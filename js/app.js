@@ -12,7 +12,7 @@
 
 (() => {
   const GUARDIAN_PIN = '2468'; // demo gate only — not real security
-  const AVATARS = ['🦊', '🐱', '🐻', '🐼', '🐸', '🦉', '🐧', '🦄', '🐢', '🐳', '🐝', '🦋'];
+  const AVATARS = Sprites.animals; // custom SVG mascots (see sprites.js)
 
   const app = document.getElementById('app');
 
@@ -58,22 +58,22 @@
       class: 'big-start',
       onclick: async () => {
         startBtn.disabled = true;
-        startBtn.textContent = 'Waking the piano…';
+        startBtn.innerHTML = 'Waking the piano…';
         await PianoAudio.unlock();
         startPractice();
       },
-    }, '▶  Start');
+    }, el('span', { class: 'btn-ico', html: Sprites.icon('play') }), 'Start');
 
     const profileStrip = el('div', { class: 'profile-strip' },
       el('button', { class: 'avatar-chip', title: 'Who is playing?', onclick: switchProfilePrompt },
-        el('span', { class: 'avatar-emoji' }, p.avatar),
+        el('span', { class: 'avatar-emoji', html: Sprites.mascot(p.avatar) }),
         el('span', { class: 'avatar-name' }, p.name)),
-      el('button', { class: 'gear', title: 'Grown-ups', 'aria-label': 'Grown-up area', onclick: () => renderGuardianGate() }, '⚙'));
+      el('button', { class: 'gear', title: 'Grown-ups', 'aria-label': 'Grown-up area', onclick: () => renderGuardianGate(), html: Sprites.icon('gear') }));
 
     app.appendChild(el('section', { class: 'screen home' },
       profileStrip,
       el('div', { class: 'brand' },
-        el('div', { class: 'brand-mark' }, '🌈'),
+        el('div', { class: 'brand-mark', html: Sprites.icon('rainbow') }),
         el('h1', { class: 'brand-title' }, 'Rainbow Pitch'),
         el('p', { class: 'brand-sub' }, 'Listen and tap the colour!')),
       el('div', { class: 'today-panel' },
@@ -112,6 +112,7 @@
       index: 0,
       correct: 0,
       current: null,
+      repeat: 0,        // consecutive count of the current colour
       attempted: false, // whether this round already counted toward stats
       locked: false,
     };
@@ -119,12 +120,16 @@
     nextRound();
   }
 
+  // Genuinely random target each round. We allow repeats (real randomness), but
+  // never let the same colour appear 3+ times in a row so it still feels varied.
   function pickTarget() {
     const choices = session.colors;
-    let pick;
-    do {
-      pick = choices[Math.floor(Math.random() * choices.length)];
-    } while (choices.length > 1 && session.current && pick.name === session.current.name);
+    let pick = choices[Math.floor(Math.random() * choices.length)];
+    if (choices.length > 1 && session.current && pick.name === session.current.name && session.repeat >= 2) {
+      const others = choices.filter((c) => c.name !== session.current.name);
+      pick = others[Math.floor(Math.random() * others.length)];
+    }
+    session.repeat = (session.current && pick.name === session.current.name) ? session.repeat + 1 : 1;
     return pick;
   }
 
@@ -149,9 +154,13 @@
     const listenBtn = el('button', {
       class: 'listen-btn',
       onclick: () => PianoAudio.playChord(session.current.notes),
-    }, el('span', { class: 'listen-icon' }, '🔊'), el('span', {}, 'Listen again'));
+    }, el('span', { class: 'listen-icon', html: Sprites.icon('speaker') }), el('span', {}, 'Listen again'));
 
-    const answers = el('div', { class: 'answers answers-' + session.colors.length },
+    // Adaptive columns so any number of colours fits the screen without
+    // horizontal scrolling; the grid fills the space left below the controls.
+    const n = session.colors.length;
+    const cols = n <= 4 ? 2 : n <= 9 ? 3 : 4;
+    const answers = el('div', { class: 'answers', style: `grid-template-columns:repeat(${cols},1fr)` },
       session.colors.map((c) => el('button', {
         class: 'color-btn',
         'data-color': c.name,
@@ -164,7 +173,7 @@
     app.appendChild(el('section', { class: 'screen practice' },
       el('div', { class: 'practice-top' }, progress, stopBtn),
       el('div', { class: 'listen-wrap' }, listenBtn),
-      el('div', { class: 'mascot', id: 'mascot' }, Store.activeProfile().avatar),
+      el('div', { class: 'mascot', id: 'mascot', html: Sprites.mascot(Store.activeProfile().avatar) }),
       answers));
   }
 
@@ -230,11 +239,11 @@
     PianoAudio.playHappy();
     const p = Store.activeProfile();
     app.appendChild(el('section', { class: 'screen celebrate' },
-      el('div', { class: 'cele-mascot' }, p.avatar),
-      el('h1', { class: 'cele-title' }, early ? 'Nice listening!' : 'You did it! 🎉'),
-      el('div', { class: 'stickers' }, ['⭐', '🌟', '🎵', '🏅', '🎈'].map((s) => el('span', { class: 'sticker' }, s))),
+      el('div', { class: 'cele-mascot', html: Sprites.mascot(p.avatar) }),
+      el('h1', { class: 'cele-title' }, early ? 'Nice listening!' : 'You did it!'),
+      el('div', { class: 'stickers' }, ['star', 'note', 'sparkle', 'note', 'star'].map((s) => el('span', { class: 'sticker', html: Sprites.icon(s) }))),
       el('div', { class: 'cele-actions' },
-        el('button', { class: 'big-start', onclick: () => { PianoAudio.unlock().then(startPractice); } }, '▶  Play again'),
+        el('button', { class: 'big-start', onclick: () => { PianoAudio.unlock().then(startPractice); } }, el('span', { class: 'btn-ico', html: Sprites.icon('play') }), 'Play again'),
         el('button', { class: 'ghost-btn', onclick: renderHome }, 'Home'))));
   }
 
@@ -268,7 +277,7 @@
     app.appendChild(el('section', { class: 'screen gate' },
       el('button', { class: 'back-link', onclick: renderHome }, '‹ Back to play'),
       el('div', { class: 'gate-card' },
-        el('div', { class: 'gate-lock' }, '🔒'),
+        el('div', { class: 'gate-lock', html: Sprites.icon('lock') }),
         msg,
         el('p', { class: 'pin-hint' }, 'Demo PIN: 2468'),
         dots, pad)));
@@ -290,7 +299,9 @@
       el('header', { class: 'g-head' },
         el('button', { class: 'back-link', onclick: renderHome }, '‹ Done'),
         el('h2', {}, 'Grown-up area'),
-        el('span', { class: 'g-child' }, Store.activeProfile().avatar + ' ' + Store.activeProfile().name)),
+        el('span', { class: 'g-child' },
+          el('span', { class: 'g-child-ava', html: Sprites.mascot(Store.activeProfile().avatar) }),
+          Store.activeProfile().name)),
       tabs, body));
   }
 
@@ -321,7 +332,7 @@
     const next = nextColorToAdd(p);
     if (next) {
       body.appendChild(el('div', { class: 'readiness ' + (ready ? 'ready' : 'notyet') },
-        el('span', { class: 'r-icon' }, ready ? '✅' : '⏳'),
+        el('span', { class: 'r-icon', html: Sprites.icon(ready ? 'check' : 'hourglass') }),
         el('div', {},
           el('div', { class: 'r-title' }, ready ? 'Ready for a new colour!' : 'Keep practising the current colours'),
           el('div', { class: 'r-sub' }, ready
@@ -334,7 +345,7 @@
           onclick: () => { p.activeColors.push(next.name); Store.save(); renderGuardian('colors'); },
         }, 'Add ' + next.label)));
     } else {
-      body.appendChild(el('div', { class: 'readiness ready' }, el('span', { class: 'r-icon' }, '🏆'),
+      body.appendChild(el('div', { class: 'readiness ready' }, el('span', { class: 'r-icon', html: Sprites.icon('trophy') }),
         el('div', {}, el('div', { class: 'r-title' }, 'All colours added!'), el('div', { class: 'r-sub' }, 'Amazing progress.'))));
     }
 
@@ -429,12 +440,12 @@
     data.profiles.forEach((p) => {
       list.appendChild(el('div', { class: 'profile-card' + (p.id === data.activeProfileId ? ' active' : '') },
         el('button', { class: 'pc-main', onclick: () => { Store.setActiveProfile(p.id); renderGuardian('profiles'); } },
-          el('span', { class: 'pc-avatar' }, p.avatar),
+          el('span', { class: 'pc-avatar', html: Sprites.mascot(p.avatar) }),
           el('span', {}, el('div', { class: 'pc-name' }, p.name),
             el('div', { class: 'pc-meta' }, `${p.activeColors.length} colours · ${p.sessions.length} sessions`))),
         data.profiles.length > 1 ? el('button', { class: 'pc-del', title: 'Remove', onclick: () => {
           if (window.confirm(`Remove ${p.name} and their progress?`)) { Store.removeProfile(p.id); renderGuardian('profiles'); }
-        } }, '🗑') : null));
+        } }, 'Remove') : null));
     });
     body.appendChild(list);
 
@@ -447,7 +458,7 @@
         avatar = a;
         avatarRow.querySelectorAll('.avatar-opt').forEach((b) => b.classList.remove('sel'));
         e.currentTarget.classList.add('sel');
-      } }, a)));
+      }, html: Sprites.mascot(a) })));
     body.appendChild(el('div', { class: 'add-profile' },
       el('h3', { class: 'g-sub' }, 'Add a child'),
       nameInput, avatarRow,

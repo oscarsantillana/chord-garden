@@ -16,7 +16,7 @@ const Store = (() => {
     return {
       id: 'p_' + Math.random().toString(36).slice(2, 9),
       name: name || 'Little One',
-      avatar: avatar || '🦊',
+      avatar: avatar || 'fox',
       activeColors: [...DEFAULT_ACTIVE],
       roundsPerSet: DEFAULT_ROUNDS,
       // Per-colour running tallies, used only for guardian progress + readiness.
@@ -26,7 +26,7 @@ const Store = (() => {
   }
 
   function defaultData() {
-    const first = freshProfile('Little One', '🦊');
+    const first = freshProfile('Little One', 'fox');
     return { activeProfileId: first.id, profiles: [first] };
   }
 

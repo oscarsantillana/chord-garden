@@ -107,6 +107,7 @@ rainbow-pitch/
 ├─ css/styles.css      # playful child theme + calm guardian theme (light & dark)
 ├─ js/
 │  ├─ data.js          # fixed Eguchi colour ↔ chord mapping
+│  ├─ sprites.js       # custom inline-SVG mascots & UI icons (no emoji)
 │  ├─ audio.js         # Tone.js sampled-piano engine
 │  ├─ storage.js       # profiles, stats & sessions in localStorage
 │  └─ app.js           # all screens & the practice loop
