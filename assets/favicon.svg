@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff3f9"/>
+      <stop offset="1" stop-color="#eaf3ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- rainbow arcs -->
+  <g fill="none" stroke-width="5" stroke-linecap="round">
+    <path d="M12 46 A20 20 0 0 1 52 46" stroke="#ff4d6d"/>
+    <path d="M18 46 A14 14 0 0 1 46 46" stroke="#ff9f1c"/>
+    <path d="M24 46 A8 8 0 0 1 40 46" stroke="#2ec4b6"/>
+  </g>
+  <!-- note -->
+  <circle cx="32" cy="46" r="4.5" fill="#4361ee"/>
+  <rect x="35" y="26" width="3" height="21" fill="#4361ee"/>
+</svg>

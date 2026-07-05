@@ -1,0 +1,13 @@
+{
+  "name": "Rainbow Pitch",
+  "short_name": "Rainbow Pitch",
+  "description": "Help young children learn perfect pitch with the Eguchi Chord Identification Method.",
+  "start_url": "../index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff7ef",
+  "theme_color": "#7c4dff",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
