@@ -8,9 +8,13 @@
 
 const Store = (() => {
   const KEY = 'rainbow-pitch:v1';
+  const BACKUP_KEY = 'rainbow-pitch:backup';
+  const VERSION = 4; // bumped: added per-profile `realPianoMode` toggle; events/sessions
+                      // may now carry a `src: 'mic'` tag for real-piano-detected rounds
 
   const DEFAULT_ACTIVE = ['red', 'yellow']; // start with two so there is a real choice
   const DEFAULT_ROUNDS = 20;                // a standard Practice Set
+  const DEFAULT_PIN = '2468';               // demo gate only — not real security
 
   function freshProfile(name, avatar) {
     return {
@@ -19,25 +23,55 @@ const Store = (() => {
       avatar: avatar || 'fox',
       activeColors: [...DEFAULT_ACTIVE],
       roundsPerSet: DEFAULT_ROUNDS,
+      realPianoMode: false, // guardian-only toggle; Home/Practice is unchanged when false
       // Per-colour running tallies, used only for guardian progress + readiness.
       stats: {},          // { colorName: { correct, seen } }
       sessions: [],       // [{ ts, rounds, correct, colors:[...] }]
+      events: [],         // [{ c: target, a: answered, ok, ts }] newest-first, for Logic
     };
   }
 
   function defaultData() {
     const first = freshProfile('Little One', 'fox');
-    return { activeProfileId: first.id, profiles: [first] };
+    return { version: VERSION, activeProfileId: first.id, profiles: [first], pin: DEFAULT_PIN };
+  }
+
+  // Bring older saved shapes up to date in place: add anything a newer
+  // version of the app would have written, without touching what's already
+  // there. Runs silently on every load so old localStorage never gets lost.
+  function normalise(data) {
+    data.profiles.forEach((p) => {
+      if (!Array.isArray(p.events)) p.events = [];
+      if (typeof p.realPianoMode !== 'boolean') p.realPianoMode = false;
+    });
+    // The guardian PIN used to be a hard-coded const in app.js; anything
+    // saved before it moved into the store needs one filled in here.
+    if (typeof data.pin !== 'string' || !/^\d{4}$/.test(data.pin)) data.pin = DEFAULT_PIN;
+    data.version = VERSION;
+    return data;
+  }
+
+  // If the stored data can't be used, stash the raw string first — a child's
+  // months of progress should never be silently destroyed just because the
+  // shape changed or the JSON got mangled.
+  function backupRaw(raw) {
+    try { localStorage.setItem(BACKUP_KEY, raw); } catch (e) { /* ignore */ }
   }
 
   function load() {
+    let raw;
     try {
-      const raw = localStorage.getItem(KEY);
-      if (!raw) return defaultData();
-      const data = JSON.parse(raw);
-      if (!data.profiles || !data.profiles.length) return defaultData();
-      return data;
+      raw = localStorage.getItem(KEY);
     } catch (e) {
+      return defaultData();
+    }
+    if (!raw) return defaultData();
+    try {
+      const data = JSON.parse(raw);
+      if (!data.profiles || !data.profiles.length) throw new Error('unusable shape');
+      return normalise(data);
+    } catch (e) {
+      backupRaw(raw);
       return defaultData();
     }
   }
@@ -83,13 +117,46 @@ const Store = (() => {
     save();
   }
 
-  // Record the outcome of a single round into the active profile's stats.
-  function recordRound(colorName, correct) {
+  // Colour set mutations go through the store (not direct array pokes on the
+  // profile object) so every write path funnels through save().
+  function addColor(name) {
+    const p = activeProfile();
+    if (!p.activeColors.includes(name)) p.activeColors.push(name);
+    save();
+  }
+
+  function removeColor(name) {
+    const p = activeProfile();
+    p.activeColors = p.activeColors.filter((n) => n !== name);
+    save();
+  }
+
+  // Record the outcome of a single round: lifetime tallies (guardian's
+  // simple fallback/all-time view) plus a per-round event (used by Logic for
+  // rolling-window readiness and mix-up analysis).
+  function recordRound(colorName, answeredColorName, correct) {
     const p = activeProfile();
     const s = p.stats[colorName] || { correct: 0, seen: 0 };
     s.seen += 1;
     if (correct) s.correct += 1;
     p.stats[colorName] = s;
+    p.events.unshift({ c: colorName, a: answeredColorName, ok: correct, ts: Date.now() });
+    p.events = p.events.slice(0, 500); // keep it small, like sessions below
+    save();
+  }
+
+  // Record the outcome of a single REAL-PIANO round (an adult played a chord
+  // on an actual piano; ChordDetect/MicCapture guessed which one it heard).
+  // Deliberately does NOT touch p.stats — the guardian's lifetime-tally
+  // fallback number must not move on the strength of an unproven detector
+  // (see js/logic.js's `src !== 'mic'` filters for the matching decision to
+  // keep these rounds out of the core readiness/accuracy signal for now).
+  function recordRealPianoRound(colorName, answeredColorName, correct, confidence) {
+    const p = activeProfile();
+    const event = { c: colorName, a: answeredColorName, ok: correct, ts: Date.now(), src: 'mic' };
+    if (typeof confidence === 'number') event.conf = Math.round(confidence * 100) / 100;
+    p.events.unshift(event);
+    p.events = p.events.slice(0, 500);
     save();
   }
 
@@ -101,11 +168,24 @@ const Store = (() => {
     save();
   }
 
+  function getPin() { return data.pin || DEFAULT_PIN; }
+
+  // Guardians can change the PIN from Settings; keep it a plain 4-digit
+  // string so the same pin-pad UI that reads it back can stay dead simple.
+  function setPin(pin) {
+    if (!/^\d{4}$/.test(pin)) return false;
+    data.pin = pin;
+    save();
+    return true;
+  }
+
   return {
-    all, save, load,
+    all,
     activeProfile, setActiveProfile,
     addProfile, removeProfile, updateProfile,
-    recordRound, recordSession,
-    DEFAULT_ROUNDS,
+    addColor, removeColor,
+    recordRound, recordSession, recordRealPianoRound,
+    getPin, setPin,
+    DEFAULT_PIN,
   };
 })();

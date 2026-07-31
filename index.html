@@ -9,17 +9,39 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="manifest" href="assets/manifest.json" />
   <link rel="stylesheet" href="css/styles.css" />
-  <!-- Tone.js provides the sampled acoustic piano -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <!-- Tone.js provides the sampled acoustic piano. `defer` on every script
+       tag here (CDN + local) keeps them from blocking first paint while
+       still preserving execution order, so js/app.js's boot call at the
+       bottom still runs only after data.js/sprites.js/audio.js/logic.js/
+       storage.js have all defined their globals — and after the DOM is
+       parsed, which is all `renderHome()` needs. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js" defer></script>
 </head>
 <body>
   <div id="confetti" aria-hidden="true"></div>
   <main id="app"><!-- screens render here --></main>
 
-  <script src="js/data.js"></script>
-  <script src="js/sprites.js"></script>
-  <script src="js/audio.js"></script>
-  <script src="js/storage.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/data.js" defer></script>
+  <script src="js/sprites.js" defer></script>
+  <script src="js/audio.js" defer></script>
+  <script src="js/logic.js" defer></script>
+  <script src="js/chord-detect.js" defer></script>
+  <script src="js/fresh-chord-gate.js" defer></script>
+  <script src="js/mic-capture.js" defer></script>
+  <script src="js/storage.js" defer></script>
+  <script src="js/app.js" defer></script>
+
+  <script>
+    // Register the service worker so the app shell, Tone.js, and the piano
+    // samples all keep working offline after the first visit. Guarded on
+    // http(s) because file:// (opening index.html directly) can't register
+    // a SW at all — it should just keep working as before, minus offline
+    // support, rather than throwing in the console.
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js');
+      });
+    }
+  </script>
 </body>
 </html>

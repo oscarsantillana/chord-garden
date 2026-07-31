@@ -14,7 +14,13 @@
   --accent: #7c4dff;
   --accent-2: #ff4fa3;
   --radius: 26px;
-  --font: 'Nunito', 'Baloo 2', 'Comic Sans MS', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* 'Nunito' and 'Baloo 2' were named here before but never actually loaded
+     (no <link>/@font-face) — this app is offline-first by design, so we
+     don't add network font loading just to get them. These are real,
+     commonly pre-installed system fonts with a playful, rounded feel
+     (Comic Sans MS on Windows, Chalkboard SE / Marker Felt on Apple
+     platforms), falling back to each platform's own UI font. */
+  --font: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -32,12 +38,35 @@ body { overflow-x: hidden; }
 
 button { font-family: inherit; cursor: pointer; border: none; }
 button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+/* Baseline press/hover feedback for every button in the app. Component-
+   specific rules below (.color-btn:active, .big-start:active,
+   .today-swatch:active, .listen-btn:active, .pin-key:active, .gear:hover…)
+   use class selectors, which win on specificity and are unaffected. Hover is
+   gated to fine pointers so tapping on touch devices can't leave a button
+   stuck looking "hovered". */
+button { transition: transform .12s ease, filter .12s ease; }
+button:active { transform: scale(.96); }
+@media (hover: hover) and (pointer: fine) {
+  button:hover { filter: brightness(1.06); }
+}
+
+/* A soft border gives every coloured chip a little definition — without one
+   the near-black button all but disappears against a dark background, and
+   pale ones (tan, sky blue...) can wash out against a light one. Kept subtle
+   (low alpha) so it reads as definition, not an outline. Dark override in
+   the dark theme block below. */
+.color-btn, .today-swatch, .pi-swatch, .bar-swatch, .cf-swatch {
+  border: 2px solid rgba(0,0,0,.08);
+}
 
 #app {
   max-width: 560px;
   margin: 0 auto;
   padding: 18px 18px 40px;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .screen { display: flex; flex-direction: column; gap: 18px; animation: fade-in .35s ease; }
@@ -64,9 +93,13 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
   width: 46px; height: 46px; border-radius: 50%; background: var(--card);
   display: grid; place-items: center;
   box-shadow: 0 4px 14px rgba(90, 60, 120, 0.12); color: var(--ink-soft);
+  transition: transform .2s ease;
 }
 .gear svg { width: 24px; height: 24px; }
-.gear:hover { transform: rotate(30deg); transition: transform .3s; }
+@media (hover: hover) and (pointer: fine) {
+  .gear:hover { transform: rotate(30deg); }
+}
+.gear:active { transform: rotate(15deg) scale(.92); }
 
 .brand { margin-top: 10px; }
 .brand-mark { line-height: 1; animation: bob 3s ease-in-out infinite; }
@@ -88,20 +121,31 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .today-swatch {
   width: 58px; height: 58px; border-radius: 18px;
   display: grid; place-items: center;
+  padding: 0; appearance: none; -webkit-appearance: none; /* it's a <button> now — undo UA chrome */
   box-shadow: 0 6px 14px rgba(0,0,0,.14), inset 0 2px 6px rgba(255,255,255,.35);
   animation: pop .4s ease backwards;
+  transition: transform .12s ease;
 }
+.today-swatch:active { transform: scale(.88); }
 .today-swatch:nth-child(2){animation-delay:.05s}.today-swatch:nth-child(3){animation-delay:.1s}
 .today-swatch:nth-child(4){animation-delay:.15s}.today-swatch:nth-child(5){animation-delay:.2s}
 @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
 .today-dot { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,.55); }
 
+/* Five little stars, one lit per Practice Set played today (see
+   js/app.js#setsToday) — a cadence nudge with no numbers, so an unlit star
+   just reads as "not yet", never as a score. */
+.sets-today { display: flex; gap: 6px; justify-content: center; margin-top: -4px; }
+.set-star { display: inline-flex; color: var(--ink-soft); opacity: .3; }
+.set-star svg { width: 20px; height: 20px; }
+.set-star.filled { color: #ffb703; opacity: 1; }
+
 .big-start {
   margin-top: 8px;
-  display: inline-flex; align-items: center; gap: 12px;
+  display: inline-flex; align-items: center; gap: clamp(8px, 3vw, 12px);
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #fff; font-size: 1.9rem; font-weight: 900;
-  padding: 20px 48px; border-radius: 999px;
+  color: #fff; font-size: clamp(1.5rem, 6vw, 1.9rem); font-weight: 900;
+  padding: clamp(14px, 4vw, 20px) clamp(28px, 9vw, 48px); border-radius: 999px;
   box-shadow: 0 14px 30px rgba(124, 77, 255, .4);
   transition: transform .12s ease, box-shadow .12s ease;
 }
@@ -110,20 +154,123 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .big-start:hover { transform: translateY(-2px) scale(1.02); }
 .big-start:active { transform: scale(.97); }
 .big-start:disabled { opacity: .7; }
+.start-error {
+  margin: 12px auto 0; max-width: 280px; text-align: center;
+  background: var(--card); color: var(--ink-soft); font-weight: 700; font-size: .85rem;
+  line-height: 1.4; padding: 10px 16px; border-radius: 16px; box-shadow: var(--card-shadow);
+}
+
+/* --------------------------------------------------------- Profile picker --- */
+/* An in-app overlay replaces window.confirm for "who's playing" — much
+   calmer with 3+ kids than cycling through a native confirm dialog one at a
+   time. Tapping the backdrop (not the card) closes it. */
+.overlay-backdrop {
+  position: fixed; inset: 0; z-index: 70; display: grid; place-items: center;
+  background: rgba(20, 10, 40, .45); padding: 20px; animation: fade-in .2s ease;
+}
+.profile-picker {
+  width: 100%; max-width: 320px; text-align: center;
+  background: var(--card); border-radius: var(--radius); padding: 22px; box-shadow: var(--card-shadow);
+}
+.op-title { margin: 0 0 14px; font-size: 1.05rem; font-weight: 900; }
+.op-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.op-item {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  background: #f6f4fb; border: 2px solid transparent; border-radius: 14px; padding: 8px 12px;
+}
+.op-item.active { border-color: var(--accent); background: #fff; }
+.op-avatar { width: 38px; height: 38px; display: inline-flex; }
+.op-avatar svg { width: 38px; height: 38px; }
+.op-name { font-weight: 800; color: var(--ink); }
+.op-close { width: 100%; }
 
 /* ------------------------------------------------------------ Practice --- */
 .practice { gap: 16px; min-height: calc(100vh - 60px); }
 .practice-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.round-progress { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
-.pip { width: 12px; height: 12px; border-radius: 50%; background: rgba(124,77,255,.18); transition: all .3s; }
-.pip.done { background: var(--accent); }
-.pip.now { background: var(--accent-2); transform: scale(1.35); }
+
+/* The "journey": a path across the top of the practice screen the child's
+   own mascot walks along toward a little flag, one step per round, instead
+   of the old abstract row of dots. Kept compact on purpose (the answers
+   grid below is still meant to be the dominant element on a phone screen). */
+.journey { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.journey-path { position: relative; flex: 1; height: 58px; }
+.journey-track {
+  position: absolute; left: 2px; right: 2px; top: 50%; transform: translateY(-50%);
+  height: 6px; border-radius: 999px; background: rgba(124,77,255,.18);
+}
+/* Each step's `left` is set inline in JS as (i / session.total) * 100% — the
+   SAME formula the mascot's own `left` uses (see renderPractice() in
+   app.js) — so the "now" dot always sits exactly where the mascot is
+   walking to. They used to disagree: dots were flex/space-between, which
+   flushes the first and last dot to the track's own ends (position
+   i/(total-1)), while the mascot used i/total — a gap that grew across the
+   set and left the mascot and its own "now" dot visibly apart by the later
+   rounds. Absolute + a shared formula keeps them locked together, and also
+   correctly leaves the last dot short of the flag (at (total-1)/total%)
+   instead of flush against it, since the flag marks one step further, past
+   the last round. */
+.journey-step {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 7px; height: 7px; border-radius: 50%; background: rgba(124,77,255,.35);
+  transition: background .3s, transform .3s;
+}
+.journey-step.done { background: var(--accent); }
+.journey-step.now { background: var(--accent-2); transform: translate(-50%, -50%) scale(1.5); }
+/* Like the mascot above, the flag glyph (see Sprites.icon('flag')) doesn't
+   fill its whole box either — it's a pole planted at y 3-21 of a 24-tall
+   viewBox, i.e. the pole's base (the "planted in the ground" point) sits at
+   ~87.5% down the icon, not at its literal bottom edge. margin-bottom is
+   tuned so that base lands on the track's centerline, the same way the
+   mascot's chin does, instead of floating well below the path. */
+.journey-flag { display: inline-flex; align-self: flex-end; margin-bottom: 26px; color: var(--accent-2); flex-shrink: 0; }
+.journey-flag svg { width: 22px; height: 22px; }
+
+/* The mascot walking the path — same #mascot id/behaviour as before
+   (setMascotMood swaps its face, cheer() adds .happy), just relocated and
+   shrunk down onto the journey instead of sitting alone as a big centrepiece.
+   `left` is set inline in JS and eased here so each round's step forward
+   reads as a little walk rather than a jump-cut. */
+/* Every mascot face (see MASCOTS in sprites.js) is drawn on the same 100x100
+   canvas but only occupies roughly y 20-91 of it (empty margin above the ear
+   tips, a little below the chin) — so bottom-aligning the SVG's own box edge
+   to the track left the drawn chin floating well above the line and the line
+   cutting across the ears/forehead instead. This offset instead aligns the
+   drawn chin (~91% down the artwork) to the track's centerline, so the face
+   reads as resting on the path rather than being skewered by it. */
+.journey-mascot {
+  position: absolute; bottom: 26px; transform: translateX(-50%);
+  transition: left .6s cubic-bezier(.34, 1.56, .64, 1);
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,.14));
+}
+.journey-mascot svg { width: 42px; height: 42px; display: block; }
+.journey-mascot.happy { animation: jump .9s ease; }
+@keyframes jump { 0%,100%{transform:translateY(0) scale(1)} 30%{transform:translateY(-24px) scale(1.15)} 60%{transform:translateY(0) scale(1.05)} }
 
 .calm-stop {
   background: rgba(255,255,255,.8); color: var(--ink-soft); font-weight: 800;
   padding: 10px 18px; border-radius: 999px; box-shadow: 0 3px 10px rgba(90,60,120,.12);
   white-space: nowrap;
 }
+
+/* A small persistent "Listening" chip, shown for the whole real-piano set
+   (not just while State A's round-cue is up) — sits beside .calm-stop so
+   it's always clear the mic is live. Uses only theme variables, so it
+   themes correctly with no dark-mode override needed. */
+.mic-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--card); color: var(--ink-soft); font-weight: 800; font-size: .8rem;
+  padding: 8px 14px; border-radius: 999px; box-shadow: var(--card-shadow);
+  white-space: nowrap;
+}
+.mic-pill-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0;
+  animation: mic-pulse 1.6s ease-in-out infinite;
+}
+/* A plain opacity loop rather than reusing round-cue-pulse (which animates
+   transform: scale for a whole card, not a fit for a tiny status dot). */
+@keyframes mic-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.mic-pill-icon { display: inline-flex; color: var(--accent); }
+.mic-pill-icon svg { width: 16px; height: 16px; }
 
 .listen-wrap { display: flex; justify-content: center; }
 .listen-btn {
@@ -133,47 +280,158 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
   transition: transform .12s;
 }
 .listen-btn:active { transform: scale(.95); }
+@media (hover: hover) and (pointer: fine) {
+  .listen-btn:hover { transform: translateY(-2px); }
+}
 .listen-icon { display: inline-flex; color: var(--accent); animation: wiggle 2s ease-in-out infinite; }
 .listen-icon svg { width: 46px; height: 46px; }
 @keyframes wiggle { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-8deg)} 75%{transform:rotate(8deg)} }
 
-.mascot {
-  text-align: center; transition: transform .2s;
-  filter: drop-shadow(0 6px 8px rgba(0,0,0,.12));
-}
-.mascot svg { width: 76px; height: 76px; display: block; margin: 0 auto; }
-.mascot.happy { animation: jump .9s ease; }
-@keyframes jump { 0%,100%{transform:translateY(0) scale(1)} 30%{transform:translateY(-24px) scale(1.15)} 60%{transform:translateY(0) scale(1.05)} }
+/* Positioned wrapper around the answer grid so the "round-cue" overlay below
+   can be centered directly on top of it, regardless of how many rows/columns
+   the grid itself ends up with. Takes over the "grow to fill remaining
+   space" role .answers used to have on its own. */
+.answers-wrap { position: relative; flex: 1 1 auto; display: flex; align-items: center; }
 
-/* The answer grid grows to fill the space below the controls; rows share the
-   height equally (grid-auto-rows:1fr) so 2 colours or 14 both fit on screen.
-   Column count is set inline in JS based on how many colours are active. */
+/* The answer grid grows to fill the space below the controls; rows are
+   capped (grid-auto-rows: minmax(...)) rather than left to stretch
+   unbounded, so a few colours on a tall viewport don't turn into tall
+   narrow "tombstone" tiles — any leftover vertical space becomes centered
+   empty space around the grid instead. Column count is set inline in JS
+   based on how many colours are active. */
 .answers {
   display: grid; gap: 14px; margin-top: 2px;
   grid-template-columns: repeat(2, 1fr);
-  grid-auto-rows: 1fr;
+  grid-auto-rows: minmax(90px, 200px);
   flex: 1 1 auto;
-  align-content: stretch;
+  align-content: center;
+}
+/* A trailing partial row (leftover colours that don't fill a full row of
+   `cols`) spans every column track and centers its buttons with flexbox —
+   see renderPractice() in app.js for why: a discrete grid-column can't
+   express "centered" when there's no integer middle column (e.g. one
+   leftover button in a 2-column grid). flex-basis approximates each
+   leftover button to the width a full grid column would give it, using the
+   --cols custom property set inline per render. */
+.answers-trailing {
+  display: flex; justify-content: center; gap: 14px;
+}
+.answers-trailing .color-btn {
+  flex: 0 1 calc((100% - 14px * (var(--cols) - 1)) / var(--cols));
 }
 .color-btn {
-  min-height: 60px; border-radius: 22px;
+  min-width: 0; min-height: 60px; border-radius: 22px;
   box-shadow: 0 7px 0 rgba(0,0,0,.18), inset 0 3px 10px rgba(255,255,255,.35);
   transition: transform .1s, box-shadow .1s;
   position: relative;
 }
 .color-btn:active { transform: translateY(4px); box-shadow: 0 4px 0 rgba(0,0,0,.18), inset 0 3px 10px rgba(255,255,255,.35); }
-.color-face {
-  position: absolute; inset: 0; margin: auto; width: 34%; max-width: 60px; aspect-ratio: 1;
-  border-radius: 50%; background: rgba(255,255,255,.28);
-  box-shadow: inset 0 3px 6px rgba(0,0,0,.12);
+@media (hover: hover) and (pointer: fine) {
+  .color-btn:hover { transform: translateY(-2px); box-shadow: 0 9px 0 rgba(0,0,0,.18), inset 0 3px 10px rgba(255,255,255,.35); }
 }
+/* container-type lets .color-face size itself off the SMALLER of the
+   button's own width/height (via the cqmin unit below) instead of just its
+   width — the grid can make buttons wide-and-short or tall-and-narrow
+   depending on how many colours are active. */
+.color-btn { container-type: size; }
+/* Each answer keeps its own shape (see Sprites.shape / CHORDS.shape) as a
+   currentColor badge/watermark, not a replacement for the colour tile — kept
+   fairly small and slightly translucent so the hue still reads first. */
+.color-face {
+  position: absolute; inset: 0; margin: auto;
+  width: 44px; height: 44px; /* fallback for browsers without container query units */
+  width: clamp(30px, 40cqmin, 64px); height: clamp(30px, 40cqmin, 64px);
+  opacity: .97;
+  display: grid; place-items: center;
+  pointer-events: none;
+}
+/* A cheap silhouette outline (double drop-shadow approximates a stroke
+   around the icon's alpha silhouette) so the shape reads even when its
+   currentColor fill is close in contrast to the swatch behind it. */
+.color-face svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 0 1px rgba(0,0,0,.55)) drop-shadow(0 0 1px rgba(0,0,0,.55)); }
 .color-btn.correct { animation: correct-pulse .6s ease; }
 @keyframes correct-pulse { 0%{transform:scale(1)} 40%{transform:scale(1.12)} 100%{transform:scale(1)} }
+/* Success juice: a ring blooms outward from a correctly-tapped button,
+   layered on top of the scale pulse above. CSS-only — the actual "reward"
+   the child hears is the chord replay (see playReward in audio.js); this is
+   just the visual half of that same moment. */
+.color-btn.correct::after {
+  content: ''; position: absolute; inset: 0; margin: auto;
+  width: 100%; aspect-ratio: 1; border-radius: 22px;
+  border: 4px solid #fff; opacity: .8;
+  animation: bloom-ring .6s ease-out; pointer-events: none;
+}
+@keyframes bloom-ring { 0% { transform: scale(.7); opacity: .8; } 100% { transform: scale(1.35); opacity: 0; } }
 .color-btn.nudge { animation: nudge .5s ease; }
 @keyframes nudge { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-6px)} 80%{transform:translateX(6px)} }
 
+/* Locked until the chord has actually sounded — noticeably dimmed (not just a
+   hint of it) and untappable, so it reads as "wait, listening" rather than
+   blurring into a normal, tappable grid. */
+.answers.waiting { opacity: .35; pointer-events: none; transition: opacity .25s ease; }
+
+/* The prominent round-start "get ready" overlay: centered directly on top of
+   the answers grid (see .answers-wrap) while session.cueing is true, so a
+   child gets an unmistakable "new round, ears on" beat instead of the
+   previous round's reward replay and this round's chord blurring into one
+   stream of piano (see nextRound() in app.js, which toggles `.hidden` here
+   once the chord has actually sounded). Always pointer-events: none so it
+   can never swallow a tap, even while fading out mid-transition. */
+.round-cue {
+  position: absolute; top: 50%; left: 50%; z-index: 5;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: var(--card); color: var(--accent);
+  border-radius: 28px; padding: 22px 34px; box-shadow: var(--card-shadow);
+  pointer-events: none;
+  opacity: 1; transition: opacity .25s ease;
+  animation: round-cue-pulse 1s ease-in-out infinite;
+}
+.round-cue.hidden { opacity: 0; }
+.round-cue-icon { display: inline-flex; }
+.round-cue-icon svg { width: 56px; height: 56px; }
+.round-cue-label { font-weight: 900; font-size: 1.15rem; }
+@keyframes round-cue-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.08); }
+}
+/* Real-piano mode's sub-line under the round-cue label in State A ("Rainbow
+   Pitch is listening.") — muted like the rest of the app's .g-note copy,
+   not shouty like .round-cue-label above it. */
+.round-cue-sub { margin-top: 2px; }
+/* State A (no chord heard yet) can sit for several seconds while an adult
+   finds a chord to play, not ~1s like the digital "Listen…" cue — a slower,
+   calmer pulse reads as "still waiting", not "hurry up". Overrides just the
+   shorthand's duration component (higher specificity, later in the cascade). */
+.round-cue.mic-wait { animation-duration: 2.2s; }
+/* State B: a chord was heard. Kept static (no pulse) — it's a brief ~350ms
+   confirm beat, not a "waiting" state. */
+.round-cue.mic-heard { animation: none; }
+
+/* State D — the low-confidence/idle-timeout retry (the safety valve: never
+   scores or records anything). Same visual family as .start-error (plain
+   card, muted ink, no alarm colour), laid out as a centered overlay like
+   .round-cue just above — the two existing patterns spliced together, no
+   new visual language. */
+.mic-retry {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 6;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  background: var(--card); color: var(--ink-soft); font-weight: 700; font-size: .9rem; line-height: 1.4;
+  border-radius: 20px; padding: 20px 24px; box-shadow: var(--card-shadow);
+  max-width: 280px; text-align: center;
+}
+.mic-retry-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+/* Reveal after 2 misses: dim everything except the correct colour, which gets
+   a gentle pulsing glow while the chord replays alongside it. */
+.answers.reveal .color-btn { opacity: .35; pointer-events: none; transition: opacity .3s ease; }
+.answers.reveal .color-btn.reveal { opacity: 1; animation: reveal-glow .9s ease-in-out infinite; }
+@keyframes reveal-glow {
+  0%, 100% { transform: scale(1); box-shadow: 0 7px 0 rgba(0,0,0,.18), inset 0 3px 10px rgba(255,255,255,.35), 0 0 0 rgba(255,255,255,0); }
+  50% { transform: scale(1.1); box-shadow: 0 7px 0 rgba(0,0,0,.18), inset 0 3px 10px rgba(255,255,255,.35), 0 0 26px 10px rgba(255,255,255,.6); }
+}
+
 /* --------------------------------------------------------- Celebration --- */
-.celebrate { align-items: center; text-align: center; justify-content: center; min-height: 80vh; }
+.celebrate { align-items: center; text-align: center; }
 .cele-mascot { animation: jump 1s ease infinite; filter: drop-shadow(0 8px 10px rgba(0,0,0,.15)); }
 .cele-mascot svg { width: 130px; height: 130px; display: block; }
 .cele-title { font-size: 2.4rem; font-weight: 900; margin: 6px 0; color: var(--accent); }
@@ -192,13 +450,17 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .gate-card { background: var(--card); border-radius: var(--radius); padding: 26px; box-shadow: var(--card-shadow); text-align: center; width: 100%; max-width: 340px; }
 .gate-lock { color: var(--accent); }
 .gate-lock svg { width: 46px; height: 46px; }
+/* Real-piano mode's one-time priming card reuses .gate-card verbatim, plus
+   this small stacked button row for its "Ready" / "Not now" pair — same
+   layout idea as .cele-actions on the celebration screen. */
+.gate-actions { display: flex; flex-direction: column; gap: 12px; align-items: center; margin-top: 16px; }
 .pin-msg { font-weight: 900; font-size: 1.3rem; margin: 6px 0; }
 .pin-hint { color: var(--ink-soft); font-size: .85rem; margin: 0 0 14px; }
 .pin-dots { display: flex; gap: 12px; justify-content: center; margin-bottom: 18px; }
 .pin-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--accent); }
 .pin-dot.filled { background: var(--accent); }
 .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.pin-key { background: #f3effc; color: var(--ink); font-size: 1.5rem; font-weight: 800; padding: 16px 0; border-radius: 16px; }
+.pin-key { background: #f3effc; color: var(--ink); font-size: 1.5rem; font-weight: 800; padding: 16px 0; border-radius: 16px; transition: background-color .12s ease; }
 .pin-key:active { background: #e6dcff; }
 
 /* ---------------------------------------------------------- Guardian --- */
@@ -241,12 +503,24 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .pi-chord { grid-column: 2 / 4; font-size: .72rem; color: var(--ink-soft); }
 
 .bars { display: flex; flex-direction: column; gap: 10px; }
-.bar-row { display: grid; grid-template-columns: 22px 70px 1fr 44px; align-items: center; gap: 8px; }
+.bar-row { display: grid; grid-template-columns: 22px 70px 1fr auto; align-items: center; gap: 8px; }
 .bar-swatch { width: 18px; height: 18px; border-radius: 6px; }
 .bar-name { font-weight: 700; font-size: .85rem; }
 .bar-track { background: #eee7f6; border-radius: 999px; height: 14px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 999px; transition: width .5s ease; }
-.bar-num { text-align: right; font-weight: 800; font-size: .8rem; color: var(--ink-soft); }
+.bar-nums { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+.bar-num { text-align: right; font-weight: 800; font-size: .8rem; color: var(--ink-soft); white-space: nowrap; }
+.bar-life { text-align: right; font-size: .68rem; color: var(--ink-soft); opacity: .75; white-space: nowrap; }
+
+.confusions { display: flex; flex-direction: column; gap: 8px; }
+.cf-row {
+  display: flex; align-items: center; gap: 8px;
+  background: #f6f4fb; border-radius: 14px; padding: 8px 12px; font-size: .85rem;
+}
+.cf-swatch { width: 16px; height: 16px; border-radius: 6px; flex-shrink: 0; box-shadow: inset 0 2px 4px rgba(0,0,0,.15); }
+.cf-label { font-weight: 700; }
+.cf-arrow { color: var(--ink-soft); font-weight: 800; }
+.cf-count { margin-left: auto; font-weight: 900; color: var(--ink-soft); }
 
 .sessions { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .sessions li { display: flex; justify-content: space-between; gap: 10px; font-size: .85rem; padding: 8px 0; border-bottom: 1px solid #f0ecf7; }
@@ -274,8 +548,10 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .primary-btn { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-weight: 900; padding: 12px 24px; border-radius: 999px; }
 .rename-row { display: flex; gap: 8px; align-items: flex-start; }
 .rename-row .text-input { margin-bottom: 0; }
+.pin-input { max-width: 110px; text-align: center; font-weight: 800; letter-spacing: 6px; }
+.pin-save-msg { min-height: 1.2em; margin: 6px 0 0; }
 .rounds-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.round-opt { background: #f3effc; color: var(--ink); font-weight: 800; padding: 12px 16px; border-radius: 12px; border: 2px solid transparent; }
+.round-opt { background: #f3effc; color: var(--ink); font-weight: 800; padding: 12px 16px; border-radius: 12px; border: 2px solid transparent; min-height: 44px; }
 .round-opt.sel { border-color: var(--accent); background: #fff; color: var(--accent); }
 .danger-btn { background: #ffe9e9; color: #c0392b; font-weight: 800; padding: 12px 20px; border-radius: 14px; }
 .about { border-top: 1px solid #f0ecf7; padding-top: 14px; line-height: 1.5; font-size: .9rem; }
@@ -296,15 +572,22 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
     --bg-1: #221b33; --bg-2: #2a1d3a; --bg-3: #1b2440;
     --ink: #f2edff; --ink-soft: #b3a9cc; --card: #322a45; --card-shadow: 0 18px 40px rgba(0,0,0,.4);
   }
-  .today-dot, .color-face { background: rgba(255,255,255,.25); }
-  .pin-key, .g-tab, .palette-item, .profile-card, .avatar-opt, .round-opt { background: #3d3358; color: var(--ink); }
+  .today-dot { background: rgba(255,255,255,.25); }
+  .pin-key, .g-tab, .palette-item, .profile-card, .avatar-opt, .round-opt, .cf-row { background: #3d3358; color: var(--ink); }
   .palette-item.on, .profile-card.active, .g-tab.active, .avatar-opt.sel, .round-opt.sel { background: #4a3f6b; }
   .text-input { background: #3d3358; color: var(--ink); border-color: #4a3f6b; }
   .bar-track { background: #453a63; }
   .readiness.ready { background: #234a30; } .readiness.notyet { background: #4a3d20; }
   .danger-btn { background: #4a2626; color: #ff9b8f; }
-  .calm-stop, .ghost-btn, .avatar-chip, .gear { background: #3d3358; color: var(--ink); }
+  .pc-del { color: #ff9b8f; }
+  .calm-stop, .ghost-btn { background: #3d3358; color: var(--ink); }
   .sessions li, .about { border-color: #453a63; }
+  /* The near-black button especially needs this in the dark theme — without
+     it, it nearly vanishes against the dark background. */
+  .color-btn, .today-swatch, .pi-swatch, .bar-swatch, .cf-swatch { border-color: rgba(255,255,255,.22); }
+  .overlay-backdrop { background: rgba(0,0,0,.6); }
+  .op-item { background: #3d3358; color: var(--ink); }
+  .op-item.active { background: #4a3f6b; }
 }
 
 /* Respect reduced motion */

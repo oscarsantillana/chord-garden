@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'self' 'sha384-c6Uo4N9c3SOEigMVzP6IshUG1wQ5uMp3xeoQFiHWAQ86joWdgyajkvopySyKy/Z6'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; connect-src https://tonejs.github.io/audio/salamander/A0.mp3 https://tonejs.github.io/audio/salamander/C1.mp3 https://tonejs.github.io/audio/salamander/Ds1.mp3 https://tonejs.github.io/audio/salamander/Fs1.mp3 https://tonejs.github.io/audio/salamander/A1.mp3 https://tonejs.github.io/audio/salamander/C2.mp3 https://tonejs.github.io/audio/salamander/Ds2.mp3 https://tonejs.github.io/audio/salamander/Fs2.mp3 https://tonejs.github.io/audio/salamander/A2.mp3 https://tonejs.github.io/audio/salamander/C3.mp3 https://tonejs.github.io/audio/salamander/Ds3.mp3 https://tonejs.github.io/audio/salamander/Fs3.mp3 https://tonejs.github.io/audio/salamander/A3.mp3 https://tonejs.github.io/audio/salamander/C4.mp3 https://tonejs.github.io/audio/salamander/Ds4.mp3 https://tonejs.github.io/audio/salamander/Fs4.mp3 https://tonejs.github.io/audio/salamander/A4.mp3 https://tonejs.github.io/audio/salamander/C5.mp3 https://tonejs.github.io/audio/salamander/Ds5.mp3 https://tonejs.github.io/audio/salamander/Fs5.mp3 https://tonejs.github.io/audio/salamander/A5.mp3 https://tonejs.github.io/audio/salamander/C6.mp3; img-src 'none'; media-src 'none'; font-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src blob:; manifest-src 'none'; base-uri 'none'; form-action 'none'"
+  >
+  <title>Real piano acceptance — Rainbow Pitch</title>
+  <link rel="stylesheet" href="acceptance.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js" integrity="sha384-c6Uo4N9c3SOEigMVzP6IshUG1wQ5uMp3xeoQFiHWAQ86joWdgyajkvopySyKy/Z6" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+  <script src="../../js/data.js" defer></script>
+  <script src="../../js/audio.js" defer></script>
+  <script src="../../js/chord-detect.js" defer></script>
+  <script src="../../js/fresh-chord-gate.js" defer></script>
+  <script src="../../js/mic-capture.js" defer></script>
+  <script src="../../js/real-piano-acceptance.js" defer></script>
+  <script src="acceptance.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to protocol</a>
+
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">Internal validation tool</p>
+      <h1>Real piano acceptance</h1>
+    </div>
+    <button id="stop-session" class="button button--quiet" type="button" hidden>
+      Stop session
+    </button>
+  </header>
+
+  <main id="main" class="shell">
+    <div id="guard-error" class="notice notice--error" role="alert" hidden>
+      <h2>Harness unavailable</h2>
+      <p id="guard-message"></p>
+    </div>
+
+    <ol class="phase-list" aria-label="Validation phase">
+      <li data-phase-step="SETUP" aria-current="step"><span>1</span> Setup</li>
+      <li data-phase-step="PREVIEW"><span>2</span> Preview</li>
+      <li data-phase-step="ARMING"><span>3</span> Arming</li>
+      <li data-phase-step="READY"><span>4</span> Ready</li>
+      <li data-phase-step="RESULT"><span>5</span> Result</li>
+    </ol>
+
+    <section id="setup-panel" class="panel" aria-labelledby="setup-heading">
+      <div class="panel__heading">
+        <p class="step-label">Step 1 of 5</p>
+        <h2 id="setup-heading" tabindex="-1">Label the physical setup</h2>
+        <p>Use anonymous aliases only. The labels make results comparable without recording hardware identifiers.</p>
+      </div>
+
+      <div class="privacy-note">
+        <strong>Local, ephemeral capture.</strong>
+        Microphone frames and results stay on this page. The pinned Tone.js runtime and 22 Salamander samples are downloaded from their production static hosts; those requests disclose ordinary network metadata such as IP address, user agent, and the harness origin. No audio, spectra, device IDs, or browser storage are saved or sent.
+      </div>
+
+      <form id="setup-form" class="setup-form" autocomplete="off">
+        <div class="field">
+          <label for="instrument">Piano alias</label>
+          <input
+            id="instrument"
+            name="instrument"
+            type="text"
+            placeholder="upright-1"
+            maxlength="48"
+            required
+            spellcheck="false"
+            aria-describedby="alias-help"
+          >
+        </div>
+
+        <div class="field">
+          <label for="device">Device alias</label>
+          <input
+            id="device"
+            name="device"
+            type="text"
+            placeholder="phone-1"
+            maxlength="48"
+            required
+            spellcheck="false"
+            aria-describedby="alias-help"
+          >
+        </div>
+
+        <div class="field">
+          <label for="environment">Room alias</label>
+          <input
+            id="environment"
+            name="environment"
+            type="text"
+            placeholder="quiet-room-1"
+            maxlength="48"
+            required
+            spellcheck="false"
+            aria-describedby="alias-help"
+          >
+        </div>
+
+        <p id="alias-help" class="field-help field-help--wide">
+          Good aliases are short and reusable. Do not enter a person’s name, serial number, microphone label, or location.
+        </p>
+
+        <div class="field">
+          <label for="positive-repetitions">Written-chord passes</label>
+          <select id="positive-repetitions" name="positiveRepetitions">
+            <option value="1">1 pass · 14 trials</option>
+            <option value="3" selected>3 passes · 42 trials</option>
+            <option value="6">6 passes · 84 trials</option>
+            <option value="10">10 passes · 140 trials</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="negative-repetitions">Negative-scenario passes</label>
+          <select id="negative-repetitions" name="negativeRepetitions">
+            <option value="1" selected>1 pass · 17 trials</option>
+            <option value="2">2 passes · 34 trials</option>
+            <option value="3">3 passes · 51 trials</option>
+          </select>
+        </div>
+
+        <p id="queue-summary" class="queue-summary" aria-live="polite">
+          Planned session: 59 trials.
+        </p>
+
+        <div id="setup-error" class="notice notice--error notice--compact" role="alert" hidden></div>
+
+        <button id="start-session" class="button button--primary" type="submit">
+          Allow microphone and build session
+        </button>
+      </form>
+
+      <div id="stopped-session" class="stopped-session" hidden>
+        <h3>Stopped session available</h3>
+        <p id="stopped-summary"></p>
+        <button id="export-stopped" class="button button--secondary" type="button">
+          Export stopped session
+        </button>
+      </div>
+    </section>
+
+    <section id="preview-panel" class="panel" aria-labelledby="preview-heading" hidden>
+      <div class="trial-progress">
+        <span id="trial-count">Trial 1 of 59</span>
+        <progress id="trial-progress" value="1" max="59">1 of 59</progress>
+      </div>
+
+      <div class="panel__heading">
+        <p class="step-label">Step 2 of 5 · Ground truth locked</p>
+        <h2 id="preview-heading" tabindex="-1">Preview the next scenario</h2>
+      </div>
+
+      <article class="scenario-card" aria-labelledby="scenario-name">
+        <p id="scenario-kind" class="badge">Written chord</p>
+        <p id="scenario-condition" class="condition-label"></p>
+        <h3 id="scenario-name"></h3>
+        <p id="scenario-notes" class="note-sequence"></p>
+        <p id="scenario-instruction"></p>
+        <p id="expected-behavior" class="expected-behavior"></p>
+      </article>
+
+      <button id="arm-trial" class="button button--primary" type="button">
+        Arm this trial
+      </button>
+    </section>
+
+    <section id="active-panel" class="panel panel--active" aria-labelledby="active-heading" hidden>
+      <div class="trial-progress">
+        <span id="active-trial-count"></span>
+        <progress id="active-progress" value="1" max="59">1 of 59</progress>
+      </div>
+
+      <div class="listening-mark" aria-hidden="true"><span></span></div>
+      <div class="panel__heading panel__heading--center">
+        <p id="active-step" class="step-label">Step 3 of 5</p>
+        <h2 id="active-heading" tabindex="-1">Arming microphone</h2>
+        <p id="active-status">Keep the room quiet while a fresh baseline is measured.</p>
+      </div>
+
+      <div class="active-prompt">
+        <p class="active-prompt__label">Locked scenario</p>
+        <p id="active-target" class="active-prompt__target"></p>
+        <p id="active-instruction"></p>
+      </div>
+
+      <p class="withheld-note">
+        Detector output stays hidden until this listening window ends.
+      </p>
+      <button id="invalidate-trial" class="button button--quiet" type="button">
+        Mark attempt invalid
+      </button>
+    </section>
+
+    <section id="result-panel" class="panel" aria-labelledby="result-heading" hidden>
+      <div class="trial-progress">
+        <span id="result-trial-count"></span>
+        <progress id="result-progress" value="1" max="59">1 of 59</progress>
+      </div>
+
+      <div class="panel__heading">
+        <p class="step-label">Step 5 of 5 · Terminal result</p>
+        <p id="result-classification" class="badge"></p>
+        <h2 id="result-heading" tabindex="-1"></h2>
+        <p id="result-copy"></p>
+      </div>
+
+      <dl class="result-details">
+        <div>
+          <dt>Expected</dt>
+          <dd id="result-expected"></dd>
+        </div>
+        <div>
+          <dt>Detector output</dt>
+          <dd id="result-detected"></dd>
+        </div>
+        <div>
+          <dt>Confidence</dt>
+          <dd id="result-confidence"></dd>
+        </div>
+        <div>
+          <dt>Onset-to-result</dt>
+          <dd id="result-latency"></dd>
+        </div>
+      </dl>
+
+      <div class="session-metrics" aria-labelledby="metrics-heading">
+        <h3 id="metrics-heading">Session so far</h3>
+        <div id="metrics-grid" class="metrics-grid"></div>
+      </div>
+
+      <div class="button-row">
+        <button id="next-trial" class="button button--primary" type="button">
+          Preview next trial
+        </button>
+        <button id="export-session" class="button button--secondary" type="button">
+          Export JSON
+        </button>
+      </div>
+    </section>
+
+    <p id="live-status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
+  </main>
+
+  <footer>
+    <p>Protocol only. No child-facing controls, application storage, service worker, or raw capture export is loaded. Third-party access is limited to a byte-pinned Tone.js script and the 22 exact production piano-sample paths. Tone.js may create an origin-local blob worker; it cannot connect anywhere else. Microphone content and results stay local.</p>
+  </footer>
+</body>
+</html>
