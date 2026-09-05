@@ -13,7 +13,7 @@
 
 // Bump this on every release: the shell is served cache-first, so returning
 // devices only refetch it when the version (and thus this file) changes.
-const CACHE_NAME = 'rainbow-pitch-v3';
+const CACHE_NAME = 'rainbow-pitch-v4';
 
 // The local app shell: everything needed to boot the app with no network.
 const APP_SHELL = [
@@ -37,7 +37,10 @@ const TONE_JS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js
 
 // Piano samples stream from this host — cache-first applies to any request
 // whose URL starts with it, regardless of how Tone.js issues the request.
-const SAMPLE_HOST = 'tonejs.github.io/audio/salamander/';
+const SAMPLE_ROOT = new URL('https://tonejs.github.io/audio/salamander/');
+const APP_ROOT = new URL('./', self.location.href);
+const INDEX_URL = new URL('index.html', APP_ROOT).href;
+const SHELL_URLS = new Set(APP_SHELL.map(path => new URL(path, APP_ROOT).href));
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -62,7 +65,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((names) =>
       Promise.all(
         names
-          .filter((name) => name !== CACHE_NAME)
+          .filter((name) => name.startsWith('rainbow-pitch-') && name !== CACHE_NAME)
           .map((name) => caches.delete(name))
       )
     ).then(() => self.clients.claim())
@@ -70,11 +73,8 @@ self.addEventListener('activate', (event) => {
 });
 
 function isPrecached(url) {
-  // Skip the bare './' shell entry here — it's the same document as
-  // 'index.html' (already covered below) and an empty suffix would match
-  // every URL's endsWith() check.
-  return url.href === TONE_JS_URL || url.href.includes(SAMPLE_HOST) ||
-    APP_SHELL.some((path) => path !== './' && url.href.endsWith(path));
+  return SHELL_URLS.has(url.href) || url.href === TONE_JS_URL ||
+    (url.origin === SAMPLE_ROOT.origin && url.pathname.startsWith(SAMPLE_ROOT.pathname));
 }
 
 self.addEventListener('fetch', (event) => {
@@ -84,20 +84,24 @@ self.addEventListener('fetch', (event) => {
   // Only handle GET — POST/etc (none of ours, but be defensive) pass through.
   if (request.method !== 'GET') return;
 
-  // Navigations (e.g. reloading index.html) fall back to the cached shell
-  // when offline, so the app still boots instead of showing the browser's
-  // offline error page.
+  // Only the app's two entry URLs share the main document cache. Other
+  // pages (including the acceptance tool) keep their own navigation behavior.
   if (request.mode === 'navigate') {
+    if (url.origin !== APP_ROOT.origin ||
+        (url.pathname !== APP_ROOT.pathname && url.pathname !== new URL(INDEX_URL).pathname)) return;
     event.respondWith(
-      fetch(request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put('index.html', copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match('index.html'))
+      fetch(request).then(async res => {
+        if (res.ok) {
+          try {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(INDEX_URL, res.clone());
+          } catch (error) { /* Cache failure must not discard a successful network response. */ }
+        }
+        return res;
+      }).catch(async () => {
+        const cache = await caches.open(CACHE_NAME);
+        return cache.match(INDEX_URL);
+      })
     );
     return;
   }

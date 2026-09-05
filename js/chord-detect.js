@@ -1,32 +1,9 @@
 /*
- * Rainbow Pitch — pure real-piano spectrum classification.
- *
- * No DOM, Web Audio, or microphone access lives here. A caller supplies a
- * linear magnitude spectrum and receives a selective chord result. The same
- * code therefore runs against an AnalyserNode in the browser and against
- * deterministic spectra in Node.
- *
- * The classifier keeps two kinds of evidence instead of folding everything
- * into chroma:
- *   1. chroma identifies the three-note pitch-class family;
- *   2. the spectrum's low-frequency edge proves that all three keys are
- *      present and identifies the bass pitch class for inversion ties.
- *
- * This matters because the nine core colours are three inversions of three
- * triads. Chroma alone is intentionally octave-invariant and cannot separate
- * Red/Orange/Brown, Yellow/Black/Purple, or Blue/Green/Pink. The low edge
- * retains exactly the register information that chroma discards.
- *
- * The release contract is selective: incomplete or ambiguous evidence returns
- * confidence 0 rather than a guess. Fresh-attack and multi-frame agreement are
- * separate temporal concerns owned by FreshChordGate. See
- * REAL-PIANO-MODE-NOTES.md for the discarded harmonic-inference experiments
- * and the evidence behind the shipped design.
- *
- * Tests cover full-pool synthetic adversarial spectra, live analyser
- * resolution, and onset-aligned Salamander sampled-piano spectra. Those are
- * useful regression evidence, not a claim that every acoustic piano, room,
- * and device microphone has been validated.
+ * Pure spectrum classifier for the configured close-position piano chords.
+ * Chroma selects a family; frequency/register and harmonic residuals check
+ * whether the apparent notes could instead be partials of a lower string.
+ * Ambiguous evidence abstains. FreshChordGate owns temporal stability.
+ * Confidence is a heuristic margin, not a probability of correctness.
  */
 
 const ChordDetect = {
@@ -79,46 +56,115 @@ const ChordDetect = {
     return Math.pow(10, db / 20);
   },
 
-  // Return the pitch classes of the first few salient spectral peaks, ordered
-  // from low to high frequency. A real three-note close-position chord puts
-  // the three played notes below the notes' upper harmonics; a single piano
-  // key instead repeats its own harmonic series. Keeping octave/register here
-  // provides the chord-completeness evidence that a folded chroma vector
-  // deliberately cannot retain.
-  lowEdgePitchClasses(magnitudes, {
-    sampleRate,
-    fftSize,
-    minFreq = 55,
-    maxFreq = 2200,
-    relativePeakFloor = 0.04,
-    peakCount = 4,
-  } = {}) {
+  // Keep frequency and register until note evidence has been checked. Peaks
+  // describe partials of strings, not necessarily separately pressed keys.
+  spectralPeaks(magnitudes, { sampleRate, fftSize, minFreq = 55, maxFreq = 8000 } = {}) {
     const binHz = sampleRate / fftSize;
     const lo = Math.max(1, Math.ceil(minFreq / binHz));
     const hi = Math.min(magnitudes.length - 2, Math.floor(maxFreq / binHz));
-    let maxMagnitude = 0;
-    for (let i = lo; i <= hi; i++) {
-      if (magnitudes[i] > maxMagnitude) maxMagnitude = magnitudes[i];
-    }
-    if (maxMagnitude <= 0) return [];
-
-    const floor = maxMagnitude * relativePeakFloor;
     const peaks = [];
     for (let i = lo; i <= hi; i++) {
       const magnitude = magnitudes[i];
-      if (magnitude < floor || magnitude < magnitudes[i - 1] || magnitude <= magnitudes[i + 1]) continue;
-      const freq = i * binHz;
-      const midi = 69 + 12 * Math.log2(freq / 440);
-      peaks.push(((Math.round(midi) % 12) + 12) % 12);
-      if (peaks.length >= peakCount) break;
+      if (magnitude <= 0 || magnitude < magnitudes[i - 1] || magnitude <= magnitudes[i + 1]) continue;
+      const frequency = i * binHz;
+      const midi = Math.round(69 + 12 * Math.log2(frequency / 440));
+      peaks.push({ frequency, magnitude, midi, pitchClass: ((midi % 12) + 12) % 12 });
     }
     return peaks;
   },
 
-  hasCompleteChordEvidence(magnitudes, chord, opts = {}) {
-    const observed = ChordDetect.lowEdgePitchClasses(magnitudes, opts);
-    const expected = new Set(chord.notes.map((note) => ChordDetect.noteNameToPitchClass(note)));
-    return [...expected].every((pitchClass) => observed.includes(pitchClass));
+  noteEvidence(magnitudes, chord, opts) {
+    const peaks = ChordDetect.spectralPeaks(magnitudes, opts);
+    const lowPeaks = peaks.filter(peak => peak.frequency <= 2200);
+    const maximum = Math.max(0, ...lowPeaks.map(peak => peak.magnitude));
+    const edge = lowPeaks.filter(peak => peak.magnitude >= maximum * .04).slice(0, 4);
+    const expected = new Set(chord.notes.map(ChordDetect.noteNameToPitchClass));
+    const notes = [];
+    for (const peak of edge) {
+      if (expected.has(peak.pitchClass) && !notes.some(note => note.pitchClass === peak.pitchClass)) notes.push(peak);
+    }
+    // Every configured voicing is close-position: its three fundamentals fit
+    // inside one octave. An open dyad's third/fifth harmonics must not fill
+    // in a missing key above that octave (for example C4 + E5 -> phantom G5).
+    const complete = notes.length === 3 && edge[0].pitchClass === notes[0].pitchClass &&
+      notes[2].midi - notes[0].midi < 12;
+    if (!complete) return { complete: false, ambiguousBass: false, notes };
+
+    const binHz = opts.sampleRate / opts.fftSize;
+    const findPartial = (frequency, floor) => peaks.find(peak =>
+      peak.magnitude >= maximum * floor && Math.abs(peak.frequency - frequency) <= binHz * .6 + frequency * .002);
+    const partialFrequency = (f0, harmonic, b) => f0 * harmonic * Math.sqrt(1 + b * harmonic * harmonic);
+    const coefficients = [0, .0002, .0004, .0006, .0012, .002];
+    const bass = notes[0];
+    const harmonicGroups = notes.flatMap(note => {
+      const f0 = 440 * 2 ** ((note.midi - 69) / 12);
+      return Array.from({ length: 8 }, (_, index) => coefficients.map(b => {
+        const frequency = partialFrequency(f0, index + 1, b);
+        const bin = Math.round(frequency / binHz);
+        const amplitude = Math.max(0, ...[-1, 0, 1].map(offset => magnitudes[bin + offset] || 0));
+        return { frequency, amplitude };
+      }));
+    });
+    const residuals = new Map();
+    function residualAt(frequency) {
+      const bin = Math.round(frequency / binHz);
+      if (residuals.has(bin)) return residuals.get(bin);
+      // Bound the leakage from each apparent note's harmonics. Both the live
+      // Blackman window and the older Hann fixtures are supported. This also
+      // detects a partial forming a shoulder beside a stronger peak.
+      let explained = 0;
+      for (const group of harmonicGroups) {
+        let leakage = 0;
+        for (const partial of group) {
+          const distance = Math.abs(bin - partial.frequency / binHz);
+          leakage = Math.max(leakage, partial.amplitude * ChordDetect.windowLeakage(distance) * 1.5);
+        }
+        explained += leakage;
+      }
+      const residual = Math.max(0, (magnitudes[bin] || 0) - explained);
+      residuals.set(bin, residual);
+      return residual;
+    }
+    let lowestSupported = bass.midi;
+    // A plausible lower string invalidates both bass and completeness. Its
+    // even harmonics may have supplied the apparent keys, even if it has the
+    // same pitch class as the apparent bass.
+    for (let midi = bass.midi - 12; midi < bass.midi; midi++) {
+      if (!expected.has(((midi % 12) + 12) % 12)) continue;
+      const f0 = 440 * 2 ** ((midi - 69) / 12);
+      if (f0 < 55) continue;
+      const supported = coefficients.some(b => {
+        const thirdBin = partialFrequency(f0, 3, b) / binHz;
+        // The third often merges with another key's harmonic. It corroborates
+        // a lower string; it need not create a separate local maximum.
+        const thirdMagnitude = Math.max(magnitudes[Math.floor(thirdBin)] || 0, magnitudes[Math.ceil(thirdBin)] || 0);
+        if (!findPartial(partialFrequency(f0, 2, b), .04) || thirdMagnitude < maximum * .025) return false;
+        const fundamental = findPartial(partialFrequency(f0, 1, b), .01);
+        if (midi > bass.midi - 12 && fundamental?.midi === midi &&
+            findPartial(partialFrequency(f0, 3, b), .025) && residualAt(f0) >= maximum * .01) return true;
+        return [3, 5, 7].some(harmonic => {
+          const frequency = partialFrequency(f0, harmonic, b);
+          const residual = residualAt(frequency);
+          // A windowed partial occupies adjacent bins. An isolated low-level
+          // bin in a sparse fixture (or a narrow numerical spike) is insufficient.
+          return residual >= maximum * .005 &&
+            Math.max(residualAt(frequency - binHz), residualAt(frequency + binHz)) >= residual * .15;
+        });
+      });
+      if (supported) { lowestSupported = midi; break; }
+    }
+    return { complete: true, notes, ambiguousBass: lowestSupported < bass.midi };
+  },
+
+  // Magnitude response in FFT-bin units, normalized to the window's centre.
+  // Use an upper bound across Hann/Blackman so leakage never becomes a key.
+  windowLeakage(distance) {
+    if (distance < .7) return 1;
+    const sinc = x => Math.abs(x) < 1e-8 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x);
+    const centre = sinc(distance);
+    const neighbours = sinc(distance - 1) + sinc(distance + 1);
+    const outer = sinc(distance - 2) + sinc(distance + 2);
+    return Math.max(Math.abs(centre + .5 * neighbours), Math.abs(centre + (.25 / .42) * neighbours + (.04 / .42) * outer));
   },
 
   // magnitudes: LINEAR-magnitude array, length fftSize/2 (the AnalyserNode
@@ -145,31 +191,8 @@ const ChordDetect = {
     return { chroma, energy };
   },
 
-  // score = cosine similarity between the observed chroma and each
-  // candidate chord's template. `chords` should be ONLY the profile's
-  // active colours (not the full CHORDS table) — both a correctness
-  // measure (only active colours are things the child could actually
-  // answer) and a non-issue for cost at <=14 candidates.
-  //
-  // Confidence is MARGIN-primary, gated by an absolute floor:
-  //
-  //   confidence = best.score < minAbsScore
-  //     ? 0
-  //     : clamp01((margin - noiseFloorMargin) / (targetMargin - noiseFloorMargin))
-  //
-  // Rationale (load-bearing): a sparse 3-of-12 template scores only
-  // "middling" even when correct, because real piano overtones bleed
-  // energy outside the template's 3 bins, capping the ceiling on ANY
-  // candidate's absolute score — and because several of these chords share
-  // 1-2 pitch classes, a wrong candidate can ride the same overtone bleed to
-  // a near-identical absolute score. What actually distinguishes "correct
-  // and confident" from "genuinely ambiguous" is how far the winner pulls
-  // ahead of the runner-up, hence margin-primary.
-  //
-  // minAbsScore/noiseFloorMargin/targetMargin are explicit `opts`
-  // overrides. The defaults are protected by the synthetic and
-  // sampled-piano regression corpora; re-evaluate them only with preserved
-  // failures from the remaining physical piano/device-mic acceptance pass.
+  // Cosine similarity selects the family. The gap to the next family is a
+  // heuristic confidence score; it does not establish which keys were played.
   matchChord(chroma, chords, { minAbsScore = 0.35, noiseFloorMargin = 0.03, targetMargin = 0.25 } = {}) {
     const scores = chords
       .map((chord) => ({ name: chord.name, score: ChordDetect.cosineSimilarity(chroma, ChordDetect.chordTemplate(chord)) }))
@@ -190,9 +213,8 @@ const ChordDetect = {
     return { best, second, margin, confidence, scores };
   },
 
-  // One-shot pipeline: the single entry point both js/mic-capture.js (real
-  // AnalyserNode data) and tests/chord-detect.test.mjs (synthetic DFT data)
-  // call — identical code path either way.
+  // Family classification plus note evidence. identifyWithBass resolves the
+  // inversion for live microphone capture.
   identify(magnitudes, { sampleRate, fftSize, chords, minFreq, maxFreq, minEnergy = 1e-6, ...matchOpts } = {}) {
     const { chroma, energy } = ChordDetect.chromaFromSpectrum(magnitudes, { sampleRate, fftSize, minFreq, maxFreq });
 
@@ -205,208 +227,18 @@ const ChordDetect = {
 
     const match = ChordDetect.matchChord(chroma, chords, matchOpts);
     const winnerChord = chords.find((chord) => chord.name === match.best.name);
-    if (winnerChord && !ChordDetect.hasCompleteChordEvidence(magnitudes, winnerChord, {
-      sampleRate,
-      fftSize,
-      minFreq,
-      maxFreq,
-    })) {
-      return { chroma, energy, silence: false, ...match, confidence: 0, incomplete: true };
+    const noteEvidence = winnerChord ? ChordDetect.noteEvidence(magnitudes, winnerChord, { sampleRate, fftSize, minFreq }) : null;
+    if (noteEvidence && (!noteEvidence.complete || noteEvidence.ambiguousBass)) {
+      return { chroma, energy, silence: false, ...match, confidence: 0,
+        incomplete: !noteEvidence.complete, ambiguousBass: noteEvidence.ambiguousBass, noteEvidence };
     }
-    return { chroma, energy, silence: false, ...match };
+    return { chroma, energy, silence: false, ...match, noteEvidence };
   },
 
-  // ===========================================================================
-  // Retired harmonic-inference research helpers.
-  //
-  // None of the functions down through disambiguateBassVoicing() participates
-  // in identifyWithBass() or the live microphone path. They remain only so
-  // the failed 37% whole-voicing experiment in REAL-PIANO-MODE-NOTES.md stays
-  // reproducible. Do not use their relative score as detector confidence.
-  // ===========================================================================
-
-  // 'C4' -> 60 (MIDI, middle C == 60, same convention as
-  // 440*2^((midi-69)/12) == A4 == 69). Octave-AWARE (unlike
-  // noteNameToPitchClass above) because bass disambiguation needs the actual
-  // semitone distance between a chord's notes, not just their pitch classes.
-  noteNameToMidi(note) {
-    const m = /^([A-Ga-g])([#b]?)(-?\d+)$/.exec(note);
-    if (!m) throw new Error(`Not a scientific pitch name: ${note}`);
-    const base = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1].toUpperCase()];
-    const accidental = m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0;
-    const octave = parseInt(m[3], 10);
-    return (octave + 1) * 12 + base + accidental;
-  },
-
-  midiToFreq(midi) {
-    return 440 * Math.pow(2, (midi - 69) / 12);
-  },
-
-  // A chord's notes, re-expressed as semitone offsets ABOVE its own bass
-  // note (chord.notes[0] — js/data.js always lists a chord's notes
-  // low-to-high, so this needs no separate mapping table). E.g. yellow
-  // (C4,F4,A4) -> [0,5,9]; purple (F4,A4,C5) -> [0,4,7]. This is what makes
-  // the joint search below transposition-INVARIANT: the same 3 offsets
-  // describe that voicing wherever on a real keyboard it's actually played.
-  chordSemitoneOffsets(chord) {
-    const bassMidi = ChordDetect.noteNameToMidi(chord.notes[0]);
-    return chord.notes.map((note) => ChordDetect.noteNameToMidi(note) - bassMidi);
-  },
-
-  // One-sided per-harmonic search window in Hz: piano string inharmonicity
-  // always stretches partials SHARP of k*f0, never flat, so the window is
-  // [k*f0*(1-detuneSlack), k*f0*sqrt(1+maxB*k^2)], not a symmetric band
-  // around k*f0. maxB=0.0006 is a generous upper bound for real piano
-  // inharmonicity in the B3-G4-ish register (published coefficients for
-  // mid-register notes typically run ~0.0002-0.0005); detuneSlack=0.01
-  // covers ordinary tuning drift/DFT picket-fence below k*f0.
-  harmonicWindow(f0, k, { maxB = 0.0006, detuneSlack = 0.01 } = {}) {
-    const lower = k * f0 * (1 - detuneSlack);
-    const upper = k * f0 * Math.sqrt(1 + maxB * k * k);
-    return [lower, upper];
-  },
-
-  // Peak magnitude within [loFreq,hiFreq], padded by 1 bin on each side so a
-  // narrow low-k window that falls between bin centres (DFT picket-fence)
-  // doesn't silently miss the true peak.
-  peakInRange(magnitudes, sampleRate, fftSize, loFreq, hiFreq) {
-    const binHz = sampleRate / fftSize;
-    const lo = Math.max(0, Math.floor(loFreq / binHz) - 1);
-    const hi = Math.min(magnitudes.length - 1, Math.ceil(hiFreq / binHz) + 1);
-    let peak = 0;
-    for (let i = lo; i <= hi; i++) if (magnitudes[i] > peak) peak = magnitudes[i];
-    return peak;
-  },
-
-  // Harmonic-series evidence for ONE f0 hypothesis: sum of squared peak
-  // magnitudes at harmonics k=1..harmonics, each found within an
-  // inharmonicity/detune-tolerant window (harmonicWindow). SUMMED, not
-  // multiplied — a product-style HPS collapses to zero the instant any one
-  // harmonic bin is weak, which is exactly the missing-fundamental failure
-  // mode this function exists to survive; k=1 is included but a near-zero
-  // contribution there only costs 1 of `harmonics` terms, never zeroes the
-  // whole score.
-  harmonicSeriesScore(magnitudes, f0, { sampleRate, fftSize, harmonics = 8, maxB, detuneSlack } = {}) {
-    let score = 0;
-    const nyquist = (sampleRate / 2);
-    for (let k = 1; k <= harmonics; k++) {
-      const [lo, hi] = ChordDetect.harmonicWindow(f0, k, { maxB, detuneSlack });
-      if (lo > nyquist) break; // higher k would only go further past Nyquist
-      const peak = ChordDetect.peakInRange(magnitudes, sampleRate, fftSize, lo, Math.min(hi, nyquist));
-      score += peak * peak;
-    }
-    return score;
-  },
-
-  // Total power in the spectrum within [minFreq,maxFreq] — the denominator
-  // for an ABSOLUTE (not just relative/ranking) evidence floor in
-  // disambiguateBassVoicing, so low-level noise (every candidate's score
-  // near-zero, but still nominally rankable against each other) can't
-  // produce a falsely confident bass call. Found necessary empirically: the
-  // first cut of this feature ranked candidates by margin alone and returned
-  // confidence 1.0 on pure noise, because a relative gap can look "large"
-  // even when every candidate's underlying evidence is meaningless.
-  bandPower(magnitudes, { sampleRate, fftSize, minFreq = 80, maxFreq = 900 } = {}) {
-    let total = 0;
-    for (let i = 0; i < magnitudes.length; i++) {
-      const freq = (i * sampleRate) / fftSize;
-      if (freq < minFreq || freq > maxFreq) continue;
-      total += magnitudes[i] * magnitudes[i];
-    }
-    return total;
-  },
-
-  // Joint score for ONE candidate voicing (its semitoneOffsets, from
-  // chordSemitoneOffsets) at ONE hypothesized bass MIDI value: the average,
-  // across all of the voicing's notes, of harmonicSeriesScore at each note's
-  // expected frequency. All notes are scored at the SAME shared
-  // transposition — this is the load-bearing difference from an earlier,
-  // empirically-broken version that searched each note independently (see
-  // file header): a false transposition now has to coincidentally explain
-  // every one of the voicing's notes at once, not just one.
-  voicingScoreAtBass(magnitudes, semitoneOffsets, bassMidi, opts) {
-    let total = 0;
-    for (const offset of semitoneOffsets) {
-      total += ChordDetect.harmonicSeriesScore(magnitudes, ChordDetect.midiToFreq(bassMidi + offset), opts);
-    }
-    return total / semitoneOffsets.length;
-  },
-
-  // Best-fit transposition for one candidate voicing: scans a plausible bass
-  // register (minMidi..maxMidi, default ~A1-E6 — wide enough to comfortably
-  // cover an adult playing wherever is comfortable on a real keyboard, at
-  // least an octave either side of any of js/data.js's own digital
-  // registers — deliberately NOT anchored to one specific digital octave)
-  // and returns whichever bass MIDI value gives this voicing the strongest
-  // joint harmonic support.
-  bestTranspositionForVoicing(magnitudes, semitoneOffsets, opts = {}) {
-    const { minMidi = 33, maxMidi = 88 } = opts;
-    let best = null;
-    for (let midi = minMidi; midi <= maxMidi; midi++) {
-      const score = ChordDetect.voicingScoreAtBass(magnitudes, semitoneOffsets, midi, opts);
-      if (!best || score > best.score) best = { midi, score };
-    }
-    return best;
-  },
-
-  // Retired research entry point: given 2-3 ALREADY-KNOWN candidate
-  // chords that share one chroma template (a same-family tie — see
-  // identifyWithBass below), scores each candidate's WHOLE relative voicing
-  // at its own best-fit transposition and returns whichever explains the
-  // observed spectrum best, with a margin-based confidence in the same
-  // spirit as matchChord's (see that function's comment) but calibrated on
-  // THIS module's own score scale via tests/chord-detect-bass.test.mjs, not
-  // reused from matchChord's chroma-cosine scale.
-  //
-  // Two gates before a call is trusted, exactly analogous to matchChord's
-  // minAbsScore/margin split:
-  //   - absolute floor: the winner's score must be a meaningful multiple of
-  //     the spectrum's own in-band background power (bandPower), or there's
-  //     no real evidence at all — this is what stops pure noise from ever
-  //     producing a confident call (two meaningless numbers can still have a
-  //     "clear" relative gap between them).
-  //   - relative margin: how far the winning voicing's score pulls ahead of
-  //     the runner-up's, relative to the winner's own score. Small margin ==
-  //     genuinely ambiguous registration == low confidence, same
-  //     margin-primary reasoning as matchChord.
-  disambiguateBassVoicing(magnitudes, candidateChords, opts = {}) {
-    const { minAbsScore = 0.02, noiseFloorMargin = 0.02, targetMargin = 0.12 } = opts;
-
-    const results = candidateChords.map((chord) => ({
-      name: chord.name,
-      best: ChordDetect.bestTranspositionForVoicing(magnitudes, ChordDetect.chordSemitoneOffsets(chord), opts),
-    })).sort((a, b) => b.best.score - a.best.score);
-
-    const best = results[0] || { name: null, best: { midi: null, score: 0 } };
-    const second = results[1] || { name: null, best: { midi: null, score: 0 } };
-    const relMargin = best.best.score > 0 ? (best.best.score - second.best.score) / best.best.score : 0;
-
-    const power = ChordDetect.bandPower(magnitudes, opts);
-    const absOk = power > 0 && best.best.score > power * minAbsScore;
-
-    let confidence = 0;
-    if (absOk) {
-      confidence = Math.max(0, Math.min(1, (relMargin - noiseFloorMargin) / (targetMargin - noiseFloorMargin)));
-    }
-
-    return {
-      best: { name: best.name, score: best.best.score },
-      second: { name: second.name, score: second.best.score },
-      margin: relMargin,
-      confidence,
-      results,
-    };
-  },
-
-  // Shipped selective pipeline. Run chroma/completeness first, then require
-  // the lowest salient component's pitch class to match a candidate's
-  // written bass. For a shared chroma family this selects the one configured
-  // inversion; for a unique family it prevents an unwritten inversion from
-  // inheriting the configured colour. Missing or non-matching direct evidence
-  // produces confidence 0—never a fallback guess from the retired scorer.
+  // Name an active written inversion only after note and family checks pass.
   identifyWithBass(magnitudes, { sampleRate, fftSize, chords, minFreq, maxFreq, minEnergy, bassOpts = {}, ...matchOpts } = {}) {
     const result = ChordDetect.identify(magnitudes, { sampleRate, fftSize, chords, minFreq, maxFreq, minEnergy, ...matchOpts });
-    if (result.silence || result.incomplete || !result.best) return result;
+    if (result.silence || result.incomplete || result.ambiguousBass || !result.best) return result;
 
     const winnerChord = chords.find((c) => c.name === result.best.name);
     if (!winnerChord) return result;
@@ -429,12 +261,8 @@ const ChordDetect = {
         seenTemplates.add(key);
         familyRepresentatives.push(chord);
       }
-      // Completeness has already established three direct low-edge pitch
-      // classes, so this is a narrower "did the winning family at least pull
-      // clear of the next distinct family?" check—not the original
-      // chroma-only decision. Sampled-piano onsets need a smaller target
-      // margin than the 0.25 chroma-only default, while a near-tie below 0.02
-      // still maps to zero confidence.
+      // After checking note evidence, compare distinct families using the
+      // margin calibrated by the sampled-piano regression corpus.
       const familyMatch = ChordDetect.matchChord(result.chroma, familyRepresentatives, {
         ...matchOpts,
         noiseFloorMargin: bassOpts.familyNoiseFloorMargin != null
@@ -455,15 +283,7 @@ const ChordDetect = {
     // octave information long enough to read the lowest salient component,
     // then map that bass pitch class to the one configured candidate in this
     // family whose written voicing starts on the same pitch class.
-    const lowEdge = ChordDetect.lowEdgePitchClasses(magnitudes, {
-      sampleRate,
-      fftSize,
-      minFreq: bassOpts.minFreq,
-      maxFreq: bassOpts.maxFreq,
-      relativePeakFloor: bassOpts.relativePeakFloor,
-      peakCount: 1,
-    });
-    const bassPitchClass = lowEdge[0];
+    const bassPitchClass = result.noteEvidence?.notes[0]?.pitchClass;
     const directMatches = tiedChords.filter(
       (chord) => ChordDetect.noteNameToPitchClass(chord.notes[0]) === bassPitchClass
     );
@@ -479,14 +299,12 @@ const ChordDetect = {
           margin: 1,
           confidence: 1,
           pitchClass: bassPitchClass,
-          method: 'low-edge',
+          method: 'note-evidence',
         },
       };
     }
 
-    // No direct lower-edge evidence means "can't tell." Do not fall back to
-    // the old inferred-harmonic scorer: the adversarial suite documents that
-    // it can become confidently wrong on missing-fundamental cases.
+    // The observed bass must map to one active, configured voicing.
     return {
       ...result,
       confidence: 0,
@@ -496,7 +314,7 @@ const ChordDetect = {
         margin: 0,
         confidence: 0,
         pitchClass: bassPitchClass == null ? null : bassPitchClass,
-        method: 'low-edge',
+        method: 'note-evidence',
       },
     };
   },

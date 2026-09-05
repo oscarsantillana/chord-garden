@@ -1,19 +1,4 @@
-/*
- * Rainbow Pitch — real-piano microphone capture (browser-only).
- *
- * Wraps the native Web Audio API (getUserMedia + AudioContext + AnalyserNode)
- * directly — deliberately NOT a Tone.js-specific wrapper, so mic capture is
- * decoupled from Tone.js version quirks (PianoAudio/Tone.js stays the
- * playback-only module; see js/audio.js). The pure chroma/template-matching
- * math this file leans on lives in js/chord-detect.js and is unit tested
- * there with synthetic, Node-only signals (tests/chord-detect.test.mjs) —
- * this file's only job is wiring: mic -> live spectrum -> ChordDetect ->
- * a debounced, "never a failure" callback for js/app.js's practice screen.
- *
- * Browser-only by nature (getUserMedia/AudioContext don't exist in Node) —
- * not unit tested here for that reason; `node --check` only verifies this
- * file parses, it never executes any of the browser-only calls below.
- */
+/* Local microphone capture and spectral polling. */
 
 const MicCapture = (() => {
   let stream = null;
@@ -22,6 +7,7 @@ const MicCapture = (() => {
   let dataArray = null; // Float32Array of dB values, filled by getFloatFrequencyData
   let pollHandle = null; // the current listenForChord() round's pending setTimeout, if any
   let activeListen = null;
+  let captureGeneration = 0;
   const MAX_BIN_WIDTH_HZ = 5.86;
 
   function defaultFftSize(sampleRate) {
@@ -35,54 +21,51 @@ const MicCapture = (() => {
       (window.AudioContext || window.webkitAudioContext));
   }
 
-  // Acquire the microphone and build the analyser. Must be called from
-  // inside a user gesture (the same browser rule PianoAudio.unlock() already
-  // relies on) — see js/app.js's enterRealPianoMode(), which calls this
-  // straight from the priming card's "Ready" tap.
-  //
-  // Resolves with a small handle ({ stop }) for any caller that wants to
-  // hold onto it, but every bit of state is also tracked at module scope, so
-  // a bare `MicCapture.stop()` — called from somewhere that never held onto
-  // what start() returned, e.g. app.js's calmStop()/finishPractice() — works
-  // exactly the same way.
+  function cancelledStart() {
+    const error = new Error('Microphone startup was cancelled.');
+    error.name = 'AbortError';
+    return error;
+  }
+
   async function start({ fftSize } = {}) {
+    stop();
+    const generation = captureGeneration;
     if (!isSupported()) {
-      const err = new Error('This browser can\'t access the microphone here.');
-      err.code = 'UNAVAILABLE';
-      throw err;
+      const error = new Error('This browser cannot access the microphone here.');
+      error.code = 'UNAVAILABLE';
+      throw error;
     }
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-        channelCount: 1,
-      },
+    const acquiredStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
     });
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    audioCtx = new Ctx();
-    if (audioCtx.state === 'suspended') {
-      try { await audioCtx.resume(); } catch (e) { /* best-effort — see playChord's own resume patterns */ }
+    if (generation !== captureGeneration) {
+      acquiredStream.getTracks().forEach(track => track.stop());
+      throw cancelledStart();
     }
-    const source = audioCtx.createMediaStreamSource(stream);
-    analyser = audioCtx.createAnalyser();
-    // Low-register chord tones sit close enough together that 10–12 Hz bins
-    // can round a fundamental to the neighbouring pitch class. Keep live
-    // bins at or below the 48 kHz / 8192 resolution proven by the detector
-    // suite, scaling up automatically for 88.2/96 kHz device contexts.
-    analyser.fftSize = fftSize || defaultFftSize(audioCtx.sampleRate);
-    // A little smoothing so a single noisy frame doesn't swing the read, but
-    // not so much it blurs together the actual attack of a freshly-played
-    // chord with whatever rang just before it.
-    analyser.smoothingTimeConstant = 0.2;
-    dataArray = new Float32Array(analyser.frequencyBinCount);
-    source.connect(analyser);
-    return { stop };
+    stream = acquiredStream;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const context = new Ctx();
+      audioCtx = context;
+      if (context.state === 'suspended') await context.resume();
+      if (generation !== captureGeneration) throw cancelledStart();
+      const source = context.createMediaStreamSource(acquiredStream);
+      analyser = context.createAnalyser();
+      analyser.fftSize = fftSize || defaultFftSize(context.sampleRate);
+      analyser.smoothingTimeConstant = 0.2;
+      dataArray = new Float32Array(analyser.frequencyBinCount);
+      source.connect(analyser);
+      return { stop() { if (generation === captureGeneration) stop(); } };
+    } catch (error) {
+      if (generation === captureGeneration) stop();
+      throw error;
+    }
   }
 
   // Releases the microphone (MediaStream tracks) and tears down the audio
   // graph. Safe to call multiple times / when nothing was ever started.
   function stop() {
+    captureGeneration += 1;
     if (activeListen) activeListen.cancel();
     if (pollHandle != null) { clearTimeout(pollHandle); pollHandle = null; }
     if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }

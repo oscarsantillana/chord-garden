@@ -1,8 +1,9 @@
+import { magnitudeSpectrum } from './helpers/fft.mjs';
 // Rainbow Pitch — adversarial tests for the shipped selective inversion path.
 //
 // Purpose (read this before touching thresholds): chroma alone cannot tell
 // red/orange/brown (etc.) apart. This file keeps the original 405-condition
-// grid and asks whether direct low-edge evidence stays both safe and useful
+// grid and asks whether register and harmonic evidence stays both safe and useful
 // under piano-like stresses:
 //   - weak or fully MISSING fundamentals (very common on real low piano
 //     notes — the amplitude at k=1 can be a small fraction of the upper
@@ -107,42 +108,10 @@ function hannWindow(length) {
   return w;
 }
 
-// Non-blocking performance follow-up: this direct O(N²) transform keeps the
-// oracle dependency-free and easy to inspect, but the 405-case sweep took
-// about 129 seconds on the 2026-07-29 validation machine. Replace it with a
-// deterministic radix-2 FFT if this suite runs frequently in CI. Preserve
-// the Hann window, seeded synthesis, complete grid, and all release metrics;
-// never shrink the evidence set merely to make the test faster. See
-// REAL-PIANO-MODE-NOTES.md, “Long-sweep test performance.”
+// Preserve the original Hann window and unnormalized magnitudes.
 function dft(buf) {
-  const length = buf.length;
-  const window = hannWindow(length);
-  const windowed = new Float64Array(length);
-  for (let n = 0; n < length; n++) windowed[n] = buf[n] * window[n];
-  const half = length / 2;
-  const mags = new Float64Array(half);
-  for (let k = 0; k < half; k++) {
-    let re = 0, im = 0;
-    const w = (-2 * Math.PI * k) / length;
-    for (let n = 0; n < length; n++) {
-      const angle = w * n;
-      re += windowed[n] * Math.cos(angle);
-      im += windowed[n] * Math.sin(angle);
-    }
-    mags[k] = Math.sqrt(re * re + im * im);
-  }
-  return mags;
-}
-
-// --- unit-level sanity: harmonicWindow / peakInRange behave as documented --
-
-{
-  const [lo, hi] = ChordDetect.harmonicWindow(300, 8, { maxB: 0.0006, detuneSlack: 0.01 });
-  assert.ok(lo < 8 * 300, 'lower bound should sit below the idealized k*f0');
-  assert.ok(hi > 8 * 300, 'upper bound should sit above k*f0 (inharmonic stretch is always sharp)');
-  const semitoneWidth = 12 * Math.log2(hi / (8 * 300));
-  assert.ok(semitoneWidth < 0.6, `harmonic-8 window should stay comfortably under a semitone (was ${semitoneWidth.toFixed(2)} semitones) so it can't swallow a neighbouring pitch class`);
-  console.log(`ok - harmonicWindow: k=8 window is one-sided-sharp and stays within ${semitoneWidth.toFixed(2)} semitones (< 1) of ideal at default maxB`);
+  const window = hannWindow(buf.length);
+  return magnitudeSpectrum(buf.map((value, index) => value * window[index]));
 }
 
 // --- Main adversarial grid: {family x true-bass-colour x B x fundamentalAmp x octave shift} ---
@@ -273,14 +242,14 @@ console.log('');
   const withBass = ChordDetect.identifyWithBass(magnitudes, { sampleRate: SAMPLE_RATE, fftSize: N, chords: activeSubset });
   assert.equal(withBass.best.name, plain.best.name, 'written-bass validation must preserve the correct family answer');
   assert.equal(withBass.confidence, plain.confidence, 'written-bass validation must preserve confidence for the exact voicing');
-  assert.equal(withBass.bass && withBass.bass.method, 'low-edge', 'every accepted chord must carry direct written-bass evidence');
+  assert.equal(withBass.bass && withBass.bass.method, 'note-evidence', 'every accepted chord must carry checked written-bass evidence');
   console.log('ok - identifyWithBass: validates written bass without changing a correct unique-family answer');
 }
 
 // --- Silence / noise control: must not hallucinate a confident bass call --
 //
 // The retired inferred-harmonic scorer used to hallucinate confidently here.
-// The shipped low-edge path is deliberately selective: noise lacks complete
+// The shipped note-evidence path is deliberately selective: noise lacks complete
 // chord evidence, so confidence must remain below the live threshold.
 {
   const rand = makeRand(9);

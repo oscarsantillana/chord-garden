@@ -24,31 +24,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tests=(
-            tests/logic.test.mjs
-            tests/chord-detect.test.mjs
-            tests/chord-detect-all-chords.test.mjs
-            tests/chord-detect-full-pool.test.mjs
-            tests/chord-detect-live-resolution.test.mjs
-            tests/fresh-chord-gate.test.mjs
-            tests/chord-detect-sampled-piano.test.mjs
-            tests/mic-capture.test.mjs
-            tests/mic-capture-resolution.test.mjs
-            tests/audio-output-barrier.test.mjs
-            tests/real-piano-acceptance.test.mjs
-            tests/real-piano-acceptance-browser.test.mjs
-            tests/real-piano-acceptance-summary-cli.test.mjs
-          )
-          for test_file in "${tests[@]}"; do
-            node "$test_file"
-          done
+          node --test tests/*.test.mjs
           for script_file in js/*.js sw.js; do
             node --check "$script_file"
           done
 
       # Keep the operator-only acceptance harness outside the production
-      # service-worker scope. The long 405-condition bass sweep remains a
-      # manual release check until its test-only O(n²) DFT is replaced.
+      # service-worker scope.
       - name: Prepare static site
         shell: bash
         run: |

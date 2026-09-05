@@ -111,13 +111,11 @@ which chord it heard, and the child taps the matching colour. Turn it on
 per-child in **Settings**. All listening happens locally in the browser —
 audio is never recorded, saved, or sent anywhere.
 
-The detector checks that all three keys are present, waits for a fresh attack,
-and requires the lowest heard key to match the colour's configured written
-voicing. That distinguishes core inversions such as Yellow/Black/Purple and
-prevents an unwritten advanced inversion from being accepted. It is
-deliberately selective: unclear evidence becomes a gentle retry and is not
-scored. This remains experimental until it has been validated across a
-representative set of physical pianos, rooms, and device microphones.
+The detector looks for a close-position triad and checks for harmonics that
+could indicate a quieter lower key. Incomplete or ambiguous evidence produces
+a gentle retry and is not scored. Play the configured voicing, with all three
+keys struck together; octave shifts are supported. This remains experimental
+until validated across physical pianos, rooms, and device microphones.
 
 The PIN defaults to **`2468`** and can be changed any time in **Settings**.
 The lock screen's "Demo PIN: 2468" hint is only shown while the PIN is still
@@ -153,28 +151,16 @@ rainbow-pitch/
 No build step — this is still a static site, so there's nothing to compile
 or bundle.
 
-- Run the tests:
-  `node tests/logic.test.mjs`,
-  `node tests/chord-detect.test.mjs`,
-  `node tests/chord-detect-bass.test.mjs`,
-  `node tests/chord-detect-all-chords.test.mjs`,
-  `node tests/chord-detect-full-pool.test.mjs`,
-  `node tests/chord-detect-live-resolution.test.mjs`,
-  `node tests/fresh-chord-gate.test.mjs`,
-  `node tests/chord-detect-sampled-piano.test.mjs`,
-  `node tests/mic-capture.test.mjs`,
-  `node tests/mic-capture-resolution.test.mjs`,
-  `node tests/audio-output-barrier.test.mjs`,
-  `node tests/real-piano-acceptance.test.mjs`,
-  `node tests/real-piano-acceptance-browser.test.mjs`,
-  and `node tests/real-piano-acceptance-summary-cli.test.mjs`
-- Syntax-check every script: `node --check js/*.js sw.js`
+Run all regression tests, including the 405-condition detector sweep:
 
-`tests/chord-detect-bass.test.mjs` is the deliberate long-running exception:
-its dependency-free O(N²) DFT makes the 405-case sweep take roughly two
-minutes on the current validation machine. This is a recorded test-harness
-performance follow-up, not production detector cost; preserve the full grid
-and release assertions when replacing it with a deterministic FFT.
+```bash
+node --test tests/*.test.mjs
+for file in js/*.js sw.js; do node --check "$file" || exit 1; done
+```
+
+The waveform tests use a test-only FFT checked against the original direct
+transform. They preserve the synthesis, windows, and full case grids without
+the former two-minute transform cost.
 
 `js/logic.js` holds the pure method logic — rolling readiness windows,
 weighted colour picking, confusion aggregation — deliberately kept free of
@@ -182,9 +168,9 @@ weighted colour picking, confusion aggregation — deliberately kept free of
 directly in Node, and so it stays straightforward to test. `js/chord-detect.js`
 is the same pattern applied to real-piano mode's spectrum classification.
 
-The detector suites enforce a selective safety contract: no wrong written
-voicing may cross the live confidence threshold, while realistic synthetic
-conditions must retain useful coverage. The sampled-piano fixture suite feeds
+The detector suites require zero wrong accepted colours in their defined
+synthetic grids while retaining useful coverage. That is regression evidence,
+not a guarantee for arbitrary acoustic input. The sampled-piano fixture suite feeds
 all 14 configured chords as onset-aligned 48 kHz spectra from the same
 Salamander piano timbre through the public detector and fresh-attack gate.
 Neither suite substitutes for the remaining physical-piano/device-microphone

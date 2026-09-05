@@ -1,3 +1,4 @@
+import { magnitudeSpectrum } from './helpers/fft.mjs';
 // Rainbow Pitch — behavior tests for the pure spectrum classifier.
 //
 // No test framework, no deps: plain assertions, run with `node
@@ -112,32 +113,10 @@ function hannWindow(length) {
   return w;
 }
 
-// Hand-rolled O(N^2) DFT — plenty fast for N=2048 in Node, no FFT library
-// needed. Hann-windowed first: required, not cosmetic — a rectangular
-// window's sidelobes would leak energy across pitch-class bin boundaries in
-// a way that's an artifact of this naive DFT (a real AnalyserNode already
-// windows internally), so skipping it would make the test flaky or
-// unrealistically easy. Returns linear-magnitude array of length N/2.
+// Preserve the original Hann window and unnormalized magnitudes.
 function dft(buf) {
-  const length = buf.length;
-  const window = hannWindow(length);
-  const windowed = new Float64Array(length);
-  for (let n = 0; n < length; n++) windowed[n] = buf[n] * window[n];
-
-  const half = length / 2;
-  const mags = new Float64Array(half);
-  for (let k = 0; k < half; k++) {
-    let re = 0;
-    let im = 0;
-    const w = (-2 * Math.PI * k) / length;
-    for (let n = 0; n < length; n++) {
-      const angle = w * n;
-      re += windowed[n] * Math.cos(angle);
-      im += windowed[n] * Math.sin(angle);
-    }
-    mags[k] = Math.sqrt(re * re + im * im);
-  }
-  return mags;
+  const window = hannWindow(buf.length);
+  return magnitudeSpectrum(buf.map((value, index) => value * window[index]));
 }
 
 function identifyChordWaveform(buf) {

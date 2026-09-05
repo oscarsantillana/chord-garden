@@ -117,6 +117,10 @@ const Store = (() => {
     save();
   }
 
+  function resetProgress(id) {
+    updateProfile(id, { stats: {}, sessions: [], events: [] });
+  }
+
   // Colour set mutations go through the store (not direct array pokes on the
   // profile object) so every write path funnels through save().
   function addColor(name) {
@@ -182,7 +186,7 @@ const Store = (() => {
   return {
     all,
     activeProfile, setActiveProfile,
-    addProfile, removeProfile, updateProfile,
+    addProfile, removeProfile, updateProfile, resetProgress,
     addColor, removeColor,
     recordRound, recordSession, recordRealPianoRound,
     getPin, setPin,

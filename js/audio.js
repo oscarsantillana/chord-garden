@@ -97,7 +97,7 @@ const PianoAudio = (() => {
    * @param {string[]} notes e.g. ['C4','E4','G4']
    * @param {number} duration seconds the chord rings
    */
-  async function playChord(notes, duration = 2.2) {
+  async function playPitched(notes, duration, velocity) {
     const operationGeneration = pitchedOperationGeneration;
     pendingPitchedOperations += 1;
     try {
@@ -105,13 +105,8 @@ const PianoAudio = (() => {
       await ensureSampler();
       if (operationGeneration !== pitchedOperationGeneration) return;
       sampler.releaseAll();
-      // Schedule slightly in the future (rather than "now") so every note in
-      // the chord is handed to the audio clock at the exact same instant —
-      // sample-accurate shared attack is a big part of what makes simultaneous
-      // notes read as one chord instead of a smeared little arpeggio.
       const delay = 0.05;
-      const when = Tone.now() + delay;
-      sampler.triggerAttackRelease(notes, duration, when);
+      sampler.triggerAttackRelease(notes, duration, Tone.now() + delay, velocity);
       pitchedOutputUntil = Math.max(
         pitchedOutputUntil,
         Date.now() + (delay + duration + RELEASE_SECONDS) * 1000
@@ -121,33 +116,13 @@ const PianoAudio = (() => {
     }
   }
 
-  /**
-   * Replay the just-heard TARGET chord once, a touch softer and shorter,
-   * right after a correct answer. This is intentionally NOT a different
-   * "ta-da" jingle: playing new pitches (even a cheerful arpeggio) in the
-   * same piano timbre the child is learning would be interference — new
-   * chord↔sound pairs landing right on top of the one we're reinforcing.
-   * Hearing the SAME chord again at the moment of success is the reward.
-   * @param {string[]} notes the target chord that was just answered correctly
-   */
-  async function playReward(notes, duration = 1.2) {
-    const operationGeneration = pitchedOperationGeneration;
-    pendingPitchedOperations += 1;
-    try {
-      if (!started) await unlock();
-      await ensureSampler();
-      if (operationGeneration !== pitchedOperationGeneration) return;
-      sampler.releaseAll();
-      const delay = 0.05;
-      const when = Tone.now() + delay; // shared onset — see playChord
-      sampler.triggerAttackRelease(notes, duration, when, 0.75); // a touch softer
-      pitchedOutputUntil = Math.max(
-        pitchedOutputUntil,
-        Date.now() + (delay + duration + RELEASE_SECONDS) * 1000
-      );
-    } finally {
-      pendingPitchedOperations -= 1;
-    }
+  function playChord(notes, duration = 2.2) {
+    return playPitched(notes, duration, 1);
+  }
+
+  // Reward replays the target chord, softer and shorter.
+  function playReward(notes, duration = 1.2) {
+    return playPitched(notes, duration, .75);
   }
 
   let sparkleSynth = null;

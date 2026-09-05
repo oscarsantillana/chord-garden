@@ -1,0 +1,86 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import { fakeDom, fakeClock } from './helpers/fake-dom.mjs';
+const flush = () => new Promise(resolve => setImmediate(resolve));
+function setup({ micMode = false, deferredMic = false, deferredChord = false } = {}) {
+  const { app, document } = fakeDom(), clock = fakeClock();
+  const saved = new Map(), windowEvents = {}, played = [], listens = [], pendingStarts = [], pendingChords = [];
+  let micStarts = 0, micStops = 0;
+  const sandbox = { console, document, ...clock, requestAnimationFrame: callback => callback(),
+    window: { confirm: () => true, addEventListener: (name, callback) => { windowEvents[name] = callback; } },
+    navigator: {}, localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
+    Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '' },
+    PianoAudio: {
+      async unlock() {}, stopAll() {}, async whenOutputSilent() {}, playCue() {}, playPop() {}, playSparkle() {}, async playReward() {},
+      playChord(notes) { played.push([...notes]); return deferredChord ? new Promise(resolve => pendingChords.push(resolve)) : Promise.resolve(); },
+    },
+    MicCapture: {
+      isSupported: () => true, stop() { micStops++; },
+      start() { micStarts++; return deferredMic ? new Promise(resolve => pendingStarts.push(resolve)) : Promise.resolve(); },
+      listenForChord(chords, heard, low, opts) { const listen = { chords, heard, low, opts, cancelled: false }; listens.push(listen); return { cancel() { listen.cancelled = true; } }; },
+    },
+  };
+  vm.createContext(sandbox);
+  for (const file of ['data', 'logic', 'storage']) vm.runInContext(fs.readFileSync(new URL(`../js/${file}.js`, import.meta.url), 'utf8'), sandbox);
+  vm.runInContext('this.store=Store; Store.updateProfile(Store.activeProfile().id, { realPianoMode: ' + micMode + ', activeColors: ["red"], roundsPerSet: 2 });', sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8'), sandbox);
+  const click = async label => {
+    const button = app.querySelectorAll('button').find(node => node.textContent === label);
+    assert.ok(button, `button ${label} is visible: ${app.textContent}`);
+    const pending = button.click(); await flush(); return { pending };
+  };
+  return { app, clock, click, played, listens, pendingStarts, pendingChords, windowEvents,
+    store: sandbox.store, saved, get micStarts() { return micStarts; }, get micStops() { return micStops; } };
+}
+{
+  const ui = setup({ micMode: true });
+  await ui.click('Start'); await ui.click('Ready'); assert.equal(ui.micStarts, 1);
+  await ui.click('All done'); await ui.click('Play again');
+  assert.equal(ui.micStarts, 2, 'replay reacquires the microphone');
+  assert.equal(ui.listens.length, 2); assert.equal(ui.played.length, 0);
+}
+{
+  const ui = setup({ micMode: true, deferredMic: true });
+  await ui.click('Start'); const { pending } = await ui.click('Ready');
+  await ui.click('Not now'); ui.pendingStarts[0](); await pending; await flush();
+  assert.ok(ui.app.querySelector('.home')); assert.equal(ui.listens.length, 0);
+  assert.equal(ui.micStops, 1, 'leaving priming cancels acquisition');
+}
+{
+  const ui = setup();
+  await ui.click('Start'); await ui.clock.tick(1050);
+  ui.app.querySelector('.color-btn').click();
+  await ui.click('All done'); await ui.click('Play again');
+  await ui.clock.tick(2200);
+  assert.equal(ui.played.length, 2, 'the previous answer timer cannot start an extra round');
+  assert.equal(ui.store.activeProfile().events.length, 1);
+}
+{
+  const ui = setup({ deferredChord: true });
+  await ui.click('Start'); await ui.clock.tick(1050);
+  await ui.click('All done'); await ui.click('Play again');
+  ui.pendingChords[0](); await flush();
+  assert.ok(ui.app.querySelector('.answers').classList.contains('waiting'), 'old playback completion cannot unlock a new round');
+  await ui.clock.tick(1050); ui.pendingChords[1](); await flush();
+  assert.equal(ui.app.querySelector('.answers').classList.contains('waiting'), false);
+}
+{
+  const ui = setup();
+  await ui.click('Start'); await ui.click('All done'); await ui.click('Play again'); await ui.clock.tick(1050);
+  assert.equal(ui.played.length, 1, 'stopping during the cue cancels the old chord timer');
+  ui.windowEvents.pagehide(); await ui.clock.tick(5000);
+  ui.windowEvents.pageshow({ persisted: true }); assert.ok(ui.app.querySelector('.home'));
+}
+{
+  const ui = setup(); const p = ui.store.activeProfile();
+  ui.store.recordRound('red', 'red', true); ui.store.recordRealPianoRound('red', 'yellow', false, .8);
+  ui.store.recordSession({ rounds: 1, correct: 1 });
+  ui.app.querySelector('.gear').click();
+  for (const digit of ['2', '4', '6', '8']) await ui.click(digit);
+  await ui.click('Settings'); await ui.click('Reset this child’s progress');
+  assert.equal(p.events.length, 0); assert.equal(p.sessions.length, 0); assert.equal(Object.keys(p.stats).length, 0);
+  const persisted = JSON.parse(ui.saved.get('rainbow-pitch:v1')).profiles[0];
+  assert.deepEqual(persisted.events, []); assert.deepEqual(persisted.activeColors, ['red']);
+}
+console.log('ok - app replay, startup cancellation, session timers, stale playback, and progress reset');

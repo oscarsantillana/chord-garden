@@ -33,6 +33,41 @@
   }
   const clear = (n) => { while (n.firstChild) n.removeChild(n.firstChild); };
 
+  let screenGeneration = 0;
+  let pendingMicStart = false;
+  let roundSequence = 0;
+
+  function clearScreen() {
+    screenGeneration += 1;
+    if (pendingMicStart) {
+      pendingMicStart = false;
+      MicCapture.stop();
+    }
+    clear(app);
+  }
+
+  async function beginPractice(button, error) {
+    const generation = screenGeneration;
+    const label = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = 'Waking the piano…';
+    error.hidden = true;
+    try {
+      await PianoAudio.unlock();
+      if (generation !== screenGeneration) return;
+      if (Store.activeProfile().realPianoMode) await enterRealPianoMode();
+      else startPractice('digital');
+    } catch (failure) {
+      if (generation !== screenGeneration) return;
+      button.disabled = false;
+      button.innerHTML = label;
+      error.textContent = failure?.name === 'NotAllowedError'
+        ? 'Microphone access was not granted. Please try again or change the real piano setting.'
+        : 'Could not start the piano or microphone. Please try again.';
+      error.hidden = false;
+    }
+  }
+
   function activeColorObjects() {
     const p = Store.activeProfile();
     return p.activeColors.map((name) => CHORD_BY_NAME[name]).filter(Boolean);
@@ -59,7 +94,7 @@
   //  HOME  (Child Start)
   // =======================================================================
   function renderHome() {
-    clear(app);
+    clearScreen();
     const p = Store.activeProfile();
     const colors = activeColorObjects();
 
@@ -93,27 +128,7 @@
       'The piano needs the internet the first time — check your connection and try again.');
     const startBtn = el('button', {
       class: 'big-start',
-      onclick: async () => {
-        const label = startBtn.innerHTML; // remember icon+"Start" to restore on failure
-        startBtn.disabled = true;
-        startBtn.innerHTML = 'Waking the piano…';
-        startError.hidden = true;
-        try {
-          await PianoAudio.unlock();
-          const p = Store.activeProfile();
-          if (p.realPianoMode) await enterRealPianoMode(startError);
-          else startPractice('digital');
-        } catch (e) {
-          // Most likely the CDN piano samples couldn't load (offline, first
-          // run) — or, in real-piano mode, the microphone couldn't be
-          // reacquired after already being granted once this session (see
-          // enterRealPianoMode). Reset the button so the grown-up can just
-          // try again rather than being stuck on "Waking the piano…" forever.
-          startBtn.disabled = false;
-          startBtn.innerHTML = label;
-          startError.hidden = false;
-        }
-      },
+      onclick: () => beginPractice(startBtn, startError),
     }, el('span', { class: 'btn-ico', html: Sprites.icon('play') }), 'Start');
 
     const profileStrip = el('div', { class: 'profile-strip' },
@@ -174,38 +189,30 @@
   //  REAL PIANO MODE  (mic priming + entry, guardian-toggled — see
   //  guardianSettings' "Real piano mode" section below for the on/off switch)
   // =======================================================================
-  // Whether the microphone has already been granted once this page-load.
-  // Kept outside `session` (like mascotPct below) because it needs to
-  // survive across whole Practice Sets, Home visits, etc. — priming is
-  // once-per-BROWSER-SESSION, not once-per-practice-set and not once-ever:
-  // only an actual getUserMedia grant flips this, so tapping "Not now" just
-  // returns to Home and offers the exact same priming card next time.
   let micPrimedThisSession = false;
 
-  // Called from Home's Start button once PianoAudio.unlock() has already
-  // succeeded and the active profile has real-piano mode on. If the mic was
-  // already granted once this session, skip straight to (re)acquiring it —
-  // a real getUserMedia failure here (e.g. permission revoked mid-session)
-  // is deliberately left to bubble up to the Start button's own try/catch,
-  // which already knows how to reset the button and reveal `startError`.
-  // Otherwise, show the one-time priming card, which owns the rest of the
-  // flow (and never throws back up here — it renders its own UI either way).
-  async function enterRealPianoMode(startError) {
-    if (micPrimedThisSession) {
+  async function acquireMicrophone() {
+    const generation = screenGeneration;
+    pendingMicStart = true;
+    try {
       await MicCapture.start();
+      if (generation !== screenGeneration) return;
+      pendingMicStart = false;
+      micPrimedThisSession = true;
       startPractice('mic');
-      return;
+    } finally {
+      if (generation === screenGeneration) pendingMicStart = false;
     }
-    renderMicPriming();
   }
 
-  // The one-time (per browser session) priming card: explains what real
-  // piano mode does and that listening happens only on-device, then the
-  // "Ready" tap is the actual user gesture that calls getUserMedia. Reuses
-  // the PIN gate's `.gate-card` shell verbatim — same shell, same plain
-  // honest-copy tone as the rest of the app's privacy language.
+  async function enterRealPianoMode() {
+    if (micPrimedThisSession) await acquireMicrophone();
+    else renderMicPriming();
+  }
+
   function renderMicPriming() {
-    clear(app);
+    clearScreen();
+    const generation = screenGeneration;
     const micError = el('p', { class: 'start-error', hidden: true });
     const readyBtn = el('button', {
       class: 'primary-btn',
@@ -213,10 +220,9 @@
         readyBtn.disabled = true;
         micError.hidden = true;
         try {
-          await MicCapture.start();
-          micPrimedThisSession = true;
-          startPractice('mic');
+          await acquireMicrophone();
         } catch (e) {
+          if (generation !== screenGeneration) return;
           readyBtn.disabled = false;
           if (e && e.code === 'UNAVAILABLE') {
             // Nothing to retry — old browser / insecure context — so the
@@ -273,7 +279,8 @@
       misses: 0,        // wrong taps so far this round
       locked: false,
       cueing: false,    // true while the "Listen…" cue is showing, pre-chord
-      roundId: 0,        // bumped each round; guards stale playChord unlocks
+      roundId: 0,
+      timers: new Set(),
       streak: 0,        // consecutive FIRST-ATTEMPT-correct rounds; any miss resets it
       mode,             // 'digital' (app picks + plays) or 'mic' (real piano)
       micListen: null,   // cancellable handle for the current mic round
@@ -325,6 +332,26 @@
     if (cueEl) cueEl.classList.add('hidden'); // the cue's job is done once answers unlock
   }
 
+  // Delayed practice work belongs to one round of one session.
+  function scheduleRound(callback, delay) {
+    const owner = session;
+    const roundId = owner.roundId;
+    const timer = setTimeout(() => {
+      owner.timers.delete(timer);
+      if (session === owner && owner.roundId === roundId) callback();
+    }, delay);
+    owner.timers.add(timer);
+  }
+
+  function clearRoundWork() {
+    if (!session) return;
+    for (const timer of session.timers) clearTimeout(timer);
+    session.timers.clear();
+    if (session.micListen) session.micListen.cancel();
+    session.micListen = null;
+    PianoAudio.stopAll();
+  }
+
   function nextRound() {
     if (!session) return; // a calm stop may have ended the set already
     if (session.mode === 'mic') { nextMicRound(); return; }
@@ -333,7 +360,7 @@
     // or a two-miss reveal chord) right away, so its release fade happens
     // during this round's cue beat instead of bleeding into the new chord
     // below.
-    PianoAudio.stopAll();
+    clearRoundWork();
     session.current = pickTarget();
     session.attempted = false;
     session.misses = 0;
@@ -343,7 +370,7 @@
     // playChord promise if the round moves on before it resolves.
     session.locked = true;
     session.cueing = true; // shows the "Listen…" overlay until the chord below sounds
-    const roundId = ++session.roundId;
+    const roundId = session.roundId = ++roundSequence;
     renderPractice();
     const notes = session.current.notes;
     // Timings: a beat longer than before (was 500/900ms) to give the stopAll
@@ -351,11 +378,11 @@
     // to land as their own unmistakable "new round, ears on" moment —
     // otherwise the previous chord's tail and this round's chord blur into
     // one stream of piano.
-    setTimeout(() => {
+    scheduleRound(() => {
       if (!session || session.roundId !== roundId) return;
       PianoAudio.playCue();
     }, 600);
-    setTimeout(() => {
+    scheduleRound(() => {
       if (!session) return;
       // If the chord genuinely fails to play (e.g. the sampler load timed
       // out), unlock the answer grid anyway — a silent, chordless round is
@@ -378,11 +405,7 @@
   function nextMicRound() {
     if (!session) return; // a calm stop may have ended the set already
     if (session.index >= session.total) return finishPractice(false);
-    if (session.micListen) {
-      session.micListen.cancel();
-      session.micListen = null;
-    }
-    PianoAudio.stopAll();
+    clearRoundWork();
     const armAfter = PianoAudio.whenOutputSilent();
     session.current = null;
     session.currentConfidence = null;
@@ -392,7 +415,7 @@
     session.misses = 0;
     session.locked = true;
     session.cueing = true;
-    const roundId = ++session.roundId;
+    const roundId = session.roundId = ++roundSequence;
     renderPractice();
 
     session.micListen = MicCapture.listenForChord(activeChordsForSession(), (chordObj, confidence) => {
@@ -401,7 +424,7 @@
       session.current = chordObj;
       session.currentConfidence = confidence;
       renderPractice(); // State B: brief "Got it!" confirm beat, no colour named
-      setTimeout(() => unlockAnswers(roundId), 350);
+      scheduleRound(() => unlockAnswers(roundId), 350);
     }, () => {
       if (!session || session.roundId !== roundId) return;
       session.micListen = null;
@@ -442,7 +465,7 @@
   }
 
   function renderPractice() {
-    clear(app);
+    clearScreen();
     // How far along the set the child is, as a % of the journey path — the
     // mascot walks to this spot and the flag marks the end (session.total).
     const targetPct = session.total > 0 ? Math.min(100, (session.index / session.total) * 100) : 0;
@@ -626,7 +649,7 @@
       // new pitch content landing on top of the association we're building.
       PianoAudio.playReward(session.current.notes).catch(() => {});
       session.index += 1;
-      setTimeout(nextRound, 1100);
+      scheduleRound(nextRound, 1100);
     } else {
       // Any miss breaks the happy streak, and gets a brief, gentle
       // "curious" face — never a lingering state; a new round always starts
@@ -648,11 +671,11 @@
         const correctBtn = app.querySelector(`.color-btn[data-color="${session.current.name}"]`);
         if (correctBtn) correctBtn.classList.add('reveal');
         const notes = session.current.notes;
-        setTimeout(() => { if (session) PianoAudio.playChord(notes).catch(() => {}); }, 300);
+        scheduleRound(() => { if (session) PianoAudio.playChord(notes).catch(() => {}); }, 300);
         // A revealed round still uses up a journey step — otherwise a tough
         // set keeps growing and the recorded session accuracy over-counts.
         session.index += 1;
-        setTimeout(nextRound, 1600);
+        scheduleRound(nextRound, 1600);
       } else {
         // Gentle feedback on the first miss: a soft wobble and replay the
         // sound. No "wrong" text. The round doesn't advance here, so the
@@ -661,11 +684,11 @@
         // guarded by roundId in case the round moves on anyway (e.g. the
         // child gets it right on retry) before the timer fires.
         btn.classList.add('nudge');
-        setTimeout(() => btn.classList.remove('nudge'), 500);
+        scheduleRound(() => btn.classList.remove('nudge'), 500);
         const notes = session.current.notes;
-        setTimeout(() => { if (session) PianoAudio.playChord(notes).catch(() => {}); }, 260);
+        scheduleRound(() => { if (session) PianoAudio.playChord(notes).catch(() => {}); }, 260);
         const roundId = session.roundId;
-        setTimeout(() => {
+        scheduleRound(() => {
           if (!session || session.roundId !== roundId) return; // a new round already took over the mascot
           setMascotMood(baselineMood());
         }, 1500);
@@ -688,6 +711,7 @@
 
   function finishPractice(early) {
     if (!session) return;
+    clearRoundWork();
     // Release the microphone (MediaStream tracks) the moment a real-piano
     // set ends — this IS the stop control; there's no separate mic-off
     // button, since tapping the existing "All done" button already goes
@@ -710,24 +734,27 @@
   //  CELEBRATION  (Child Celebration)
   // =======================================================================
   function renderCelebration(early) {
-    clear(app);
+    clearScreen();
     burstConfetti(60);
     PianoAudio.playSparkle(); // non-pitched flourish — see audio.js for why
     const p = Store.activeProfile();
+    const startError = el('p', { class: 'start-error', hidden: true });
+    const again = el('button', { class: 'big-start', onclick: () => beginPractice(again, startError) },
+      el('span', { class: 'btn-ico', html: Sprites.icon('play') }), 'Play again');
     app.appendChild(el('section', { class: 'screen celebrate' },
       el('div', { class: 'cele-mascot', html: Sprites.mascot(p.avatar, 'happy') }),
       el('h1', { class: 'cele-title' }, early ? 'Nice listening!' : 'You did it!'),
       el('div', { class: 'stickers' }, ['star', 'note', 'sparkle', 'note', 'star'].map((s) => el('span', { class: 'sticker', html: Sprites.icon(s) }))),
       el('div', { class: 'cele-actions' },
-        el('button', { class: 'big-start', onclick: () => { PianoAudio.unlock().then(startPractice, () => {}); } }, el('span', { class: 'btn-ico', html: Sprites.icon('play') }), 'Play again'),
-        el('button', { class: 'ghost-btn', onclick: renderHome }, 'Home'))));
+        again,
+        el('button', { class: 'ghost-btn', onclick: renderHome }, 'Home')), startError));
   }
 
   // =======================================================================
   //  GUARDIAN  (PIN gate + panels)
   // =======================================================================
   function renderGuardianGate() {
-    clear(app);
+    clearScreen();
     let entered = '';
     const dots = el('div', { class: 'pin-dots' });
     const msg = el('p', { class: 'pin-msg' }, 'Grown-ups only');
@@ -764,7 +791,7 @@
   }
 
   function renderGuardian(tab) {
-    clear(app);
+    clearScreen();
     const tabs = el('nav', { class: 'g-tabs' },
       [['colors', 'Colours'], ['progress', 'Progress'], ['profiles', 'Children'], ['settings', 'Settings']].map(([id, lbl]) =>
         el('button', { class: 'g-tab' + (tab === id ? ' active' : ''), onclick: () => renderGuardian(id) }, lbl)));
@@ -1039,7 +1066,7 @@
     body.appendChild(el('h3', { class: 'g-sub' }, 'Danger zone'));
     body.appendChild(el('button', { class: 'danger-btn', onclick: () => {
       if (window.confirm(`Reset all progress for ${p.name}? This cannot be undone.`)) {
-        Store.updateProfile(p.id, { stats: {}, sessions: [] });
+        Store.resetProgress(p.id);
         renderGuardian('settings');
       }
     } }, 'Reset this child’s progress'));
@@ -1065,6 +1092,18 @@
       setTimeout(() => bit.remove(), 2200);
     }
   }
+
+  window.addEventListener('pagehide', () => {
+    screenGeneration += 1;
+    pendingMicStart = false;
+    clearRoundWork();
+    session = null;
+    MicCapture.stop();
+    PianoAudio.stopAll();
+  });
+  window.addEventListener('pageshow', event => {
+    if (event.persisted) renderHome();
+  });
 
   // ---- boot --------------------------------------------------------------
   renderHome();
