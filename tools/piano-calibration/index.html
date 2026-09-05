@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Piano recognition check — Rainbow Pitch</title>
+  <link rel="stylesheet" href="calibration.css">
+  <script src="../../js/data.js?calibration=1" defer></script>
+  <script src="../../js/chord-detect.js?calibration=1" defer></script>
+  <script src="../../js/fresh-chord-gate.js?calibration=1" defer></script>
+  <script src="../../js/mic-capture.js?calibration=1" defer></script>
+  <script src="calibration.js" defer></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Rainbow Pitch · Piano diagnostics</p>
+    <h1>Let’s check your piano</h1>
+    <p>Start without the sustain pedal. Release the keys, start listening, then play the displayed keys together when <strong>Play now</strong> appears. Hold for two seconds.</p>
+    <label for="target">Keys to play</label>
+    <select id="target"></select>
+    <p id="notes" class="notes"></p>
+    <div class="controls">
+      <button id="start">Start listening</button>
+      <button id="stop" disabled>Stop</button>
+    </div>
+    <section class="live" aria-label="Microphone test">
+      <h2 id="status" role="status">Ready to start</h2>
+      <meter id="level" min="0" max="1" value="0" aria-label="Microphone input level"></meter>
+      <p id="input">Microphone off</p>
+    </section>
+    <section id="result" hidden>
+      <h2>What happened</h2>
+      <p id="outcome"></p>
+      <pre id="summary"></pre>
+      <button id="save">Save diagnostics</button>
+    </section>
+    <details>
+      <summary>What this test collects</summary>
+      <p>This uses the same recogniser as practice, with all 14 colour chords as candidates. The selected keys only label what you intended to play; they do not influence the answer. Each listen lasts up to 15 seconds.</p>
+      <p>Frequency measurements and recognition results stay in memory in this tab. No audio recording, device identifiers, storage, or network upload is used. Save diagnostics downloads those measurements as JSON so a failed attempt can be replayed locally. Starting another listen replaces the previous attempt.</p>
+    </details>
+  </main>
+</body>
+</html>

@@ -129,6 +129,7 @@ let arm;
 const armAfter = new Promise((resolve) => { arm = resolve; });
 const red = { name: 'red', notes: ['C4', 'E4', 'G4'] };
 const lifecycle = [];
+const frames = [];
 const heardPromise = new Promise((resolve, reject) => {
   MicCapture.listenForChord(
     [red],
@@ -145,6 +146,7 @@ const heardPromise = new Promise((resolve, reject) => {
       stableFrames: 3,
       onReady: () => { lifecycle.push('ready'); },
       onOnset: () => { lifecycle.push('onset'); },
+      onFrame: frame => frames.push(frame),
     }
   );
 });
@@ -161,6 +163,12 @@ assert.equal(heard.chord.name, 'red');
 assert.equal(heard.confidence, 0.9);
 assert.deepEqual(lifecycle, ['ready', 'onset', 'heard'], 'capture must expose baseline, onset, then terminal detection in order');
 assert.ok(identifyCalls >= 6, 'baseline, onset, and stable frames should all traverse identifyWithBass');
+assert.equal(frames.length, identifyCalls, 'optional diagnostics include every classified frame, including the accepted frame');
+assert.equal(frames[0].fftSize, 8192);
+assert.equal(frames[0].sampleRate, 48000);
+assert.equal(frames[0].magnitudes.length, 4096);
+assert.equal(frames.at(-1).result.best.name, 'red');
+assert.equal(frames[0].state, 'WAIT_BASELINE');
 
 MicCapture.stop();
 await new Promise((resolve) => setTimeout(resolve, 0));

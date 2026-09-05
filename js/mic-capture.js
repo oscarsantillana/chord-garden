@@ -182,12 +182,12 @@ const MicCapture = (() => {
       }
       previousLinear = linear;
 
-      gate.pushFrame({
-        at: Date.now(),
-        energy: result.energy,
-        positiveFlux,
-        result,
-      });
+      const frame = { at: Date.now(), energy: result.energy, positiveFlux, result };
+      // Calibration tools may observe frames; the practice app never opts in.
+      if (opts.onFrame) opts.onFrame({ ...frame, state: gate.getState(),
+        sampleRate: audioCtx.sampleRate, fftSize: analyser.fftSize, magnitudes: linear });
+      if (cancelled) return;
+      gate.pushFrame(frame);
       if (gate.getState() === 'DONE') return;
 
       if (Date.now() - startedAt >= timeoutMs) {
