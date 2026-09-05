@@ -26,13 +26,14 @@ same chroma template, so this stage cannot determine the bass.
 
 The note-evidence stage retains register and frequency:
 
-1. Look for the three expected pitch classes among the first four salient
-   peaks. Their apparent fundamentals must fit within one octave, as every
+1. Look for the three expected pitch classes among the first four peaks at
+   least 10% of the strongest low-frequency peak. Quieter peaks remain
+   available for lower-string checks. The apparent fundamentals must fit within one octave, as every
    configured voicing does. An open dyad's upper harmonics must not supply
    the missing third key.
 2. Test lower-string hypotheses from the same family. An octave peak alone
    cannot establish a lower key. Require corroborating harmonics and either
-   a weak fundamental with a distinct third-harmonic peak, or an odd partial
+   a weak fundamental with a distinct, unexplained third-harmonic peak, or an odd partial
    that the apparent three notes cannot explain.
 3. Estimate and subtract conservative Hann/Blackman window leakage from the
    apparent notes' harmonics. The residual check considers odd partials 3,
@@ -84,6 +85,16 @@ individual frequency bins. Spectral flux alone must not keep the listener
 waiting indefinitely; the onset still requires both flux and an energy rise.
 A bounded capture window resets after an unsuccessful onset. Timeouts cause a
 neutral retry and record no child answer.
+A later attack with a new energy rise and spectral flux starts a fresh
+capture window and resets frame agreement, even if an earlier noise attack
+is still being examined. Sustained/decaying tails cannot extend the window.
+
+A saved physical Blue attempt exposed weaker low-frequency components
+displacing B3–D4–G4, and D4's second harmonic being mistaken for independent
+support for G3. The revised peak selection and unexplained-harmonic check,
+together with fresh-attack restart, recognise its first piano strike on
+replay. The fixture and independent interference tests cover this case;
+recognition across devices and pianos remains unvalidated.
 
 `PianoAudio.stopAll()` invalidates pending pitched playback, including work
 awaiting sample loading. `whenOutputSilent()` waits through the release tail

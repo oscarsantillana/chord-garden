@@ -27,6 +27,7 @@ const FreshChordGate = {
     let terminal = false;
     let attackStartedAt = null;
     let readySignalled = false;
+    let previousEnergy = null;
 
     function signalReady() {
       if (readySignalled) return;
@@ -61,6 +62,9 @@ const FreshChordGate = {
 
     function pushFrame({ at = Date.now(), energy = 0, positiveFlux = 0, result = null } = {}) {
       if (terminal) return state;
+      const freshRise = positiveFlux >= fluxThreshold && previousEnergy != null &&
+        (previousEnergy > 0 ? energy >= previousEnergy * energyRiseRatio : energy > 0);
+      previousEnergy = Number.isFinite(energy) ? energy : null;
 
       if (state === 'WAIT_BASELINE') {
         // Stationary room noise changes individual FFT bins even when its
@@ -84,10 +88,7 @@ const FreshChordGate = {
           ? energy > 0
           : energy >= baselineEnergy * energyRiseRatio;
         if (positiveFlux >= fluxThreshold && enoughEnergy) {
-          state = 'CAPTURE_ATTACK';
-          attackStartedAt = at;
-          if (typeof onOnset === 'function') onOnset(at);
-          observeCandidate(result);
+          startAttack(at, result);
         } else {
           updateBaseline(energy);
         }
@@ -95,7 +96,11 @@ const FreshChordGate = {
       }
 
       if (state === 'CAPTURE_ATTACK') {
-        if (attackStartedAt != null && at - attackStartedAt > captureMs) {
+        // A noise transient must not consume the window for a later piano
+        // strike. A new rise resets agreement as well as the capture clock.
+        if (freshRise) {
+          startAttack(at, result);
+        } else if (attackStartedAt != null && at - attackStartedAt > captureMs) {
           state = 'WAIT_BASELINE';
           calmFrames = positiveFlux < fluxThreshold ? 1 : 0;
           baselineEnergy = Number.isFinite(energy) ? energy : null;
@@ -107,6 +112,15 @@ const FreshChordGate = {
         }
       }
       return state;
+    }
+
+    function startAttack(at, result) {
+      state = 'CAPTURE_ATTACK';
+      attackStartedAt = at;
+      streak = 0;
+      streakName = null;
+      if (typeof onOnset === 'function') onOnset(at);
+      observeCandidate(result);
     }
 
     function timeout() {

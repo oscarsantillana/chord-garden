@@ -96,6 +96,34 @@ const FreshChordGate = require('../js/fresh-chord-gate.js');
 console.log('\nAll fresh-chord-gate.test.mjs assertions passed.');
 
 {
+  const heard = [], onsets = [];
+  const gate = FreshChordGate.create({ onHeard: result => heard.push(result.best.name), onOnset: at => onsets.push(at) });
+  for (const at of [0, 120, 240]) gate.pushFrame({ at, energy: 1, positiveFlux: 0 });
+  gate.pushFrame({ at: 360, energy: 2, positiveFlux: .7 }); // Room transient, no chord.
+  gate.pushFrame({ at: 960, energy: 1, positiveFlux: 0 });
+  const blue = { best: { name: 'blue' }, confidence: .95 };
+  gate.pushFrame({ at: 1080, energy: 8, positiveFlux: .9, result: blue });
+  gate.pushFrame({ at: 1200, energy: 7.5, positiveFlux: 0, result: blue });
+  gate.pushFrame({ at: 1320, energy: 7, positiveFlux: 0, result: blue });
+  assert.deepEqual(heard, ['blue'], 'a later fresh piano attack must get its own capture window');
+  assert.deepEqual(onsets, [360, 1080]);
+}
+
+{
+  const heard = [];
+  const gate = FreshChordGate.create({ onHeard: result => heard.push(result.best.name) });
+  const blue = { best: { name: 'blue' }, confidence: .95 };
+  for (const at of [0, 120, 240]) gate.pushFrame({ at, energy: 1, positiveFlux: 0 });
+  gate.pushFrame({ at: 360, energy: 3, positiveFlux: .8, result: blue });
+  gate.pushFrame({ at: 480, energy: 2.9, positiveFlux: 0, result: blue });
+  gate.pushFrame({ at: 600, energy: 8, positiveFlux: .9, result: blue });
+  assert.deepEqual(heard, [], 'a restrike must not inherit confident frames from the previous attack');
+  gate.pushFrame({ at: 720, energy: 7.5, positiveFlux: 0, result: blue });
+  gate.pushFrame({ at: 840, energy: 7, positiveFlux: 0, result: blue });
+  assert.deepEqual(heard, ['blue']);
+}
+
+{
   let ready = false;
   const heard = [];
   const gate = FreshChordGate.create({ onReady: () => { ready = true; }, onHeard: result => heard.push(result.best.name) });

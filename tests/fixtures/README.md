@@ -21,3 +21,15 @@ for C#4, E4, D4, G#4, B4, Bb3, F4, G4, and Bb4.
 These fixtures exercise recorded-piano timbre and browser-scale FFT
 resolution. They do not substitute for the separate real-piano/microphone
 acceptance corpus.
+
+`physical-blue-onsets.json.gz` is a local diagnostic excerpt supplied during
+piano testing on 2026-09-05, labelled B3–D4–G4 (Blue). It contains the first
+54 frames (6.583 seconds) of the failed attempt: 48 kHz, 8192-point spectra
+and relative frame times. Magnitudes retain seven significant digits and
+the JSON is gzip-compressed. It contains no audio, device IDs, names, or
+absolute timestamps. The original download remains unchanged.
+
+The excerpt reproduces low-frequency interference displacing apparent keys,
+a shared D4 harmonic falsely supporting a lower G, and a noise onset
+consuming the capture window before the piano strike. This is one labelled
+physical case, not a hardware acceptance matrix.

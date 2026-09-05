@@ -77,7 +77,10 @@ const ChordDetect = {
     const peaks = ChordDetect.spectralPeaks(magnitudes, opts);
     const lowPeaks = peaks.filter(peak => peak.frequency <= 2200);
     const maximum = Math.max(0, ...lowPeaks.map(peak => peak.magnitude));
-    const edge = lowPeaks.filter(peak => peak.magnitude >= maximum * .04).slice(0, 4);
+    // Select apparent keys from prominent peaks. Quieter components remain
+    // available below as lower-string evidence; they cannot displace a key
+    // solely because their frequency comes first.
+    const edge = lowPeaks.filter(peak => peak.magnitude >= maximum * .1).slice(0, 4);
     const expected = new Set(chord.notes.map(ChordDetect.noteNameToPitchClass));
     const notes = [];
     for (const peak of edge) {
@@ -140,8 +143,11 @@ const ChordDetect = {
         const thirdMagnitude = Math.max(magnitudes[Math.floor(thirdBin)] || 0, magnitudes[Math.ceil(thirdBin)] || 0);
         if (!findPartial(partialFrequency(f0, 2, b), .04) || thirdMagnitude < maximum * .025) return false;
         const fundamental = findPartial(partialFrequency(f0, 1, b), .01);
+        // A shared harmonic is not independent support for a lower key.
+        // For example, D4's second harmonic also lies at G3's third.
         if (midi > bass.midi - 12 && fundamental?.midi === midi &&
-            findPartial(partialFrequency(f0, 3, b), .025) && residualAt(f0) >= maximum * .01) return true;
+            findPartial(partialFrequency(f0, 3, b), .025) && residualAt(f0) >= maximum * .01 &&
+            residualAt(partialFrequency(f0, 3, b)) >= maximum * .005) return true;
         return [3, 5, 7].some(harmonic => {
           const frequency = partialFrequency(f0, harmonic, b);
           const residual = residualAt(frequency);

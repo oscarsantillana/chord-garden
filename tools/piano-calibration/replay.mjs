@@ -13,9 +13,9 @@ export function replay(attempt) {
   if (!Number.isFinite(sampleRate) || sampleRate < 8000 || sampleRate > 192000 ||
       !Number.isInteger(fftSize) || fftSize < 32 || fftSize > 32768 || (fftSize & (fftSize - 1)) !== 0 ||
       !Array.isArray(frames) || frames.length < 1 || frames.length > 200) throw new Error('Invalid calibration frame format');
-  let detected = null, confidence = 0, ready = false, onsets = 0, previous = null, lastAt = -1;
+  let detected = null, detectedAt = null, confidence = 0, ready = false, onsets = 0, previous = null, lastAt = -1;
   const gate = FreshChordGate.create({ onReady() { ready = true; }, onOnset() { onsets++; },
-    onHeard(result) { detected = result.best.name; confidence = result.confidence; } });
+    onHeard(result) { detected = result.best.name; confidence = result.confidence; detectedAt = lastAt; } });
   const reasons = {};
   for (const frame of frames) {
     if (!Number.isFinite(frame.at) || frame.at < lastAt || !Array.isArray(frame.magnitudes) ||
@@ -38,7 +38,7 @@ export function replay(attempt) {
     gate.pushFrame({ at: frame.at, energy: result.energy, positiveFlux, result });
     if (gate.getState() === 'DONE') break;
   }
-  return { recorded: attempt.outcome ?? null, replayed: { detected, confidence, ready, onsets }, reasons };
+  return { recorded: attempt.outcome ?? null, replayed: { detected, detectedAt, confidence, ready, onsets }, reasons };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
