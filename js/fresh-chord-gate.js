@@ -63,8 +63,14 @@ const FreshChordGate = {
       if (terminal) return state;
 
       if (state === 'WAIT_BASELINE') {
+        // Stationary room noise changes individual FFT bins even when its
+        // overall level is steady. Require a level rise as well as flux to
+        // treat it as activity that should delay baseline readiness.
+        const steadyLevel = baselineEnergy != null && Number.isFinite(energy) &&
+          energy <= baselineEnergy * energyRiseRatio;
+        const calm = positiveFlux < fluxThreshold || steadyLevel;
         updateBaseline(energy);
-        if (positiveFlux < fluxThreshold) calmFrames += 1;
+        if (calm) calmFrames += 1;
         else calmFrames = 0;
         if (calmFrames >= baselineFrames) {
           state = 'WAIT_ONSET';

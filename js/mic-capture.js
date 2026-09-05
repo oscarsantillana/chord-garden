@@ -5,6 +5,7 @@ const MicCapture = (() => {
   let audioCtx = null;
   let analyser = null;
   let dataArray = null; // Float32Array of dB values, filled by getFloatFrequencyData
+  let waveform = null;
   let pollHandle = null; // the current listenForChord() round's pending setTimeout, if any
   let activeListen = null;
   let captureGeneration = 0;
@@ -54,6 +55,7 @@ const MicCapture = (() => {
       analyser.fftSize = fftSize || defaultFftSize(context.sampleRate);
       analyser.smoothingTimeConstant = 0.2;
       dataArray = new Float32Array(analyser.frequencyBinCount);
+      waveform = new Float32Array(analyser.fftSize);
       source.connect(analyser);
       return { stop() { if (generation === captureGeneration) stop(); } };
     } catch (error) {
@@ -72,6 +74,7 @@ const MicCapture = (() => {
     if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
     analyser = null;
     dataArray = null;
+    waveform = null;
   }
 
   // Debounced, stabilised chord listening for ONE round. Polls the live
@@ -83,12 +86,8 @@ const MicCapture = (() => {
   // chord before calling onHeard, since a real piano attack, pedal noise, or
   // a stray hand on the keys can easily produce one noisy frame.
   //
-  // If nothing stabilises within `timeoutMs`, calls onLowConfidence() —
-  // js/app.js's "never a failure" safety valve (see decision #1 in the
-  // feature notes): this deliberately covers BOTH "confidence genuinely
-  // stayed low" and "nothing ever got played/heard", since from the child's
-  // practice session both should read as one gentle retry, not two
-  // different kinds of failure.
+  // Raw input status is independent of chord confidence. The retry result
+  // distinguishes missing input from sound that could not be matched.
   function listenForChord(chords, onHeard, onLowConfidence, opts = {}) {
     const pollMs = opts.pollMs || 120;
     const stableFrames = opts.stableFrames || 3;
@@ -101,6 +100,8 @@ const MicCapture = (() => {
     let gate = null;
     let startedAt = null;
     let previousLinear = null;
+    let inputState = 'unavailable';
+    let receivedInput = false;
 
     const handle = {
       cancel() {
@@ -127,7 +128,8 @@ const MicCapture = (() => {
     function lowConfidence() {
       if (cancelled) return;
       finishActive();
-      onLowConfidence();
+      onLowConfidence({ reason: inputState === 'unavailable' ? 'unavailable'
+        : receivedInput ? 'unrecognised' : 'no-input' });
     }
 
     function heard(result) {
@@ -140,6 +142,21 @@ const MicCapture = (() => {
 
     function poll() {
       if (cancelled || !analyser || !dataArray || !audioCtx) return;
+
+      analyser.getFloatTimeDomainData(waveform);
+      let power = 0;
+      for (const sample of waveform) power += sample * sample;
+      const rms = Math.sqrt(power / waveform.length);
+      const track = stream.getTracks()[0];
+      const available = audioCtx.state === 'running' && track &&
+        track.readyState !== 'ended' && !track.muted && track.enabled !== false;
+      // -80 dBFS is a display floor, not a chord-detection threshold.
+      inputState = !available ? 'unavailable' : rms > .0001 ? 'sound' : 'quiet';
+      if (inputState === 'sound') receivedInput = true;
+      if (opts.onInput) opts.onInput({ state: inputState,
+        level: available && rms > 0 ? Math.max(0, Math.min(1, (20 * Math.log10(rms) + 80) / 60)) : 0 });
+      if (cancelled) return;
+      if (!available) { lowConfidence(); return; }
 
       analyser.getFloatFrequencyData(dataArray);
       const linear = new Array(dataArray.length);

@@ -84,3 +84,21 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false } =
   assert.deepEqual(persisted.events, []); assert.deepEqual(persisted.activeColors, ['red']);
 }
 console.log('ok - app replay, startup cancellation, session timers, stale playback, and progress reset');
+
+{
+  const ui = setup({ micMode: true });
+  await ui.click('Start'); await ui.click('Ready');
+  const first = ui.listens[0];
+  first.low({ reason: 'no-input' });
+  assert.equal(ui.app.querySelector('.mic-status').textContent, 'Paused');
+  assert.match(ui.app.querySelector('.mic-retry').textContent, /No microphone signal/);
+  await ui.click('Try again');
+  ui.listens[1].opts.onInput({ level: .7, state: 'sound' });
+  assert.equal(ui.app.querySelector('.mic-status').textContent, 'Sound detected');
+  assert.equal(ui.app.querySelector('.mic-meter').value, .7);
+  first.opts.onInput({ level: 0, state: 'quiet' });
+  assert.equal(ui.app.querySelector('.mic-status').textContent, 'Sound detected', 'stale input cannot change the new round');
+  ui.listens[1].low({ reason: 'unrecognised' });
+  assert.match(ui.app.querySelector('.mic-retry').textContent, /Sound reached the microphone/);
+  assert.equal(ui.app.querySelector('.mic-status').textContent, 'Paused');
+}

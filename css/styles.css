@@ -252,23 +252,14 @@ button:active { transform: scale(.96); }
   white-space: nowrap;
 }
 
-/* A small persistent "Listening" chip, shown for the whole real-piano set
-   (not just while State A's round-cue is up) — sits beside .calm-stop so
-   it's always clear the mic is live. Uses only theme variables, so it
-   themes correctly with no dark-mode override needed. */
+/* Measured microphone input, with an explicit paused state between listens. */
 .mic-pill {
   display: inline-flex; align-items: center; gap: 6px;
   background: var(--card); color: var(--ink-soft); font-weight: 800; font-size: .8rem;
   padding: 8px 14px; border-radius: 999px; box-shadow: var(--card-shadow);
   white-space: nowrap;
 }
-.mic-pill-dot {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0;
-  animation: mic-pulse 1.6s ease-in-out infinite;
-}
-/* A plain opacity loop rather than reusing round-cue-pulse (which animates
-   transform: scale for a whole card, not a fit for a tiny status dot). */
-@keyframes mic-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.mic-meter { width: 48px; height: 12px; }
 .mic-pill-icon { display: inline-flex; color: var(--accent); }
 .mic-pill-icon svg { width: 16px; height: 16px; }
 

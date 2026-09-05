@@ -31,6 +31,8 @@ class FakeAnalyser {
     target.fill(analyserFrame < 3 ? -60 : -20);
     analyserFrame += 1;
   }
+
+  getFloatTimeDomainData(target) { target.fill(analyserFrame < 3 ? 0 : .1); }
 }
 
 class FakeAudioContext {

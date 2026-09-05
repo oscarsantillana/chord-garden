@@ -11,6 +11,15 @@ It uses an 8192-point analyser at 44.1/48 kHz and 16384 at 88.2/96 kHz,
 keeping frequency bins at or below 5.86 Hz. Input is processed locally;
 no audio or spectra are saved or uploaded.
 
+The practice screen shows the analyser's raw time-domain input level,
+independently of chord confidence. A moving meter confirms incoming sound,
+not a recognised piano chord. Input below -80 dBFS displays as quiet; this
+display floor does not change detector thresholds. A muted/ended track or
+non-running audio context displays as unavailable. After a round times out,
+the badge says Paused and the retry explains whether input was missing or
+sound arrived without a recognised chord. Polling resumes with Try again;
+All done releases the microphone.
+
 `ChordDetect` folds the magnitude spectrum into twelve pitch classes and
 compares candidate chord families by cosine similarity. Inversions have the
 same chroma template, so this stage cannot determine the bass.
@@ -70,6 +79,9 @@ Their previous implementations and historical results remain in Git history.
 
 `FreshChordGate` requires a calm baseline, a new attack with spectral flux and
 an energy rise, and three consecutive confident frames agreeing on a colour.
+Baseline readiness allows a steady overall level even when room noise changes
+individual frequency bins. Spectral flux alone must not keep the listener
+waiting indefinitely; the onset still requires both flux and an energy rise.
 A bounded capture window resets after an unsuccessful onset. Timeouts cause a
 neutral retry and record no child answer.
 

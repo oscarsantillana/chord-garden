@@ -411,6 +411,8 @@
     session.currentConfidence = null;
     session.micArmed = false;
     session.showMicRetry = false;
+    session.micRetryReason = null;
+    session.micInput = null;
     session.attempted = false;
     session.misses = 0;
     session.locked = true;
@@ -425,7 +427,7 @@
       session.currentConfidence = confidence;
       renderPractice(); // State B: brief "Got it!" confirm beat, no colour named
       scheduleRound(() => unlockAnswers(roundId), 350);
-    }, () => {
+    }, (diagnostic) => {
       if (!session || session.roundId !== roundId) return;
       session.micListen = null;
       // The safety valve (decision #1): low confidence or nothing ever
@@ -434,16 +436,35 @@
       // overlay with a gentle, non-blaming retry card.
       session.cueing = false;
       session.showMicRetry = true;
+      session.micRetryReason = diagnostic?.reason;
       setMascotMood('curious');
       renderPractice();
     }, {
       armAfter,
+      onInput: (input) => {
+        if (!session || session.roundId !== roundId || session.current || session.showMicRetry) return;
+        session.micInput = input;
+        updateMicInput();
+      },
       onReady: () => {
         if (!session || session.roundId !== roundId || session.current) return;
         session.micArmed = true;
         renderPractice();
       },
     });
+  }
+
+  function micStatus() {
+    if (session.showMicRetry || session.current) return 'Paused';
+    if (!session.micInput) return 'Checking input…';
+    return { sound: 'Sound detected', quiet: 'Input quiet', unavailable: 'Input unavailable' }[session.micInput.state];
+  }
+
+  function updateMicInput() {
+    const status = app.querySelector('.mic-status');
+    const meter = app.querySelector('.mic-meter');
+    if (status) status.textContent = micStatus();
+    if (meter) meter.value = session.showMicRetry || session.current ? 0 : session.micInput?.level || 0;
   }
 
   // State D's "Try again": re-listen for the SAME round (session.index does
@@ -575,21 +596,23 @@
     // anything, so it's the room/mic that didn't cooperate, never the
     // child's answer. Same visual family as .start-error (plain, honest,
     // no "sorry"/"wrong"), laid out centered like .round-cue above it.
+    const retryMessage = session.micRetryReason === 'no-input'
+      ? 'No microphone signal reached the app. Check the selected input and microphone level in your device settings, then try again.'
+      : session.micRetryReason === 'unavailable'
+        ? 'Microphone input is unavailable. Check microphone access, then use All done and start again.'
+        : 'Sound reached the microphone, but the chord could not be matched. Release the keys, tap Try again, and wait for the piano prompt before playing all three keys together.';
     const micRetry = (session.mode === 'mic' && session.showMicRetry) ? el('div', { class: 'mic-retry' },
-      el('p', {}, "Couldn't quite hear that — try again a little closer to the microphone?"),
+      el('p', {}, retryMessage),
       el('div', { class: 'mic-retry-actions' },
         el('button', { class: 'primary-btn', onclick: retryMicRound }, 'Try again'),
         el('button', { class: 'ghost-btn', onclick: skipMicRound }, 'Skip this one'))) : null;
 
-    // A small persistent "Listening" pill, visible for the whole real-piano
-    // set (not just State A) so it's always clear the mic is live — sits
-    // beside the existing "All done" button, which is also the ONLY stop
-    // control needed: tapping it calls calmStop() -> finishPractice(), which
-    // releases the microphone via MicCapture.stop() (see finishPractice()).
+    // Show measured input while polling; permission alone is not evidence
+    // that the selected microphone is supplying audio.
     const micPill = session.mode === 'mic' ? el('div', { class: 'mic-pill' },
-      el('span', { class: 'mic-pill-dot' }),
       el('span', { class: 'mic-pill-icon', html: Sprites.icon('mic') }),
-      'Listening') : null;
+      el('meter', { class: 'mic-meter', min: 0, max: 1, value: 0, 'aria-label': 'Microphone input level' }),
+      el('span', { class: 'mic-status' }, micStatus())) : null;
 
     const stopBtn = el('button', { class: 'calm-stop', onclick: calmStop }, 'All done');
 
@@ -597,6 +620,7 @@
       el('div', { class: 'practice-top' }, journey, micPill, stopBtn),
       el('div', { class: 'listen-wrap' }, listenBtn),
       el('div', { class: 'answers-wrap' }, answers, roundCue, micRetry)));
+    if (session.mode === 'mic') updateMicInput();
   }
 
   // Swaps the live #mascot element's face in place (no full re-render) —

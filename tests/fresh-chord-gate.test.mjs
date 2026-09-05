@@ -94,3 +94,19 @@ const FreshChordGate = require('../js/fresh-chord-gate.js');
 }
 
 console.log('\nAll fresh-chord-gate.test.mjs assertions passed.');
+
+{
+  let ready = false;
+  const heard = [];
+  const gate = FreshChordGate.create({ onReady: () => { ready = true; }, onHeard: result => heard.push(result.best.name) });
+  // Room noise can have a steady total level while power moves between bins.
+  // Its positive spectral flux is not a new piano attack.
+  for (let i = 0; i < 8; i++) gate.pushFrame({ at: i * 120, energy: 1 + (i % 2) * .03, positiveFlux: .4 });
+  assert.equal(ready, true, 'stationary background noise must allow the listener to become ready');
+  assert.deepEqual(heard, []);
+  const red = { best: { name: 'red' }, confidence: .9 };
+  gate.pushFrame({ at: 960, energy: 4, positiveFlux: .8, result: red });
+  gate.pushFrame({ at: 1080, energy: 3.9, positiveFlux: .2, result: red });
+  gate.pushFrame({ at: 1200, energy: 3.8, positiveFlux: .2, result: red });
+  assert.deepEqual(heard, ['red'], 'a new chord above the background must still pass stable-frame detection');
+}
