@@ -192,7 +192,10 @@ const ChordDetect = {
     }
     const max = Math.max(...chroma);
     if (max > 0) {
-      for (let i = 0; i < 12; i++) chroma[i] /= max;
+      // Compare amplitude-scaled pitch strength so one louder/sustaining
+      // key does not suppress two audible keys through squared weighting.
+      // Keep the summed power above unchanged for silence and onset gating.
+      for (let i = 0; i < 12; i++) chroma[i] = Math.sqrt(chroma[i] / max);
     }
     return { chroma, energy };
   },

@@ -21,7 +21,10 @@ sound arrived without a recognised chord. Polling resumes with Try again;
 All done releases the microphone.
 
 `ChordDetect` folds the magnitude spectrum into twelve pitch classes and
-compares candidate chord families by cosine similarity. Inversions have the
+compares candidate chord families by cosine similarity. Each pitch-class
+power is square-root scaled before comparison, so a louder or longer-held
+key does not receive squared weight relative to quieter audible keys. Raw
+power still drives silence and onset thresholds. Inversions have the
 same chroma template, so this stage cannot determine the bass.
 
 The note-evidence stage retains register and frequency:
@@ -95,6 +98,12 @@ support for G3. The revised peak selection and unexplained-harmonic check,
 together with fresh-attack restart, recognise its first piano strike on
 replay. The fixture and independent interference tests cover this case;
 recognition across devices and pianos remains unvalidated.
+
+A subsequent physical Orange attempt had clear E4–G4–C5 evidence but lost
+family confidence as C5 faded under a stronger G4. Amplitude-scaled chroma
+recognises its first strike after readiness without reducing the confidence
+threshold or the required three agreeing frames. The saved excerpt and an
+independent synthetic chord with uneven key amplitudes cover this behavior.
 
 `PianoAudio.stopAll()` invalidates pending pitched playback, including work
 awaiting sample loading. `whenOutputSilent()` waits through the release tail

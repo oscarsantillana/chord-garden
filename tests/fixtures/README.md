@@ -33,3 +33,10 @@ The excerpt reproduces low-frequency interference displacing apparent keys,
 a shared D4 harmonic falsely supporting a lower G, and a noise onset
 consuming the capture window before the piano strike. This is one labelled
 physical case, not a hardware acceptance matrix.
+
+`physical-orange-onset.json.gz` contains the first 28 frames (3.802 seconds)
+of the next supplied physical diagnostic, labelled E4–G4–C5 (Orange), with
+the same format and precision. G4 dominates as E4 and C5 decay, exposing the
+power-weighted chord comparison's failure to maintain confidence despite
+three-note evidence. It includes a chord played before readiness, which
+must be ignored, and the first strike after readiness, which must be accepted.
