@@ -5,8 +5,11 @@ const root = 'https://example.test/rainbow-pitch/';
 const handlers = {};
 const entries = new Map([[root + 'index.html', new Response('main app')]]);
 const writes = [];
+let precached = [];
 let offline = false;
 const cache = {
+  async addAll(requests) { precached = requests; },
+  async add() {},
   async match(request) { return entries.get(typeof request === 'string' ? request : request.url)?.clone(); },
   async put(request, response) {
     const key = typeof request === 'string' ? request : request.url;
@@ -14,7 +17,7 @@ const cache = {
   },
 };
 const context = {
-  URL, console,
+  URL, Request, console,
   self: { location: { href: root + 'sw.js' }, addEventListener: (name, callback) => { handlers[name] = callback; } },
   caches: { async open() { return cache; }, match: cache.match },
   async fetch(request) {
@@ -23,6 +26,11 @@ const context = {
   },
 };
 vm.runInNewContext(fs.readFileSync(new URL('../sw.js', import.meta.url), 'utf8'), context);
+let installed;
+handlers.install({ waitUntil(promise) { installed = promise; } });
+await installed;
+assert.ok(precached.length > 0);
+assert.ok(precached.every(request => request.cache === 'reload'), 'new releases must refresh HTTP-cached shell files');
 function dispatch(path, mode = 'navigate') {
   let response;
   handlers.fetch({ request: { method: 'GET', url: new URL(path, root).href, mode }, respondWith(value) { response = value; } });

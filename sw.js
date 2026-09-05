@@ -13,7 +13,7 @@
 
 // Bump this on every release: the shell is served cache-first, so returning
 // devices only refetch it when the version (and thus this file) changes.
-const CACHE_NAME = 'rainbow-pitch-v6';
+const CACHE_NAME = 'rainbow-pitch-v7';
 
 // The local app shell: everything needed to boot the app with no network.
 const APP_SHELL = [
@@ -47,7 +47,8 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME).then(async (cache) => {
       // The local shell has to succeed — if any of these 404s, install
       // should fail loudly so we notice, same as any normal build error.
-      await cache.addAll(APP_SHELL);
+      // A new cache name must also bypass still-fresh HTTP cache entries.
+      await cache.addAll(APP_SHELL.map(path => new Request(new URL(path, APP_ROOT), { cache: 'reload' })));
       // Tone.js lives on a third-party CDN we don't control; if it's briefly
       // unreachable, don't let that sink the whole install — the app can
       // still boot (and re-fetch Tone.js) on the next online visit.
