@@ -1,4 +1,4 @@
-// Rainbow Pitch — full 14-colour selective-safety regression.
+// Chord Garden — full 14-colour selective-safety regression.
 //
 // This suite deliberately passes the complete CHORDS table to every detector
 // call. It protects the release contract that matters in real-piano mode:

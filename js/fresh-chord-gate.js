@@ -1,5 +1,5 @@
 /*
- * Rainbow Pitch — pure fresh-onset gate for real-piano capture.
+ * Chord Garden — pure fresh-onset gate for real-piano capture.
  *
  * This module owns no browser APIs or timers. MicCapture feeds it timestamped
  * spectral-frame observations; tests can feed the same public interface

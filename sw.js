@@ -1,5 +1,5 @@
 /*
- * Rainbow Pitch — service worker.
+ * Chord Garden — service worker.
  *
  * WHY: the app loads Tone.js from a CDN and ~22 Salamander piano samples at
  * runtime (see js/audio.js), and without a service worker none of that is
@@ -13,7 +13,7 @@
 
 // Bump this on every release: the shell is served cache-first, so returning
 // devices only refetch it when the version (and thus this file) changes.
-const CACHE_NAME = 'rainbow-pitch-v10';
+const CACHE_NAME = 'rainbow-pitch-v11';
 
 // The local app shell: everything needed to boot the app with no network.
 const APP_SHELL = [
@@ -35,10 +35,10 @@ const APP_SHELL = [
   'assets/icons/icon-192.png',
   'assets/icons/icon-512.png',
   'assets/icons/icon-maskable-512.png',
-  'assets/fonts/fredoka-latin.woff2',
-  'assets/fonts/fredoka-latin-ext.woff2',
-  'assets/fonts/inter-latin.woff2',
-  'assets/fonts/inter-latin-ext.woff2',
+  'assets/fonts/grandstander-latin.woff2',
+  'assets/fonts/grandstander-latin-ext.woff2',
+  'assets/fonts/nunito-latin.woff2',
+  'assets/fonts/nunito-latin-ext.woff2',
 ];
 
 const TONE_JS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js';

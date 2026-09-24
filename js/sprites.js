@@ -1,5 +1,5 @@
 /*
- * Rainbow Pitch — hand-drawn SVG sprites.
+ * Chord Garden — hand-drawn SVG sprites.
  *
  * Custom flat-design mascot characters and UI icons, so the app has a
  * consistent illustrated look instead of relying on system emoji (which render
@@ -260,6 +260,15 @@ const Sprites = (() => {
     flag: svg(`
       <path d="M6 3 V21" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/>
       <path d="M6 4 L19 4 L14.5 8.5 L19 13 L6 13 Z" fill="currentColor"/>`, '0 0 24 24'),
+    // Home's "sets today" row: a bloomed daisy per set played, a bud per set
+    // still to come. Fixed colours, like the mascots.
+    daisy: svg(`
+      <path d="M15 20 V44" stroke="#5E8F46" stroke-width="3"/>
+      <g fill="#fff"><circle cx="21" cy="12" r="5"/><circle cx="18" cy="18.2" r="5"/><circle cx="12" cy="18.2" r="5"/><circle cx="9" cy="12" r="5"/><circle cx="12" cy="5.8" r="5"/><circle cx="18" cy="5.8" r="5"/></g>
+      <circle cx="15" cy="12" r="4.5" fill="#E9A92A"/>`, '0 0 30 44'),
+    bud: svg(`
+      <path d="M15 22 V44" stroke="#5E8F46" stroke-width="3"/>
+      <ellipse cx="15" cy="17" rx="5" ry="8" fill="#6FA656"/>`, '0 0 30 44'),
     // Grown-up UI glyphs, drawn to replace text characters (‹ ⬇ ⌫) that
     // render differently in every font.
     back: svg(`<path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`, '0 0 24 24'),
@@ -285,84 +294,106 @@ const Sprites = (() => {
   // contrast against whatever swatch colour it sits on. Kept to one or two
   // paths wherever the shape allows it; a few (cloud, flower, clover) need
   // several overlapping primitives to read as themselves at a glance.
-  const SHAPES = {
-    apple: svg(`
+  const SHAPE_BODIES = {
+    apple: `
       <circle cx="50" cy="66" r="27" fill="currentColor"/>
       <rect x="46.5" y="30" width="7" height="17" rx="3" fill="currentColor" transform="rotate(-14 50 38)"/>
-      <path d="M54 34 C64 27 75 31 73 40 C71 48 58 47 52 40 Z" fill="currentColor"/>`),
+      <path d="M54 34 C64 27 75 31 73 40 C71 48 58 47 52 40 Z" fill="currentColor"/>`,
 
-    star: svg(`<path d="M50 14 L59.4 41.1 L88 41.6 L65.2 58.9 L73.5 86.4 L50 70 L26.5 86.4 L34.8 58.9 L12 41.6 L40.6 41.1 Z" fill="currentColor"/>`),
+    star: `<path d="M50 14 L59.4 41.1 L88 41.6 L65.2 58.9 L73.5 86.4 L50 70 L26.5 86.4 L34.8 58.9 L12 41.6 L40.6 41.1 Z" fill="currentColor"/>`,
 
-    raindrop: svg(`<path d="M50 12 C68 42 80 62 80 76 C80 90 66 96 50 96 C34 96 20 90 20 76 C20 62 32 42 50 12 Z" fill="currentColor"/>`),
+    raindrop: `<path d="M50 12 C68 42 80 62 80 76 C80 90 66 96 50 96 C34 96 20 90 20 76 C20 62 32 42 50 12 Z" fill="currentColor"/>`,
 
-    note: svg(`
+    note: `
       <ellipse cx="40" cy="76" rx="15" ry="11" transform="rotate(-18 40 76)" fill="currentColor"/>
       <rect x="52" y="20" width="7" height="58" rx="3" fill="currentColor"/>
-      <path d="M59 20 C78 24 82 40 70 48 C72 36 62 28 59 32 Z" fill="currentColor"/>`),
+      <path d="M59 20 C78 24 82 40 70 48 C72 36 62 28 59 32 Z" fill="currentColor"/>`,
 
-    leaf: svg(`
+    leaf: `
       <path d="M50 8 C80 30 80 70 50 96 C20 70 20 30 50 8 Z" fill="currentColor"/>
-      <rect x="47" y="90" width="6" height="10" rx="2" fill="currentColor"/>`),
+      <rect x="47" y="90" width="6" height="10" rx="2" fill="currentColor"/>`,
 
-    carrot: svg(`
+    carrot: `
       <path d="M50 32 C43 20 31 15 23 20 C31 22 39 28 45 34 Z M50 32 C50 16 48 6 48 6 C54 8 56 20 54 32 Z M50 32 C58 20 70 15 78 20 C70 22 62 28 56 34 Z" fill="currentColor"/>
-      <path d="M50 30 C60 30 66 39 63 51 L54 92 C53 96 47 96 46 92 L37 51 C34 39 40 30 50 30 Z" fill="currentColor"/>`),
+      <path d="M50 30 C60 30 66 39 63 51 L54 92 C53 96 47 96 46 92 L37 51 C34 39 40 30 50 30 Z" fill="currentColor"/>`,
 
-    butterfly: svg(`
+    butterfly: `
       <path d="M50 40 C38 14 8 10 6 28 C4 42 16 50 30 48 C18 56 12 72 22 84 C32 94 46 82 50 62 Z" fill="currentColor"/>
       <path d="M50 40 C62 14 92 10 94 28 C96 42 84 50 70 48 C82 56 88 72 78 84 C68 94 54 82 50 62 Z" fill="currentColor"/>
-      <rect x="47" y="36" width="6" height="34" rx="3" fill="currentColor"/>`),
+      <rect x="47" y="36" width="6" height="34" rx="3" fill="currentColor"/>`,
 
-    heart: svg(`<path d="M50 88 C20 66 8 48 8 32 C8 16 22 6 36 12 C44 15 48 22 50 28 C52 22 56 15 64 12 C78 6 92 16 92 32 C92 48 80 66 50 88 Z" fill="currentColor"/>`),
+    heart: `<path d="M50 88 C20 66 8 48 8 32 C8 16 22 6 36 12 C44 15 48 22 50 28 C52 22 56 15 64 12 C78 6 92 16 92 32 C92 48 80 66 50 88 Z" fill="currentColor"/>`,
 
-    acorn: svg(`
+    acorn: `
       <path d="M28 40 C28 26 38 18 50 18 C62 18 72 26 72 40 C72 44 66 46 50 46 C34 46 28 44 28 40 Z" fill="currentColor"/>
       <rect x="47" y="10" width="6" height="9" rx="2" fill="currentColor"/>
-      <path d="M32 42 C28 60 34 84 50 92 C66 84 72 60 68 42 C60 48 40 48 32 42 Z" fill="currentColor"/>`),
+      <path d="M32 42 C28 60 34 84 50 92 C66 84 72 60 68 42 C60 48 40 48 32 42 Z" fill="currentColor"/>`,
 
-    cloud: svg(`
+    cloud: `
       <ellipse cx="50" cy="66" rx="34" ry="18" fill="currentColor"/>
       <circle cx="32" cy="52" r="16" fill="currentColor"/>
       <circle cx="52" cy="44" r="20" fill="currentColor"/>
-      <circle cx="72" cy="54" r="15" fill="currentColor"/>`),
+      <circle cx="72" cy="54" r="15" fill="currentColor"/>`,
 
     // A hand-drawn cookie disc (irregular edge, not a perfect circle) with a
     // few chip holes cut into it via evenodd — one path, one colour, real
     // holes that show whatever is behind the icon rather than needing a
     // second fill colour.
-    cookie: svg(`<path fill-rule="evenodd" fill="currentColor" d="M50 15 C62 13 74 20 78 32 C88 34 92 46 87 56 C90 66 84 77 73 80 C70 90 58 94 48 90 C36 93 24 87 20 76 C10 73 8 61 14 52 C10 42 16 31 27 28 C30 18 40 13 50 15 Z
+    cookie: `<path fill-rule="evenodd" fill="currentColor" d="M50 15 C62 13 74 20 78 32 C88 34 92 46 87 56 C90 66 84 77 73 80 C70 90 58 94 48 90 C36 93 24 87 20 76 C10 73 8 61 14 52 C10 42 16 31 27 28 C30 18 40 13 50 15 Z
       M42 40 A4 4 0 1 0 34 40 A4 4 0 1 0 42 40 Z
       M66.5 36 A4.5 4.5 0 1 0 57.5 36 A4.5 4.5 0 1 0 66.5 36 Z
       M70 60 A4 4 0 1 0 62 60 A4 4 0 1 0 70 60 Z
-      M43.5 64 A3.5 3.5 0 1 0 36.5 64 A3.5 3.5 0 1 0 43.5 64 Z"/>`),
+      M43.5 64 A3.5 3.5 0 1 0 36.5 64 A3.5 3.5 0 1 0 43.5 64 Z"/>`,
 
-    clover: svg(`
+    clover: `
       <circle cx="50" cy="34" r="18" fill="currentColor"/>
       <circle cx="32" cy="60" r="18" fill="currentColor"/>
       <circle cx="68" cy="60" r="18" fill="currentColor"/>
-      <path d="M50 66 C50 80 54 90 62 94" stroke="currentColor" stroke-width="7" fill="none" stroke-linecap="round"/>`),
+      <path d="M50 66 C50 80 54 90 62 94" stroke="currentColor" stroke-width="7" fill="none" stroke-linecap="round"/>`,
 
-    flower: svg(`
+    flower: `
       <circle cx="50" cy="16" r="15" fill="currentColor"/>
       <circle cx="70.9" cy="31.2" r="15" fill="currentColor"/>
       <circle cx="62.9" cy="55.8" r="15" fill="currentColor"/>
       <circle cx="37.1" cy="55.8" r="15" fill="currentColor"/>
       <circle cx="29.1" cy="31.2" r="15" fill="currentColor"/>
       <path d="M50 62 L50 92" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-      <ellipse cx="58" cy="76" rx="10" ry="5" transform="rotate(-30 58 76)" fill="currentColor"/>`),
+      <ellipse cx="58" cy="76" rx="10" ry="5" transform="rotate(-30 58 76)" fill="currentColor"/>`,
 
-    bird: svg(`
+    bird: `
       <ellipse cx="48" cy="58" rx="28" ry="24" fill="currentColor"/>
       <path fill-rule="evenodd" fill="currentColor" d="M91 40 A15 15 0 1 0 61 40 A15 15 0 1 0 91 40 Z
         M87 34 A3 3 0 1 0 81 34 A3 3 0 1 0 87 34 Z"/>
       <path d="M90 37 L99 41 L90 46 Z" fill="currentColor"/>
       <path d="M22 48 L4 60 L24 68 Z" fill="currentColor"/>
-      <ellipse cx="44" cy="68" rx="14" ry="20" transform="rotate(-20 44 68)" fill="currentColor"/>`),
+      <ellipse cx="44" cy="68" rx="14" ry="20" transform="rotate(-20 44 68)" fill="currentColor"/>`,
   };
+
+  const SHAPES = Object.fromEntries(Object.entries(SHAPE_BODIES).map(([k, body]) => [k, svg(body)]));
 
   function shape(name) {
     return SHAPES[name] || '';
   }
 
-  return { mascot, icon, animals, shape };
+  // ---- Flags --------------------------------------------------------------
+  // The answer object: an Eguchi-style colour flag planted in the grass, the
+  // way the method is taught with real flags. The cloth carries the colour's
+  // shape in its ink tone; poles, knob and mound are styled from CSS
+  // (.flag-pole etc.) so the day/night garden themes can recolour them.
+  // .flag-cloth is the group that waves when the flag is picked.
+  function flag(chord) {
+    const body = SHAPE_BODIES[chord.shape] || '';
+    return `<svg viewBox="0 0 110 168" xmlns="http://www.w3.org/2000/svg" class="sprite flag" aria-hidden="true" focusable="false">
+      <ellipse class="flag-mound" cx="18" cy="164" rx="15" ry="4"/>
+      <rect class="flag-pole" x="14" y="8" width="8" height="156" rx="4"/>
+      <circle class="flag-knob" cx="18" cy="9" r="7"/>
+      <g class="flag-cloth">
+        <path class="flag-fabric" d="M22 16 C44 6 70 26 104 14 L104 90 C70 102 44 82 22 92 Z" fill="${chord.swatch}"/>
+        <path d="M22 16 C44 6 70 26 104 14 L104 24 C70 36 44 16 22 26 Z" fill="#fff" opacity=".16"/>
+        <g transform="translate(40 30) scale(0.46)" style="color:${chord.text}">${body}</g>
+      </g>
+    </svg>`;
+  }
+
+  return { mascot, icon, animals, shape, flag };
 })();

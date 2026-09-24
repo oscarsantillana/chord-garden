@@ -1,4 +1,4 @@
-name: Deploy Rainbow Pitch to GitHub Pages
+name: Deploy Chord Garden to GitHub Pages
 
 on:
   push:

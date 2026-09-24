@@ -1,5 +1,5 @@
 import { magnitudeSpectrum } from './helpers/fft.mjs';
-// Rainbow Pitch — adversarial tests for the shipped selective inversion path.
+// Chord Garden — adversarial tests for the shipped selective inversion path.
 //
 // Purpose (read this before touching thresholds): chroma alone cannot tell
 // red/orange/brown (etc.) apart. This file keeps the original 405-condition

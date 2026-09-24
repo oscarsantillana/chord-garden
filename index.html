@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="description" content="Rainbow Pitch — a playful web app that helps young children learn perfect pitch with the Eguchi Chord Identification Method." />
-  <meta name="theme-color" content="#f3efff" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#1d1834" media="(prefers-color-scheme: dark)" />
-  <title>Rainbow Pitch — Perfect Pitch for Kids</title>
+  <meta name="description" content="Chord Garden — a playful web app that helps young children learn perfect pitch with the Eguchi Chord Identification Method." />
+  <meta name="theme-color" content="#CDE9F5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#15233A" media="(prefers-color-scheme: dark)" />
+  <title>Chord Garden — Perfect Pitch for Kids</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" />
   <link rel="manifest" href="assets/manifest.json" />
   <!-- Bundled fonts (see the @font-face rules in css/styles.css); preloading
        the Latin files avoids a flash of fallback text on first paint. -->
-  <link rel="preload" href="assets/fonts/fredoka-latin.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/grandstander-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/nunito-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="css/styles.css" />
   <!-- Tone.js provides the sampled acoustic piano. `defer` on every script
        tag here (CDN + local) keeps them from blocking first paint while
@@ -24,6 +24,18 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js" defer></script>
 </head>
 <body>
+  <!-- The garden behind every child screen (hidden for grown-ups; colours
+       come from CSS so the night garden can recolour it). -->
+  <div id="scene" aria-hidden="true">
+    <svg class="scene-clouds" viewBox="0 0 390 80">
+      <ellipse cx="92" cy="52" rx="30" ry="13" /><ellipse cx="112" cy="44" rx="19" ry="15" /><ellipse cx="76" cy="47" rx="14" ry="10" />
+      <ellipse cx="286" cy="30" rx="34" ry="13" /><ellipse cx="270" cy="22" rx="18" ry="14" /><ellipse cx="302" cy="19" rx="14" ry="11" />
+    </svg>
+    <svg class="scene-hills" viewBox="0 0 390 340" preserveAspectRatio="none">
+      <path class="hill-back" d="M0 90 C90 30 200 40 390 74 L390 340 L0 340 Z" />
+      <path class="hill-front" d="M0 150 C120 104 270 112 390 142 L390 340 L0 340 Z" />
+    </svg>
+  </div>
   <div id="confetti" aria-hidden="true"></div>
   <main id="app"><!-- screens render here --></main>
 

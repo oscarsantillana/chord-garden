@@ -1,5 +1,5 @@
 /*
- * Rainbow Pitch — application logic.
+ * Chord Garden — application logic.
  *
  * Two audiences, one app:
  *   • Child flow  — a playful "practice toy". Big colour buttons, warm piano,
@@ -101,9 +101,11 @@
 
   async function beginPractice(button, error) {
     const generation = screenGeneration;
-    const label = button.innerHTML;
+    // Only the label changes while the piano loads; the disc stays put.
+    const labelEl = button.querySelector('.play-label') || button;
+    const label = labelEl.textContent;
     button.disabled = true;
-    button.innerHTML = 'Waking the piano…';
+    labelEl.textContent = 'Waking the piano…';
     error.hidden = true;
     try {
       await PianoAudio.unlock();
@@ -113,7 +115,7 @@
     } catch (failure) {
       if (generation !== screenGeneration) return;
       button.disabled = false;
-      button.innerHTML = label;
+      labelEl.textContent = label;
       error.textContent = failure?.name === 'NotAllowedError'
         ? 'Microphone access was not granted. Please try again or change the real piano setting.'
         : 'Could not start the piano or microphone. Please try again.';
@@ -146,6 +148,15 @@
   // =======================================================================
   //  HOME  (Child Start)
   // =======================================================================
+  // The big round Play button (home and celebration). The label sits inside
+  // the button, under the disc, so the whole thing is one tap target.
+  function playButton(label, error) {
+    const btn = el('button', { class: 'big-start', onclick: () => beginPractice(btn, error) },
+      el('span', { class: 'play-disc', html: Sprites.icon('play') }),
+      el('span', { class: 'play-label' }, label));
+    return btn;
+  }
+
   function renderHome() {
     clearScreen();
     clearConfetti();
@@ -153,59 +164,56 @@
     const p = Store.activeProfile();
     const colors = activeColorObjects();
 
-    // Tapping a swatch plays its chord — a self-serve way to prime the
-    // chord↔colour pairing (presentation mode) before quizzing begins. Each
-    // swatch carries the same shape its answer tile uses in practice.
-    const swatches = el('div', { class: 'today-colors' },
+    // Today's flags, planted along the hill. Tapping one plays its chord — a
+    // self-serve way to prime the chord↔colour pairing (presentation mode)
+    // before quizzing begins.
+    const flags = el('div', { class: 'today-colors' },
       colors.map((c) => el('button', {
         class: 'today-swatch',
-        style: `background:${c.swatch};color:${c.text}`,
         title: c.label,
         'aria-label': c.label,
+        html: Sprites.flag(c),
         onclick: async () => {
           // Presentation-mode taps are best-effort — if the piano hasn't
-          // loaded yet, the Start button below is where a real retry with a
+          // loaded yet, the Play button above is where a real retry with a
           // friendly message happens, so a failure here just stays silent.
           try {
             await PianoAudio.unlock();
             PianoAudio.playChord(c.notes).catch(() => {});
           } catch (e) { /* no-op — see comment above */ }
         },
-      }, el('span', { class: 'color-face', html: Sprites.shape(c.shape) }))));
+      })));
 
-    // Five little stars, one lit per Practice Set played today — a gentle
-    // cadence nudge with no numbers and nothing to feel bad about (dim
-    // stars are just "not yet", never "0 of 5").
-    const setsRow = el('div', { class: 'sets-today', 'aria-label': 'Sets played today' },
+    // Five daisies, one in bloom per Practice Set played today — a gentle
+    // cadence nudge with no numbers and nothing to feel bad about (a bud is
+    // just "not yet", never "0 of 5").
+    const played = Math.min(setsToday(p), 5);
+    const setsRow = el('div', { class: 'sets-today', role: 'img', 'aria-label': `Sets played today: ${played} of 5` },
       Array.from({ length: 5 }, (_, i) =>
-        el('span', { class: 'set-star' + (i < Math.min(setsToday(p), 5) ? ' filled' : ''), html: Sprites.icon('star') })));
+        el('span', { class: 'set-flower' + (i < played ? ' bloom' : ''), html: Sprites.icon(i < played ? 'daisy' : 'bud') })));
 
     const startError = el('p', { class: 'start-error', hidden: true },
       'The piano needs the internet the first time — check your connection and try again.');
-    const startBtn = el('button', {
-      class: 'big-start',
-      onclick: () => beginPractice(startBtn, startError),
-    }, el('span', { class: 'btn-ico', html: Sprites.icon('play') }), 'Start');
+    const startBtn = playButton('Play', startError);
 
     const profileStrip = el('header', { class: 'home-top' },
       el('button', { class: 'avatar-chip', title: 'Who is playing?', onclick: openProfilePicker },
         el('span', { class: 'avatar-emoji', html: Sprites.mascot(p.avatar) }),
         el('span', { class: 'avatar-name' }, p.name)),
-      el('button', { class: 'gear', title: 'Grown-ups', 'aria-label': 'Grown-up area', onclick: () => renderGuardianGate(), html: Sprites.icon('gear') }));
+      el('button', { class: 'gear', title: 'Grown-ups', 'aria-label': 'Grown-up area', onclick: () => renderGuardianGate(), html: Sprites.icon('lock') }));
 
     app.appendChild(el('section', { class: 'screen home' },
       profileStrip,
       el('div', { class: 'home-main' },
         el('div', { class: 'brand' },
-          el('div', { class: 'brand-mark', html: Sprites.icon('rainbow') }),
-          el('h1', { class: 'brand-title' }, 'Rainbow Pitch'),
-          el('p', { class: 'brand-sub' }, 'Listen and tap the colour!')),
-        el('div', { class: 'today-panel' },
-          el('p', { class: 'today-label' }, 'Tap a colour to hear it'),
-          swatches),
-        setsRow,
+          el('h1', { class: 'brand-title' }, 'Chord Garden'),
+          el('p', { class: 'brand-sub' }, 'Listen, then pick the flag')),
         startBtn,
-        startError)));
+        setsRow,
+        startError),
+      el('div', { class: 'home-flags' },
+        el('p', { class: 'today-label' }, 'Tap a flag to hear its song'),
+        flags)));
   }
 
   // A lightweight in-app overlay instead of window.confirm — with 3+ kids
@@ -290,7 +298,7 @@
             // Any denial (blocked, dismissed, OS-level) — deliberately not
             // distinguished further, same reasoning as the existing offline-
             // piano error not trying to diagnose DNS vs. CDN-down.
-            micError.textContent = "Rainbow Pitch can't hear the piano without microphone access — check your browser's site settings and try again.";
+            micError.textContent = "Chord Garden can't hear the piano without microphone access — check your browser's site settings and try again.";
           }
           micError.hidden = false;
         }
@@ -302,7 +310,7 @@
         el('div', { class: 'gate-card' },
           el('div', { class: 'gate-lock', html: Sprites.icon('mic') }),
           el('p', { class: 'pin-msg' }, 'Real piano mode'),
-          el('p', {}, 'An adult plays chords on a real piano near this device. Rainbow Pitch listens through the microphone to figure out which chord it heard, then your child taps the colour.'),
+          el('p', {}, 'An adult plays chords on a real piano near this device. Chord Garden listens through the microphone to figure out which chord it heard, then your child taps the colour.'),
           el('p', { class: 'g-caption' }, 'The sound is analysed right here in the browser and is never recorded, saved, or sent anywhere.'),
           el('div', { class: 'gate-actions' },
             readyBtn,
@@ -315,12 +323,11 @@
   // =======================================================================
   let session = null;
 
-  // The journey mascot's last-rendered position (0–100, a % of the path),
-  // kept outside `session` because renderPractice() rebuilds the whole
-  // screen every round — this is what lets the mascot animate FROM its old
-  // spot TO its new one across that rebuild instead of just popping there.
-  // See renderPractice() for how it's used.
-  let mascotPct = 0;
+  // The vine's last-drawn progress (0–1), kept outside `session` because
+  // renderPractice() rebuilds the whole screen every round — this is what
+  // lets the vine and mascot grow FROM their old spot TO the new one across
+  // that rebuild instead of just popping there. See renderPractice().
+  let vineProgress = 0;
 
   function startPractice(mode = 'digital') {
     setMode('child'); // real-piano mode arrives here from the grown-up priming card
@@ -345,7 +352,7 @@
       micListen: null,   // cancellable handle for the current mic round
       micArmed: false,   // flips true after FreshChordGate has a calm baseline
     };
-    mascotPct = 0;
+    vineProgress = 0;
     renderPractice();
     nextRound();
   }
@@ -546,39 +553,22 @@
 
   function renderPractice() {
     clearScreen();
-    // How far along the set the child is, as a % of the journey path — the
-    // mascot walks to this spot and the flag marks the end (session.total).
-    const targetPct = session.total > 0 ? Math.min(100, (session.index / session.total) * 100) : 0;
+    // How far along the set the child is, as a fraction of the vine.
+    const target = session.total > 0 ? Math.min(1, session.index / session.total) : 0;
 
-    // A continuous filled track rather than one dot per round (20 dots read
-    // as a loading spinner). The fill and the mascot share the same
-    // (index / total) position and both animate from where the previous
-    // render left them — see mascotPct above.
-    const fill = el('div', { class: 'journey-fill', style: `width:${mascotPct}%` });
-    const track = el('div', { class: 'journey-track' }, fill);
-
-    // The mascot itself — same #mascot id as before, so setMascotMood() and
-    // cheer()'s .happy hop keep working untouched. It's placed at its OLD
-    // spot (mascotPct) here, then nudged to the new one a frame later so the
-    // CSS transition on `left` has something to animate between; without
-    // that two-step, a full re-render would just make it appear already at
-    // the new spot with nothing to see move.
+    // The vine replaces a row of round dots: a wavy line that grows toward
+    // the end of the set and sprouts a leaf per round played, with the
+    // child's mascot riding its tip. It's drawn after render (drawVine) since
+    // the wave is laid out in real pixels. The mascot keeps its #mascot id so
+    // setMascotMood() and cheer()'s .happy hop work on it directly.
     const mascotEl = el('div', {
-      class: 'journey-mascot', id: 'mascot', style: `left:${mascotPct}%`,
+      class: 'journey-mascot', id: 'mascot',
       html: Sprites.mascot(Store.activeProfile().avatar, baselineMood()),
     });
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      mascotEl.style.left = targetPct + '%';
-      fill.style.width = targetPct + '%';
-    }));
-    mascotPct = targetPct;
-
     const journey = el('div', {
-      class: 'journey', role: 'progressbar', 'aria-label': 'Rounds played',
+      class: 'vine', role: 'progressbar', 'aria-label': 'Rounds played',
       'aria-valuemin': 0, 'aria-valuemax': session.total, 'aria-valuenow': session.index,
-    },
-      el('div', { class: 'journey-path' }, track, mascotEl),
-      el('span', { class: 'journey-flag', 'aria-hidden': 'true', html: Sprites.icon('flag') }));
+    }, el('div', { class: 'vine-art' }), mascotEl);
 
     // In mic mode there's nothing to replay until a chord has actually been
     // heard (State A has no session.current yet) — the button only appears
@@ -591,18 +581,18 @@
     }, el('span', { class: 'listen-icon', html: Sprites.icon('speaker') }),
        el('span', {}, session.mode === 'mic' ? 'Hear it again' : 'Listen again'));
 
-    // Square tiles in a wrapping, centred flex row — a partial last row
-    // centres itself. Tile size and column count are fitted to the space
-    // after render (fitAnswers). Dimmed + non-interactive while locked
-    // waiting for the chord to sound, so an eager tap can't land before
-    // there's anything to listen to.
+    // One planted flag per active colour, in a wrapping, centred row — a
+    // partial last row centres itself. Flag size and column count are fitted
+    // to the space after render (fitAnswers). Dimmed + non-interactive while
+    // locked waiting for the chord to sound, so an eager tap can't land
+    // before there's anything to listen to.
     const makeAnswerBtn = (c) => el('button', {
       class: 'color-btn',
       'data-color': c.name,
       'aria-label': c.label,
-      style: `background:${c.swatch};color:${c.text}`,
+      html: Sprites.flag(c),
       onclick: () => onAnswer(c),
-    }, el('span', { class: 'color-face', html: Sprites.shape(c.shape) }));
+    });
 
     const answers = el('div', { class: 'answers' + (session.locked ? ' waiting' : '') },
       session.colors.map(makeAnswerBtn));
@@ -628,7 +618,7 @@
             el('span', { class: 'round-cue-label' },
               session.micArmed ? 'Play any colour on the piano!' : 'Get ready…'),
             el('span', { class: 'round-cue-sub' },
-              session.micArmed ? 'Rainbow Pitch is listening.' : 'Waiting for a quiet moment.'));
+              session.micArmed ? 'Chord Garden is listening.' : 'Waiting for a quiet moment.'));
     } else {
       roundCue = el('div', { class: 'round-cue' + (session.cueing ? '' : ' hidden') },
         el('span', { class: 'round-cue-icon', html: Sprites.icon('speaker') }),
@@ -666,38 +656,87 @@
       el('div', { class: 'listen-wrap' }, micPill, listenBtn),
       el('div', { class: 'answers-wrap' }, answers, roundCue, micRetry)));
     fitAnswers();
+    // Draw the vine where the previous round left it, then grow it to this
+    // round a frame later so the tip (and the mascot riding it) visibly
+    // moves forward instead of popping into place after the re-render.
+    drawVine(vineProgress, vineProgress);
+    const from = vineProgress;
+    requestAnimationFrame(() => requestAnimationFrame(() => drawVine(from, target)));
+    vineProgress = target;
     if (session.mode === 'mic') updateMicInput();
   }
 
-  // Largest square tile that fits every active colour into the space left
-  // for answers, trying each column count. Ties go to more columns (wider,
-  // shorter layouts). Capped so two colours on a tablet don't become
-  // billboards, and floored so a crowded small screen scrolls rather than
-  // shrinking tiles below a comfortable tap size.
-  const TILE_GAP = 14;
-  const TILE_MAX = 240;
-  const TILE_MIN = 64;
-  function fitTiles(n, width, height) {
-    let best = { cols: 1, size: 0 };
+  // The vine's wave in real pixels (48px tall box): shared by the drawn
+  // line, the leaves and the mascot so they all sit on it.
+  const VINE_WAVELENGTH = 96;
+  const vineY = (x) => 24 + 8 * Math.sin((x / VINE_WAVELENGTH) * Math.PI * 2 + 0.6);
+
+  function drawVine(from, to) {
+    const vine = app.querySelector('.vine');
+    const art = vine && vine.querySelector('.vine-art');
+    const mascotEl = document.getElementById('mascot');
+    if (!session || !art || !mascotEl) return;
+    const w = vine.clientWidth || 240;
+    const points = [];
+    for (let x = 0; x <= w; x += 4) points.push(`${points.length ? 'L' : 'M'}${x} ${vineY(x).toFixed(1)}`);
+    // Only rounds actually reached so far sprout a leaf; the newest pops in.
+    const shown = Math.round(to * session.total);
+    const leaves = [];
+    for (let i = 0; i < shown; i++) {
+      const x = ((i + 0.5) / session.total) * w;
+      const up = i % 2 === 0;
+      const fresh = i === shown - 1 && to > from;
+      leaves.push(`<span class="vine-leaf${fresh ? ' new' : ''}" style="left:${x.toFixed(1)}px;top:${(vineY(x) + (up ? -7 : 7)).toFixed(1)}px;--tilt:${up ? -35 : 35}deg"></span>`);
+    }
+    art.innerHTML =
+      `<svg viewBox="0 0 ${w} 48" aria-hidden="true">` +
+      `<path class="vine-track" d="${points.join(' ')}"/>` +
+      // The gap (1000) outruns the path so the dash pattern never repeats a
+      // round-capped dot at the far end.
+      `<path class="vine-grow" pathLength="100" stroke-dasharray="${(to * 100).toFixed(2)} 1000" style="--from:${(from * 100).toFixed(2)}" d="${points.join(' ')}"/>` +
+      `</svg>` + leaves.join('');
+    // The chin of the face sits ~91% down its 36px box, onto the line.
+    const x = to * w;
+    mascotEl.style.left = x.toFixed(1) + 'px';
+    mascotEl.style.top = (vineY(x) - 33).toFixed(1) + 'px';
+  }
+
+  // Largest flag that fits every active colour into the space left for
+  // answers, trying each column count at the flag's own proportions. Ties
+  // go to more columns (wider, shorter layouts). Capped so two colours on a
+  // tablet don't become billboards, and floored so a crowded small screen
+  // scrolls rather than shrinking flags below a comfortable tap size.
+  const FLAG_ASPECT = 110 / 168; // the flag sprite's viewBox
+  const GAP_X = 10;
+  const GAP_Y = 18;
+  const FLAG_MAX_H = 230;
+  const FLAG_MIN_H = 96;
+  function fitFlags(n, width, height) {
+    let best = { cols: 1, h: 0 };
     for (let cols = 1; cols <= n; cols++) {
       const rows = Math.ceil(n / cols);
-      const size = Math.min(TILE_MAX,
-        (width - TILE_GAP * (cols - 1)) / cols,
-        (height - TILE_GAP * (rows - 1)) / rows);
-      if (size >= best.size) best = { cols, size };
+      const h = Math.min(FLAG_MAX_H,
+        (height - GAP_Y * (rows - 1)) / rows,
+        (width - GAP_X * (cols - 1)) / cols / FLAG_ASPECT);
+      if (h >= best.h) best = { cols, h };
     }
-    return { cols: best.cols, size: Math.max(TILE_MIN, Math.floor(best.size)) };
+    const h = Math.max(FLAG_MIN_H, Math.floor(best.h));
+    return { cols: best.cols, h, w: Math.floor(h * FLAG_ASPECT) };
   }
 
   function fitAnswers() {
     const wrap = app.querySelector('.answers-wrap');
     const answers = app.querySelector('.answers');
     if (!session || !wrap || !answers || !wrap.clientWidth || !wrap.clientHeight) return;
-    const { cols, size } = fitTiles(session.colors.length, wrap.clientWidth, wrap.clientHeight);
-    answers.style.setProperty('--tile', size + 'px');
-    answers.style.width = (cols * size + (cols - 1) * TILE_GAP) + 'px';
+    const { cols, h, w } = fitFlags(session.colors.length, wrap.clientWidth, wrap.clientHeight);
+    answers.style.setProperty('--tile-w', w + 'px');
+    answers.style.setProperty('--tile-h', h + 'px');
+    answers.style.width = (cols * w + (cols - 1) * GAP_X) + 'px';
   }
-  window.addEventListener('resize', fitAnswers);
+  window.addEventListener('resize', () => {
+    fitAnswers();
+    if (session) drawVine(vineProgress, vineProgress);
+  });
 
   // Swaps the live #mascot element's face in place (no full re-render) —
   // used for the brief "curious" flash on a miss, since that's a transient
@@ -847,12 +886,12 @@
     PianoAudio.playSparkle(); // non-pitched flourish — see audio.js for why
     const p = Store.activeProfile();
     const startError = el('p', { class: 'start-error', hidden: true });
-    const again = el('button', { class: 'big-start', onclick: () => beginPractice(again, startError) },
-      el('span', { class: 'btn-ico', html: Sprites.icon('play') }), 'Play again');
+    const again = playButton('Play again', startError);
+    // A row of daisies bursting into bloom, one after another.
     app.appendChild(el('section', { class: 'screen celebrate' },
       el('div', { class: 'cele-mascot', html: Sprites.mascot(p.avatar, 'happy') }),
       el('h1', { class: 'cele-title' }, early ? 'Nice listening!' : 'You did it!'),
-      el('div', { class: 'stickers' }, ['star', 'note', 'sparkle', 'note', 'star'].map((s) => el('span', { class: 'sticker', html: Sprites.icon(s) }))),
+      el('div', { class: 'stickers', 'aria-hidden': 'true' }, Array.from({ length: 5 }, () => el('span', { class: 'sticker', html: Sprites.icon('daisy') }))),
       el('div', { class: 'cele-actions' },
         again,
         el('button', { class: 'ghost-btn', onclick: renderHome }, 'Home')), startError));
@@ -1045,7 +1084,7 @@
         title: locked ? 'At least one colour stays on' : null,
         onclick: () => { if (!locked) toggleColor(c.name); },
       },
-        el('span', { class: 'swatch', style: `background:${c.swatch}` }),
+        el('span', { class: 'row-flag', html: Sprites.flag(c) }),
         el('span', { class: 'g-row-main' },
           el('span', { class: 'g-row-title' }, c.label),
           el('span', { class: 'g-row-sub', title: 'Chord (grown-up only)' }, 'Chord ' + c.chord)),
@@ -1173,6 +1212,21 @@
         seen ? `${right} of ${seen} right first time` : 'No practice yet')));
     body.appendChild(el('div', { class: 'g-card' }, accuracyChart(days)));
 
+    // Cadence: the method asks for about five short sets a day. One column
+    // of five dots per day, filled per set played (more than five still
+    // shows five; the tooltip has the real count).
+    const setDays = Logic.dailySets(p.sessions, { days: 14 });
+    body.appendChild(section('Sets per day', el('div', { class: 'g-card' },
+      el('div', {
+        class: 'sets-grid', style: `--days:${setDays.length}`, role: 'img',
+        'aria-label': 'Sets per day, last 14 days: ' + setDays.map((d) => `${fmtDay(d.start)} ${d.sets}`).join(', '),
+      }, setDays.map((d) => el('div', { class: 'sets-col', title: `${fmtDay(d.start)}: ${plural(d.sets, 'set')}` },
+        Array.from({ length: 5 }, (_, i) => el('span', { class: 'sets-dot' + (i < d.sets ? ' on' : '') }))))),
+      el('div', { class: 'sets-x', 'aria-hidden': 'true' },
+        el('span', {}, new Date(setDays[0].start).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })),
+        el('span', { class: 'today' }, 'Today'))),
+      'Each dot is one set. Aim for about 5 short sets a day.'));
+
     const grid = el('div', { class: 'acc-grid' });
     p.activeColors.forEach((name) => {
       const c = CHORD_BY_NAME[name];
@@ -1249,7 +1303,7 @@
   function exportData(p) {
     const blob = new Blob([JSON.stringify(p, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = el('a', { href: url, download: `rainbow-pitch-${p.name}.json` });
+    const a = el('a', { href: url, download: `chord-garden-${p.name}.json` });
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   }
@@ -1375,7 +1429,7 @@
       }) }, 'Reset this child’s progress'))));
 
     body.appendChild(el('div', { class: 'about' },
-      el('p', {}, 'Rainbow Pitch uses the Eguchi Chord Identification Method: children aged about 2–6 learn absolute pitch by matching piano chords to fixed colours. Practise about 5 short times a day.'),
+      el('p', {}, 'Chord Garden uses the Eguchi Chord Identification Method: children aged about 2–6 learn absolute pitch by matching piano chords to fixed colours. Practise about 5 short times a day.'),
       el('p', {}, 'All data stays on this device.')));
   }
 
@@ -1383,8 +1437,9 @@
   //  Confetti (lightweight, no dependencies)
   // =======================================================================
   // Confetti in the colours the child was just practising (so the burst is
-  // "theirs"), in a mix of shapes, each with its own drift, spin and speed.
-  const CONFETTI_SHAPES = ['', 'circle', 'ribbon', 'star'];
+  // "theirs"): petals, circles and little stars, each with its own drift,
+  // spin and speed.
+  const CONFETTI_SHAPES = ['', 'circle', 'petal', 'star'];
   function burstConfetti(count, chordColors) {
     const layer = document.getElementById('confetti');
     const colors = (chordColors && chordColors.length ? chordColors : CHORDS).map((c) => c.swatch);

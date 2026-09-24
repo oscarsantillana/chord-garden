@@ -1,5 +1,5 @@
 /*
- * Rainbow Pitch — ground-truth acceptance-session recorder.
+ * Chord Garden — ground-truth acceptance-session recorder.
  *
  * Pure state and metrics only: no DOM, microphone, storage, or downloads.
  * The manual browser harness fixes the intended stimulus before listening,

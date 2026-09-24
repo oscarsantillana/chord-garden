@@ -10,7 +10,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false } =
   const sandbox = { console, document, ...clock, requestAnimationFrame: callback => callback(),
     window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
     navigator: {}, localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
-    Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '' },
+    Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '', flag: () => '' },
     PianoAudio: {
       async unlock() {}, stopAll() {}, async whenOutputSilent() {}, playCue() {}, playPop() {}, playSparkle() {}, async playReward() {},
       playChord(notes) { played.push([...notes]); return deferredChord ? new Promise(resolve => pendingChords.push(resolve)) : Promise.resolve(); },
@@ -36,21 +36,21 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false } =
 }
 {
   const ui = setup({ micMode: true });
-  await ui.click('Start'); await ui.click('Ready'); assert.equal(ui.micStarts, 1);
+  await ui.click('Play'); await ui.click('Ready'); assert.equal(ui.micStarts, 1);
   await ui.click('All done'); await ui.click('Play again');
   assert.equal(ui.micStarts, 2, 'replay reacquires the microphone');
   assert.equal(ui.listens.length, 2); assert.equal(ui.played.length, 0);
 }
 {
   const ui = setup({ micMode: true, deferredMic: true });
-  await ui.click('Start'); const { pending } = await ui.click('Ready');
+  await ui.click('Play'); const { pending } = await ui.click('Ready');
   await ui.click('Not now'); ui.pendingStarts[0](); await pending; await flush();
   assert.ok(ui.app.querySelector('.home')); assert.equal(ui.listens.length, 0);
   assert.equal(ui.micStops, 1, 'leaving priming cancels acquisition');
 }
 {
   const ui = setup();
-  await ui.click('Start'); await ui.clock.tick(1050);
+  await ui.click('Play'); await ui.clock.tick(1050);
   ui.app.querySelector('.color-btn').click();
   await ui.click('All done'); await ui.click('Play again');
   await ui.clock.tick(2200);
@@ -59,7 +59,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false } =
 }
 {
   const ui = setup({ deferredChord: true });
-  await ui.click('Start'); await ui.clock.tick(1050);
+  await ui.click('Play'); await ui.clock.tick(1050);
   await ui.click('All done'); await ui.click('Play again');
   ui.pendingChords[0](); await flush();
   assert.ok(ui.app.querySelector('.answers').classList.contains('waiting'), 'old playback completion cannot unlock a new round');
@@ -68,7 +68,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false } =
 }
 {
   const ui = setup();
-  await ui.click('Start'); await ui.click('All done'); await ui.click('Play again'); await ui.clock.tick(1050);
+  await ui.click('Play'); await ui.click('All done'); await ui.click('Play again'); await ui.clock.tick(1050);
   assert.equal(ui.played.length, 1, 'stopping during the cue cancels the old chord timer');
   ui.windowEvents.pagehide(); await ui.clock.tick(5000);
   ui.windowEvents.pageshow({ persisted: true }); assert.ok(ui.app.querySelector('.home'));
@@ -90,7 +90,7 @@ console.log('ok - app replay, startup cancellation, session timers, stale playba
 
 {
   const ui = setup({ micMode: true });
-  await ui.click('Start'); await ui.click('Ready');
+  await ui.click('Play'); await ui.click('Ready');
   const first = ui.listens[0];
   first.low({ reason: 'no-input' });
   assert.equal(ui.app.querySelector('.mic-status').textContent, 'Paused');

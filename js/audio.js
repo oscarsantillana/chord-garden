@@ -1,5 +1,5 @@
 /*
- * Rainbow Pitch — audio engine.
+ * Chord Garden — audio engine.
  *
  * Plays chords on a real sampled acoustic piano using Tone.js. A warm, real
  * piano matters here: the child is building a lasting mental link between a

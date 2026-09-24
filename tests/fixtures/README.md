@@ -2,7 +2,7 @@
 
 `salamander-onset-spectra.json` contains normalized, sparse FFT peak data—not
 audio—from onset-aligned chords rendered with the same Salamander Grand Piano
-samples used by Rainbow Pitch. Each frame retains the 128 strongest bins of a
+samples used by Chord Garden. Each frame retains the 128 strongest bins of a
 4096-point, 48 kHz Hann-windowed FFT at 0, 60, 120, 240, and 400 ms after the
 attack.
 

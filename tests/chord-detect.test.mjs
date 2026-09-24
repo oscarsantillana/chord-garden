@@ -1,5 +1,5 @@
 import { magnitudeSpectrum } from './helpers/fft.mjs';
-// Rainbow Pitch — behavior tests for the pure spectrum classifier.
+// Chord Garden — behavior tests for the pure spectrum classifier.
 //
 // No test framework, no deps: plain assertions, run with `node
 // tests/chord-detect.test.mjs`. chord-detect.js is CommonJS

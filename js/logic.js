@@ -1,5 +1,5 @@
 /*
- * Rainbow Pitch — Eguchi method decision logic.
+ * Chord Garden — Eguchi method decision logic.
  *
  * Pure functions only: data in, result out, no Store/DOM access. That keeps
  * them usable both as the `Logic` browser global (loaded before storage.js)
@@ -78,6 +78,21 @@ const Logic = {
       if (e.ok) buckets[i].correct += 1;
     });
     buckets.forEach((b) => { if (b.seen) b.pct = Math.round((b.correct / b.seen) * 100); });
+    return buckets;
+  },
+
+  // Practice Sets played per local calendar day for the last `days` days,
+  // oldest first — the "about 5 short sets a day" cadence the method asks
+  // for. Uses the same day boundaries as dailyAccuracy().
+  dailySets(sessions, { days = 14, now = Date.now() } = {}) {
+    const buckets = Logic.dailyAccuracy([], { days, now }).map((b) => ({ start: b.start, sets: 0 }));
+    const first = buckets[0].start;
+    sessions.forEach((s) => {
+      if (typeof s.ts !== 'number' || s.ts < first || s.ts > now) return;
+      let i = buckets.length - 1;
+      while (i > 0 && s.ts < buckets[i].start) i--;
+      buckets[i].sets += 1;
+    });
     return buckets;
   },
 
