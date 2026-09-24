@@ -176,4 +176,39 @@ function ev(c, a, ok) {
   console.log('ok - pickWeighted: single-colour array always returns that colour');
 }
 
+// --- readyColors ------------------------------------------------------------
+
+{
+  const events = [
+    ...Array.from({ length: 10 }, () => ev('red', 'red', true)),
+    ...Array.from({ length: 10 }, (_, i) => ev('yellow', i < 5 ? 'yellow' : 'red', i < 5)),
+  ];
+  assert.deepEqual(Logic.readyColors(events, ['red', 'yellow', 'blue']), ['red']);
+  assert.equal(Logic.readiness(events, ['red']), true);
+  assert.equal(Logic.readiness(events, ['red', 'yellow']), false);
+  console.log('ok - readyColors: lists only the colours that clear the readiness bar');
+}
+
+// --- dailyAccuracy ----------------------------------------------------------
+
+{
+  const now = new Date(2026, 8, 24, 18, 0).getTime();
+  const at = (daysAgo, hour) => { const d = new Date(2026, 8, 24 - daysAgo, hour); return d.getTime(); };
+  const events = [
+    { c: 'red', a: 'red', ok: true, ts: at(0, 9) },
+    { c: 'red', a: 'yellow', ok: false, ts: at(0, 8) },
+    { c: 'red', a: 'red', ok: true, ts: at(2, 23) },
+    { c: 'red', a: 'yellow', ok: false, ts: at(2, 0), src: 'mic' },
+    { c: 'red', a: 'red', ok: true, ts: at(20, 12) },
+  ];
+  const days = Logic.dailyAccuracy(events, { days: 7, now });
+  assert.equal(days.length, 7);
+  assert.equal(days[6].start, new Date(2026, 8, 24).getTime());
+  assert.deepEqual([days[6].seen, days[6].pct], [2, 50]);
+  assert.deepEqual([days[4].seen, days[4].pct], [1, 100], 'mic rounds are excluded');
+  assert.equal(days[5].pct, null);
+  assert.equal(days.reduce((n, d) => n + d.seen, 0), 3, 'events older than the window are ignored');
+  console.log('ok - dailyAccuracy: buckets digital first attempts by local day');
+}
+
 console.log('\nAll logic.test.mjs assertions passed.');

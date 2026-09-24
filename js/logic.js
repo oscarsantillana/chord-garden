@@ -43,11 +43,42 @@ const Logic = {
   // Ready to add the next colour once EVERY active colour has enough recent
   // attempts and a high enough recent accuracy. Profiles with no events yet
   // simply fail the minSeen check, so "not ready" is the safe default.
-  readiness(events, activeColors, { minSeen = 8, minPct = 90, windowSize = 20 } = {}) {
-    return activeColors.every((name) => {
+  readiness(events, activeColors, opts) {
+    return Logic.readyColors(events, activeColors, opts).length === activeColors.length;
+  },
+
+  // The active colours that individually clear the readiness bar, in their
+  // original order — lets the guardian see "4 of 6 ready" instead of only a
+  // yes/no, with the same thresholds readiness() itself uses.
+  readyColors(events, activeColors, { minSeen = 8, minPct = 90, windowSize = 20 } = {}) {
+    return activeColors.filter((name) => {
       const { seen, pct } = Logic.recentAccuracy(events, name, windowSize);
       return seen >= minSeen && pct !== null && pct >= minPct;
     });
+  },
+
+  // First-attempt accuracy per local calendar day for the last `days` days,
+  // oldest first, ending with the day containing `now`. Days without practice
+  // have seen 0 and pct null. Real-piano rounds are excluded, as everywhere
+  // else in the core accuracy signal.
+  dailyAccuracy(events, { days = 14, now = Date.now() } = {}) {
+    const end = new Date(now);
+    end.setHours(0, 0, 0, 0);
+    const buckets = Array.from({ length: days }, (_, i) => {
+      const start = new Date(end);
+      start.setDate(end.getDate() - (days - 1 - i));
+      return { start: start.getTime(), seen: 0, correct: 0, pct: null };
+    });
+    const first = buckets[0].start;
+    events.forEach((e) => {
+      if (e.src === 'mic' || typeof e.ts !== 'number' || e.ts < first || e.ts > now) return;
+      let i = buckets.length - 1;
+      while (i > 0 && e.ts < buckets[i].start) i--;
+      buckets[i].seen += 1;
+      if (e.ok) buckets[i].correct += 1;
+    });
+    buckets.forEach((b) => { if (b.seen) b.pct = Math.round((b.correct / b.seen) * 100); });
+    return buckets;
   },
 
   // Which wrong-answer pairs happen most, so a grown-up can see e.g. "red is

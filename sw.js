@@ -13,7 +13,7 @@
 
 // Bump this on every release: the shell is served cache-first, so returning
 // devices only refetch it when the version (and thus this file) changes.
-const CACHE_NAME = 'rainbow-pitch-v9';
+const CACHE_NAME = 'rainbow-pitch-v10';
 
 // The local app shell: everything needed to boot the app with no network.
 const APP_SHELL = [
@@ -31,6 +31,14 @@ const APP_SHELL = [
   'js/app.js',
   'assets/favicon.svg',
   'assets/manifest.json',
+  'assets/icons/apple-touch-icon.png',
+  'assets/icons/icon-192.png',
+  'assets/icons/icon-512.png',
+  'assets/icons/icon-maskable-512.png',
+  'assets/fonts/fredoka-latin.woff2',
+  'assets/fonts/fredoka-latin-ext.woff2',
+  'assets/fonts/inter-latin.woff2',
+  'assets/fonts/inter-latin-ext.woff2',
 ];
 
 const TONE_JS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js';
