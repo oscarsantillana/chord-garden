@@ -1,4 +1,4 @@
-// Rainbow Pitch — tests for js/logic.js (pure Eguchi decision logic).
+// Chord Garden — tests for js/logic.js (pure Eguchi decision logic).
 //
 // No test framework, no deps: plain assertions, run with `node
 // tests/logic.test.mjs`. logic.js is CommonJS (`module.exports = Logic`) so
@@ -209,6 +209,19 @@ function ev(c, a, ok) {
   assert.equal(days[5].pct, null);
   assert.equal(days.reduce((n, d) => n + d.seen, 0), 3, 'events older than the window are ignored');
   console.log('ok - dailyAccuracy: buckets digital first attempts by local day');
+}
+
+// --- dailySets ----------------------------------------------------------------
+
+{
+  const now = new Date(2026, 8, 24, 18, 0).getTime();
+  const at = (daysAgo, hour) => new Date(2026, 8, 24 - daysAgo, hour).getTime();
+  const sessions = [{ ts: at(0, 9) }, { ts: at(0, 8) }, { ts: at(0, 7) }, { ts: at(3, 12) }, { ts: at(30, 12) }];
+  const days = Logic.dailySets(sessions, { days: 7, now });
+  assert.equal(days.length, 7);
+  assert.deepEqual(days.map((d) => d.sets), [0, 0, 0, 1, 0, 0, 3]);
+  assert.equal(days[6].start, new Date(2026, 8, 24).getTime());
+  console.log('ok - dailySets: counts sets per local day, ignoring older ones');
 }
 
 console.log('\nAll logic.test.mjs assertions passed.');

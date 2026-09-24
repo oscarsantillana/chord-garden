@@ -1,111 +1,127 @@
 /* ==========================================================================
-   Rainbow Pitch — styles
+   Chord Garden — styles
    Two visual languages, one app:
-   • Child screens ("toy blocks"): Fredoka, a quiet background so the chord
-     colours are the loudest thing on screen, and a chunky solid "lip" under
-     everything pressable that compresses when tapped.
-   • Grown-up screens (body.adult, or any .adult overlay): Inter, neutral
-     surfaces, grouped lists and standard controls — calm and legible.
+   • Child screens: a flag garden. The answers are Eguchi-style colour flags
+     planted on a hill (the method is taught with real flags); everything
+     else — buttons, text, progress — is drawn in neutral white and garden
+     ink, so the chord colours only ever mean chords. Grandstander for the
+     playful display type, Nunito for labels. A night garden in dark mode.
+   • Grown-up screens (body.adult, or any .adult overlay): calm surfaces,
+     grouped lists and standard controls in Nunito, same ink accent.
    ========================================================================== */
 
 /* Fonts are bundled locally (assets/fonts, precached by sw.js) so the app
    keeps its offline-first promise. Both are variable fonts (OFL 1.1). */
 @font-face {
-  font-family: 'Fredoka'; font-style: normal; font-weight: 300 700; font-display: swap;
-  src: url(../assets/fonts/fredoka-latin.woff2) format('woff2');
+  font-family: 'Grandstander'; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url(../assets/fonts/grandstander-latin.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Fredoka'; font-style: normal; font-weight: 300 700; font-display: swap;
-  src: url(../assets/fonts/fredoka-latin-ext.woff2) format('woff2');
+  font-family: 'Grandstander'; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url(../assets/fonts/grandstander-latin-ext.woff2) format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Inter'; font-style: normal; font-weight: 100 900; font-display: swap;
-  src: url(../assets/fonts/inter-latin.woff2) format('woff2');
+  font-family: 'Nunito'; font-style: normal; font-weight: 200 1000; font-display: swap;
+  src: url(../assets/fonts/nunito-latin.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Inter'; font-style: normal; font-weight: 100 900; font-display: swap;
-  src: url(../assets/fonts/inter-latin-ext.woff2) format('woff2');
+  font-family: 'Nunito'; font-style: normal; font-weight: 200 1000; font-display: swap;
+  src: url(../assets/fonts/nunito-latin-ext.woff2) format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
 /* ------------------------------------------------------------- Tokens --- */
 :root {
-  --font: 'Fredoka', ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --bg-top: #f3efff;
-  --bg-bottom: #fff5ec;
-  --ink: #2b2250;
-  --ink-soft: #6a6288;
-  --card: #ffffff;
-  --card-line: rgba(43, 34, 80, .08);
-  --card-shadow: 0 1px 0 var(--card-line), 0 14px 34px -14px rgba(43, 34, 80, .22);
-  --lip: rgba(43, 34, 80, .14);
-  --accent: #6b3cf5;
-  --accent-lip: #4a20c8;
-  --track: rgba(107, 60, 245, .14);
-  --star: #ffb703;
+  --font: 'Nunito', ui-rounded, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display: 'Grandstander', 'Nunito', ui-rounded, system-ui, sans-serif;
+  --sky: #CDE9F5;
+  --cloud: rgba(255, 255, 255, .85);
+  --hill-back: #B4DA93;
+  --hill-front: #93C774;
+  --grass: #7AB05C;
+  --ink: #1F3A2E;
+  --ink-soft: #35584A;
+  --card: #FFFFFF;
+  --card-shadow: 0 14px 34px -16px rgba(31, 58, 46, .35);
+  --lip: rgba(31, 58, 46, .16);
+  --pole: #9B6B43;
+  --knob: #C9A26B;
+  --mound: rgba(79, 125, 58, .45);
+  --vine: #5E8F46;
+  --vine-track: rgba(255, 255, 255, .8);
+  --leaf: #6FA656;
+  --accent: var(--ink); /* focus rings and the few accents stay garden ink */
 }
 
 /* Grown-up tokens. Declared on a class (not :root) so they apply to the
    grown-up screens via body.adult AND to a grown-up overlay shown on top of
    a child screen, such as the "who is playing?" picker. */
 .adult {
-  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --bg: #f3f2f7;
-  --surface: #ffffff;
+  --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --bg: #F4F6F2;
+  --surface: #FFFFFF;
   --card: var(--surface); /* the gear/lock icons punch their holes with --card */
-  --ink: #1c1a24;
-  --ink-soft: #5d5a6b;
-  --ink-muted: #85818f;
-  --line: #e4e2eb;
-  --fill: #efeef4;
-  --fill-strong: #e3e1ea;
-  --accent: #5a3fd6;
-  --accent-soft: #ece8fd;
-  --good: #1e7f49;
-  --good-soft: #e3f3ea;
-  --warn: #975a00;
-  --warn-soft: #fbf0de;
-  --danger: #b8322a;
-  --danger-soft: #fcebea;
-  --raise: 0 1px 2px rgba(20, 16, 40, .05), 0 10px 30px -18px rgba(20, 16, 40, .25);
+  --ink: #1D2A23;
+  --ink-soft: #4D5E55;
+  --ink-muted: #6A7A71;
+  --line: #E1E7DE;
+  --fill: #EDF1EA;
+  --fill-strong: #E0E7DB;
+  --accent: #1F3A2E;
+  --accent-soft: #E3ECE5;
+  --on-accent: #FFFFFF;
+  --good: #2A7A4B;
+  --good-soft: #E2F1E7;
+  --warn: #8A5A00;
+  --warn-soft: #FBF0DE;
+  --danger: #B8322A;
+  --danger-soft: #FCEBEA;
+  --raise: 0 1px 2px rgba(20, 32, 24, .05), 0 10px 30px -18px rgba(20, 32, 24, .25);
   font-family: var(--font);
   color: var(--ink);
 }
 
+/* Night garden */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-top: #1d1834;
-    --bg-bottom: #241a2e;
-    --ink: #f2eeff;
-    --ink-soft: #b5acd2;
-    --card: #2d2748;
-    --card-line: rgba(255, 255, 255, .06);
-    --card-shadow: 0 1px 0 var(--card-line), 0 14px 34px -14px rgba(0, 0, 0, .6);
-    --lip: rgba(0, 0, 0, .38);
-    --accent: #8b66ff;
-    --accent-lip: #5a37d6;
-    --track: rgba(139, 102, 255, .24);
+    --sky: #15233A;
+    --cloud: rgba(255, 255, 255, .07);
+    --hill-back: #1F3B2D;
+    --hill-front: #274A34;
+    --grass: #335C40;
+    --ink: #EAF3EC;
+    --ink-soft: #B5CBBE;
+    --card: #203447;
+    --card-shadow: 0 14px 34px -16px rgba(0, 0, 0, .7);
+    --lip: rgba(0, 0, 0, .4);
+    --pole: #8A6242;
+    --knob: #B39266;
+    --mound: rgba(0, 0, 0, .35);
+    --vine: #86C27B;
+    --vine-track: rgba(255, 255, 255, .16);
+    --leaf: #8CC47E;
   }
   .adult {
-    --bg: #16151b;
-    --surface: #211f28;
-    --ink: #eeecf4;
-    --ink-soft: #aca8ba;
-    --ink-muted: #85818f;
-    --line: #34313e;
-    --fill: #2b2934;
-    --fill-strong: #36333f;
-    --accent: #a896ff;
-    --accent-soft: #2e2848;
-    --good: #62cf92;
-    --good-soft: #1a3125;
-    --warn: #efb45b;
-    --warn-soft: #372b17;
-    --danger: #ff8b7e;
-    --danger-soft: #3b2220;
+    --bg: #121A16;
+    --surface: #1B2620;
+    --ink: #E6EEE8;
+    --ink-soft: #A9BAB0;
+    --ink-muted: #7E8F85;
+    --line: #2C3A32;
+    --fill: #243029;
+    --fill-strong: #2E3B33;
+    --accent: #BFE0C9;
+    --accent-soft: #22362B;
+    --on-accent: #121A16;
+    --good: #6FD19A;
+    --good-soft: #193226;
+    --warn: #F0B45B;
+    --warn-soft: #372B17;
+    --danger: #FF8B7E;
+    --danger-soft: #3B2220;
     --raise: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px -18px rgba(0, 0, 0, .7);
   }
 }
@@ -120,20 +136,28 @@ html, body { margin: 0; min-height: 100%; }
 body {
   font-family: var(--font);
   color: var(--ink);
-  background-color: var(--bg-bottom);
-  background-image: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+  background: var(--sky);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 body.adult { background: var(--bg); }
 
+/* The garden scenery (clouds + two hills, see index.html) sits fixed behind
+   every child screen and is hidden for grown-ups. */
+#scene { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+body.adult #scene { display: none; }
+.scene-clouds { position: absolute; top: 60px; left: 50%; width: 390px; height: 80px; transform: translateX(-50%); }
+.scene-clouds ellipse { fill: var(--cloud); }
+.scene-hills { position: absolute; left: 0; bottom: 0; width: 100%; height: 42vh; min-height: 260px; }
+.hill-back { fill: var(--hill-back); }
+.hill-front { fill: var(--hill-front); }
+.grass { stroke: var(--grass); }
+
 button { font: inherit; color: inherit; cursor: pointer; border: none; background: none; padding: 0; }
 button:focus-visible, [tabindex]:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 button:disabled { cursor: default; }
 @media (hover: hover) and (pointer: fine) {
-  button:not(:disabled):hover { filter: brightness(1.04); }
+  button:not(:disabled):hover { filter: brightness(1.03); }
 }
 
 .sr-only {
@@ -155,10 +179,10 @@ body.adult #app { max-width: 680px; }
 .screen { display: flex; flex-direction: column; gap: 18px; flex: 1; animation: fade-in .3s ease; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-/* -------------------------------------------------------- Toy buttons --- */
-/* The child-side button language: a solid face with a solid lip below it.
-   Pressing moves the face down onto the lip, like a real toy key. */
-.toy-btn, .big-start, .ghost-btn, .primary-btn, .calm-stop, .listen-btn, .gear, .avatar-chip, .mic-pill {
+/* ------------------------------------------------------ Child buttons --- */
+/* White faces with a solid lip below that compresses when pressed, like a
+   wooden toy. No chord colours: those are reserved for the flags. */
+.toy-btn, .ghost-btn, .calm-stop, .listen-btn, .gear, .avatar-chip, .primary-btn, .mic-pill {
   transition: transform .1s ease, box-shadow .1s ease;
 }
 .toy-btn, .ghost-btn, .calm-stop, .listen-btn, .gear, .avatar-chip {
@@ -168,112 +192,104 @@ body.adult #app { max-width: 680px; }
 .toy-btn:active, .ghost-btn:active, .calm-stop:active, .listen-btn:active, .gear:active, .avatar-chip:active {
   transform: translateY(3px); box-shadow: 0 1px 0 var(--lip);
 }
-
-.big-start, .primary-btn {
-  background: var(--accent); color: #fff;
-  box-shadow: 0 6px 0 var(--accent-lip);
+.primary-btn {
+  background: var(--ink); color: var(--card);
+  font-weight: 800; font-size: 1.05rem; padding: 12px 26px; border-radius: 999px;
+  box-shadow: 0 5px 0 var(--lip);
 }
-.big-start:active, .primary-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--accent-lip); }
+.primary-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--lip); }
+.ghost-btn { font-weight: 800; font-size: 1.05rem; padding: 12px 28px; border-radius: 999px; color: var(--ink-soft); }
 
-.big-start {
-  display: inline-flex; align-items: center; gap: 12px;
-  font-size: clamp(1.5rem, 6vw, 1.8rem); font-weight: 600; letter-spacing: .01em;
-  padding: 16px 46px 16px 38px; border-radius: 999px;
+/* The big Play button: a round white disc with a thick ink rim and lip,
+   labelled underneath. The label is inside the button so it's tappable. */
+.big-start { display: inline-flex; flex-direction: column; align-items: center; gap: 10px; color: var(--ink); }
+.play-disc {
+  width: 132px; height: 132px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--card); border: 5px solid var(--ink); box-shadow: 0 8px 0 var(--ink);
+  transition: transform .1s ease, box-shadow .1s ease;
 }
-.big-start:disabled { opacity: .75; }
+.play-disc svg { width: 52px; height: 52px; color: var(--ink); margin-left: 6px; }
+.big-start:active .play-disc { transform: translateY(6px); box-shadow: 0 2px 0 var(--ink); }
+.big-start:disabled .play-disc { opacity: .7; }
+.play-label { font-family: var(--display); font-weight: 700; font-size: 1.55rem; line-height: 1; }
 .btn-ico { display: inline-flex; }
 .btn-ico svg { width: 24px; height: 24px; }
 
-.primary-btn { font-weight: 600; font-size: 1.05rem; padding: 12px 26px; border-radius: 999px; }
-.ghost-btn { font-weight: 600; font-size: 1.05rem; padding: 12px 28px; border-radius: 999px; color: var(--ink-soft); }
-
 .start-error {
   margin: 4px auto 0; max-width: 300px; text-align: center;
-  background: var(--card); color: var(--ink-soft); font-weight: 500; font-size: .95rem;
+  background: var(--card); color: var(--ink-soft); font-weight: 700; font-size: .95rem;
   line-height: 1.4; padding: 12px 16px; border-radius: 18px; box-shadow: var(--card-shadow);
 }
 
 /* --------------------------------------------------------------- Home --- */
+.home { gap: 12px; }
 .home-top { display: flex; justify-content: space-between; align-items: center; }
 .avatar-chip {
   display: inline-flex; align-items: center; gap: 8px;
   border-radius: 999px; padding: 5px 16px 5px 5px;
-  font-weight: 600; font-size: 1rem;
+  font-weight: 800; font-size: 1.05rem;
 }
 .avatar-emoji, .avatar-emoji svg { width: 38px; height: 38px; display: block; }
 .gear {
   width: 48px; height: 48px; border-radius: 50%;
   display: grid; place-items: center; color: var(--ink-soft);
 }
-.gear svg { width: 24px; height: 24px; }
+.gear svg { width: 22px; height: 22px; }
 
 .home-main {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 22px; text-align: center; padding: 8px 0 12px;
+  gap: 26px; text-align: center; padding: 4px 0 8px;
 }
-.brand-mark { line-height: 1; animation: bob 4s ease-in-out infinite; }
-.brand-mark svg { width: 112px; height: auto; display: block; margin: 0 auto; }
-@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 .brand-title {
-  margin: 10px 0 4px; font-size: clamp(2.3rem, 10vw, 2.9rem); font-weight: 700;
-  line-height: 1.05; letter-spacing: -.01em; color: var(--ink);
+  margin: 0; font-family: var(--display); font-weight: 800;
+  font-size: clamp(2.4rem, 11vw, 3rem); line-height: 1; letter-spacing: -.01em; color: var(--ink);
 }
-.brand-sub { margin: 0; color: var(--ink-soft); font-weight: 500; font-size: 1.15rem; }
+.brand-sub { margin: 8px 0 0; color: var(--ink-soft); font-weight: 700; font-size: 1.15rem; }
 
-.today-panel {
-  width: 100%; background: var(--card); border-radius: 28px;
-  padding: 16px 18px 22px; box-shadow: var(--card-shadow);
-}
-.today-label { margin: 0 0 14px; font-weight: 500; color: var(--ink-soft); font-size: .95rem; }
-.today-colors { display: flex; flex-wrap: wrap; gap: 14px 12px; justify-content: center; }
-.today-swatch {
-  width: 60px; height: 60px; border-radius: 18px; position: relative;
-  container-type: size;
-  box-shadow: 0 5px 0 rgba(0, 0, 0, .2), inset 0 2px 0 rgba(255, 255, 255, .22);
-  animation: pop .4s ease backwards;
-  transition: transform .1s ease, box-shadow .1s ease;
-}
-.today-swatch:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0, 0, 0, .2), inset 0 2px 0 rgba(255, 255, 255, .22); }
-.today-swatch:nth-child(2) { animation-delay: .05s; } .today-swatch:nth-child(3) { animation-delay: .1s; }
-.today-swatch:nth-child(4) { animation-delay: .15s; } .today-swatch:nth-child(5) { animation-delay: .2s; }
+/* Five daisies, one in bloom per Practice Set played today — a cadence
+   nudge with no numbers, so a bud just reads as "not yet". */
+.sets-today { display: flex; gap: 14px; justify-content: center; align-items: flex-end; }
+.set-flower { display: inline-flex; }
+.set-flower svg { width: 30px; height: 44px; }
+.set-flower.bloom { animation: pop .4s ease backwards; }
 @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
 
-/* Five stars, one lit per Practice Set played today — a cadence nudge with
-   no numbers, so an unlit star just reads as "not yet". */
-.sets-today { display: flex; gap: 6px; justify-content: center; }
-.set-star { display: inline-flex; color: var(--ink-soft); opacity: .28; }
-.set-star svg { width: 22px; height: 22px; }
-.set-star.filled { color: var(--star); opacity: 1; }
+/* Today's flags, planted along the front hill; tapping one plays its chord. */
+.home-flags { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-bottom: 6px; }
+.today-label { margin: 0; font-weight: 800; font-size: .95rem; color: var(--ink); }
+.today-colors { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 10px 14px; }
+.today-swatch { width: 54px; height: 82px; transition: transform .12s ease; animation: pop .4s ease backwards; transform-origin: 16% 100%; }
+.today-swatch svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.today-swatch:active { transform: rotate(-6deg); }
+.today-swatch:nth-child(2) { animation-delay: .05s; } .today-swatch:nth-child(3) { animation-delay: .1s; }
+.today-swatch:nth-child(4) { animation-delay: .15s; } .today-swatch:nth-child(5) { animation-delay: .2s; }
 
-/* A soft edge keeps near-black and pale chips defined on either background. */
-.color-btn, .today-swatch { border: 2px solid rgba(0, 0, 0, .07); }
+/* ------------------------------------------------------------- Flags --- */
+.flag-pole { fill: var(--pole); }
+.flag-knob { fill: var(--knob); }
+.flag-mound { fill: var(--mound); }
+.flag-cloth { transform-box: fill-box; transform-origin: 0% 50%; }
 @media (prefers-color-scheme: dark) {
-  .color-btn, .today-swatch { border-color: rgba(255, 255, 255, .2); }
+  /* Keeps the black flag's edge visible against the night sky. */
+  .flag-fabric { stroke: rgba(255, 255, 255, .28); stroke-width: 2; }
 }
-
-/* Each colour's fixed shape (see CHORDS.shape), sized off the smaller of
-   the tile's width/height via container units, drawn crisp in the colour's
-   own ink tone. The offset shadow has no blur on purpose — it reads as a
-   sticker edge rather than a smudge. */
-.color-face {
-  position: absolute; inset: 0; margin: auto;
-  width: 56%; height: 56%;
-  width: 56cqmin; height: 56cqmin;
-  display: grid; place-items: center; pointer-events: none;
+@keyframes flag-wave {
+  0%, 100% { transform: none; }
+  50% { transform: skewY(-7deg) scaleX(.93); }
 }
-.color-face svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .14)); }
 
 /* ----------------------------------------------------------- Overlays --- */
 .overlay-backdrop {
   position: fixed; inset: 0; z-index: 70; display: grid; place-items: center;
-  background: rgba(20, 16, 40, .42); padding: 20px; animation: fade-in .15s ease;
+  background: rgba(16, 28, 22, .42); padding: 20px; animation: fade-in .15s ease;
 }
 @media (prefers-color-scheme: dark) { .overlay-backdrop { background: rgba(0, 0, 0, .6); } }
 .dialog {
   width: 100%; max-width: 340px; background: var(--surface);
-  border-radius: 16px; padding: 20px; box-shadow: 0 24px 60px -12px rgba(20, 16, 40, .4);
+  border-radius: 16px; padding: 20px; box-shadow: 0 24px 60px -12px rgba(16, 28, 22, .4);
 }
-.dialog-title { margin: 0 0 6px; font-size: 1.0625rem; font-weight: 600; }
+.dialog-title { margin: 0 0 6px; font-size: 1.0625rem; font-weight: 800; }
 .dialog-body { margin: 0 0 18px; color: var(--ink-soft); font-size: .9375rem; line-height: 1.5; }
 .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .dialog .g-list { margin: 4px 0 16px; }
@@ -282,106 +298,107 @@ body.adult #app { max-width: 680px; }
 .practice { gap: 14px; min-height: 0; }
 .practice-top { display: flex; align-items: center; gap: 12px; }
 
-/* The journey: the child's own mascot walks a filled track toward a flag,
-   one step per round. The left padding is half the mascot's width, so on
-   round one it stands at the start of the track instead of hanging off the
-   screen edge. */
-.journey { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding-left: 22px; }
-.journey-path { position: relative; flex: 1; height: 56px; }
-.journey-track {
-  position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
-  height: 8px; border-radius: 999px; background: var(--track); overflow: hidden;
+/* The vine: grows along a wavy track toward the end of the set, sprouting a
+   leaf for every round played, with the child's own mascot riding its tip.
+   The wave is computed in JS (vinePoint in app.js) so the mascot and the
+   leaves sit exactly on the line. Left padding is half the mascot's width,
+   so it never hangs off the screen edge on round one. */
+.vine { position: relative; flex: 1; min-width: 0; height: 48px; margin-left: 18px; }
+.vine svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.vine-track, .vine-grow { fill: none; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+.vine-track { stroke: var(--vine-track); }
+.vine-grow { stroke: var(--vine); animation: vine-grow .6s ease-out both; }
+/* The vine is redrawn each round; it grows from the previous length. */
+@keyframes vine-grow { from { stroke-dasharray: var(--from, 0) 1000; } }
+.vine-leaf {
+  position: absolute; width: 14px; height: 8px; border-radius: 50%;
+  background: var(--leaf); transform: translate(-50%, -50%) rotate(var(--tilt, -30deg));
 }
-.journey-fill { height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width .6s ease-out; }
-/* The flag glyph's pole base sits ~87.5% down its 24px box; the margin puts
-   that base on the track's centreline. */
-.journey-flag { display: inline-flex; align-self: flex-end; margin-bottom: 25px; color: var(--accent); flex-shrink: 0; }
-.journey-flag svg { width: 22px; height: 22px; }
-/* Mascot faces occupy roughly y 20–91 of their 100px canvas; the bottom
-   offset lands the drawn chin (not the SVG box edge) on the track. */
+.vine-leaf.new { animation: leaf-pop .35s ease .45s backwards; }
+@keyframes leaf-pop { from { transform: translate(-50%, -50%) rotate(var(--tilt, -30deg)) scale(0); } }
+/* Mascot faces occupy roughly y 20–91 of their 100px canvas; app.js places
+   the box so the drawn chin (not the box edge) rests on the vine. */
 .journey-mascot {
-  position: absolute; bottom: 24px; transform: translateX(-50%);
-  transition: left .6s cubic-bezier(.34, 1.56, .64, 1);
+  position: absolute; left: 0; top: 0; width: 36px; height: 36px;
+  transform: translateX(-50%);
+  transition: left .6s cubic-bezier(.34, 1.56, .64, 1), top .6s ease;
   filter: drop-shadow(0 3px 0 var(--lip));
 }
-.journey-mascot svg { width: 42px; height: 42px; display: block; }
+.journey-mascot svg { width: 36px; height: 36px; display: block; }
 .journey-mascot.happy { animation: jump .9s ease; }
-@keyframes jump { 0%, 100% { transform: translate(-50%, 0) scale(1); } 30% { transform: translate(-50%, -22px) scale(1.12); } 60% { transform: translate(-50%, 0) scale(1.04); } }
+@keyframes jump { 0%, 100% { transform: translate(-50%, 0) scale(1); } 30% { transform: translate(-50%, -20px) scale(1.12); } 60% { transform: translate(-50%, 0) scale(1.04); } }
 
 .calm-stop {
-  font-weight: 600; font-size: 1rem; color: var(--ink-soft);
+  font-weight: 800; font-size: 1rem; color: var(--ink-soft);
   padding: 10px 18px; border-radius: 999px; white-space: nowrap;
 }
 
 /* Measured microphone input, with an explicit paused state between listens. */
 .mic-pill {
   display: inline-flex; align-items: center; gap: 6px;
-  background: var(--card); color: var(--ink-soft); font-weight: 500; font-size: .85rem;
+  background: var(--card); color: var(--ink-soft); font-weight: 700; font-size: .85rem;
   padding: 8px 12px; border-radius: 999px; box-shadow: 0 3px 0 var(--lip);
   white-space: nowrap;
 }
 .mic-meter { width: 44px; height: 10px; }
-.mic-pill-icon { display: inline-flex; color: var(--accent); }
+.mic-pill-icon { display: inline-flex; color: var(--ink); }
 .mic-pill-icon svg { width: 16px; height: 16px; }
 
-.listen-wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; min-height: 52px; }
+.listen-wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; min-height: 56px; }
 .listen-btn {
   display: inline-flex; align-items: center; gap: 10px;
-  font-weight: 600; font-size: 1.1rem; padding: 10px 24px 10px 18px; border-radius: 999px;
+  font-family: var(--display); font-weight: 700; font-size: 1.3rem;
+  padding: 12px 26px 12px 20px; border-radius: 999px;
 }
-.listen-icon { display: inline-flex; color: var(--accent); }
+.listen-icon { display: inline-flex; color: var(--ink); }
 .listen-icon svg { width: 30px; height: 30px; }
 
-/* The answer area takes whatever height is left. Tiles are square and
-   sized in JS (fitAnswers in app.js) to the largest size that fits every
-   colour, so a few colours give big targets and many colours still fit
-   without scrolling. The grid is absolutely placed so its own size can
-   never feed back into the space it is measured from. */
+/* The answer area takes whatever height is left. Flags are sized in JS
+   (fitAnswers in app.js) to the largest that fits every active colour, so a
+   few colours give big targets and many colours still fit without
+   scrolling. The grid is absolutely placed so its own size can never feed
+   back into the space it is measured from. */
 .answers-wrap { position: relative; flex: 1 1 0; min-height: 220px; }
 .answers {
-  --tile: 120px;
+  --tile-w: 112px; --tile-h: 170px;
   position: absolute; inset: 0; margin: auto; max-width: 100%;
-  display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 14px;
+  /* Rows fill from the bottom, so flags stand on the hill however few there are. */
+  display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-end; gap: 18px 10px;
+  transition: opacity .25s ease;
 }
 .color-btn {
-  width: var(--tile); height: var(--tile); flex: 0 0 auto;
-  border-radius: 18%; position: relative; container-type: size;
-  box-shadow: 0 7px 0 rgba(0, 0, 0, .2), inset 0 3px 0 rgba(255, 255, 255, .2);
-  transition: transform .1s, box-shadow .1s, opacity .25s ease;
+  width: var(--tile-w); height: var(--tile-h); flex: 0 0 auto; position: relative;
+  transform-origin: 16% 100%;
 }
-.color-btn:active { transform: translateY(5px); box-shadow: 0 2px 0 rgba(0, 0, 0, .2), inset 0 3px 0 rgba(255, 255, 255, .2); }
-.color-btn.correct { animation: correct-pulse .6s ease; }
-@keyframes correct-pulse { 0% { transform: scale(1); } 40% { transform: scale(1.1); } 100% { transform: scale(1); } }
-/* A ring blooms outward from a correctly tapped tile, alongside the chord
-   replay that is the real reward (see playReward in audio.js). */
-.color-btn.correct::after {
-  content: ''; position: absolute; inset: -2px; border-radius: inherit;
-  border: 4px solid #fff; opacity: .8;
-  animation: bloom-ring .6s ease-out; pointer-events: none;
-}
-@keyframes bloom-ring { 0% { transform: scale(.8); opacity: .8; } 100% { transform: scale(1.3); opacity: 0; } }
-.color-btn.nudge { animation: nudge .5s ease; }
-@keyframes nudge { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(6px); } }
+.color-btn svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.color-btn:active { transform: rotate(-4deg) translateY(2px); }
+.color-btn:focus-visible { outline-offset: 0; border-radius: 12px; }
+/* Correct: the flag lifts and its cloth waves while the chord replays (the
+   real reward — see playReward in audio.js). */
+.color-btn.correct { animation: flag-lift .9s ease; }
+.color-btn.correct .flag-cloth { animation: flag-wave .45s ease-in-out 2; }
+@keyframes flag-lift { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-16px); } }
+/* First miss: a gentle wobble on its pole, never a "wrong" mark. */
+.color-btn.nudge { animation: flag-wobble .5s ease; }
+@keyframes flag-wobble { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-5deg); } 50% { transform: rotate(4deg); } 75% { transform: rotate(-2deg); } }
 
 /* Locked until the chord has actually sounded: clearly dimmed and
    untappable, so it reads as "wait, listening". */
-.answers.waiting { opacity: .35; pointer-events: none; transition: opacity .25s ease; }
+.answers.waiting { opacity: .4; pointer-events: none; }
 
-/* Reveal after 2 misses: dim everything except the correct colour, which
-   glows while the chord replays alongside it. */
-.answers.reveal .color-btn { opacity: .3; pointer-events: none; }
-.answers.reveal .color-btn.reveal { opacity: 1; animation: reveal-glow .9s ease-in-out infinite; }
-@keyframes reveal-glow {
-  0%, 100% { transform: scale(1); box-shadow: 0 7px 0 rgba(0, 0, 0, .2), 0 0 0 rgba(255, 255, 255, 0); }
-  50% { transform: scale(1.08); box-shadow: 0 7px 0 rgba(0, 0, 0, .2), 0 0 28px 10px rgba(255, 255, 255, .65); }
-}
+/* Reveal after 2 misses: dim everything except the correct flag, which
+   lifts, waves and glows while the chord replays alongside it. */
+.answers.reveal .color-btn { opacity: .3; pointer-events: none; transition: opacity .3s ease; }
+.answers.reveal .color-btn.reveal { opacity: 1; animation: reveal-lift 1s ease-in-out infinite; filter: drop-shadow(0 0 14px rgba(255, 255, 255, .9)); }
+.answers.reveal .color-btn.reveal .flag-cloth { animation: flag-wave 1s ease-in-out infinite; }
+@keyframes reveal-lift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 
-/* The round-start "get ready" overlay, centred over the answers while
+/* The round-start "get ready" card, centred over the flags while
    session.cueing is true. Never takes taps, even while fading out. */
 .round-cue {
   position: absolute; top: 50%; left: 50%; z-index: 5;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
-  background: var(--card); color: var(--accent);
+  background: var(--card); color: var(--ink);
   border-radius: 28px; padding: 20px 32px; box-shadow: 0 6px 0 var(--lip), var(--card-shadow);
   pointer-events: none; text-align: center; max-width: 86%;
   transform: translate(-50%, -50%);
@@ -391,8 +408,8 @@ body.adult #app { max-width: 680px; }
 .round-cue.hidden { opacity: 0; }
 .round-cue-icon { display: inline-flex; }
 .round-cue-icon svg { width: 52px; height: 52px; }
-.round-cue-label { font-weight: 600; font-size: 1.3rem; color: var(--ink); }
-.round-cue-sub { color: var(--ink-soft); font-size: .95rem; }
+.round-cue-label { font-family: var(--display); font-weight: 700; font-size: 1.5rem; color: var(--ink); }
+.round-cue-sub { color: var(--ink-soft); font-size: .95rem; font-weight: 700; }
 @keyframes round-cue-pulse {
   0%, 100% { transform: translate(-50%, -50%) scale(1); }
   50% { transform: translate(-50%, -50%) scale(1.06); }
@@ -402,51 +419,53 @@ body.adult #app { max-width: 680px; }
 .round-cue.mic-wait { animation-duration: 2.2s; }
 .round-cue.mic-heard { animation: none; }
 
-/* Real-piano retry (never scored): a plain card over the answers. */
+/* Real-piano retry (never scored): a plain card over the flags. */
 .mic-retry {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 6;
   display: flex; flex-direction: column; align-items: center; gap: 14px;
-  background: var(--card); color: var(--ink-soft); font-weight: 500; font-size: 1rem; line-height: 1.45;
+  background: var(--card); color: var(--ink-soft); font-weight: 700; font-size: 1rem; line-height: 1.45;
   border-radius: 24px; padding: 20px 22px; box-shadow: var(--card-shadow);
   width: min(320px, 92%); text-align: center;
 }
 .mic-retry p { margin: 0; }
 .mic-retry-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.mic-retry .ghost-btn { box-shadow: inset 0 0 0 2px var(--lip); }
 
 /* -------------------------------------------------------- Celebration --- */
 .celebrate { align-items: center; justify-content: center; text-align: center; gap: 16px; }
 .cele-mascot { animation: cele-jump 1.1s ease infinite; filter: drop-shadow(0 6px 0 var(--lip)); }
 .cele-mascot svg { width: 150px; height: 150px; display: block; }
 @keyframes cele-jump { 0%, 100% { transform: translateY(0) scale(1); } 30% { transform: translateY(-20px) scale(1.06); } 60% { transform: translateY(0) scale(1.02); } }
-.cele-title { font-size: clamp(2.2rem, 9vw, 2.7rem); font-weight: 700; margin: 4px 0 0; color: var(--ink); letter-spacing: -.01em; }
-.stickers { display: flex; gap: 14px; color: var(--star); }
-.stickers svg { width: 40px; height: 40px; }
-.stickers .sticker:nth-child(2) svg, .stickers .sticker:nth-child(4) svg { color: var(--accent); }
+.cele-title { font-family: var(--display); font-size: clamp(2.4rem, 10vw, 2.9rem); font-weight: 800; margin: 4px 0 0; color: var(--ink); line-height: 1.05; }
+.stickers { display: flex; gap: 14px; align-items: flex-end; }
 .sticker { display: inline-flex; animation: pop .5s ease backwards; }
+.sticker svg { width: 36px; height: 53px; }
 .sticker:nth-child(2) { animation-delay: .1s; } .sticker:nth-child(3) { animation-delay: .2s; }
 .sticker:nth-child(4) { animation-delay: .3s; } .sticker:nth-child(5) { animation-delay: .4s; }
-.cele-actions { display: flex; flex-direction: column; gap: 14px; align-items: center; margin-top: 12px; }
+.cele-actions { display: flex; flex-direction: column; gap: 16px; align-items: center; margin-top: 10px; }
 
 /* ----------------------------------------------------------- Confetti --- */
+/* Petals, circles and little stars in the colours just practised. */
 #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: hidden; }
 .confetti-bit {
   position: absolute; top: -24px; width: 10px; height: 14px; border-radius: 3px;
   animation: fall var(--dur, 2.2s) cubic-bezier(.25, .6, .55, 1) forwards;
 }
 .confetti-bit.circle { width: 11px; height: 11px; border-radius: 50%; }
-.confetti-bit.ribbon { width: 5px; height: 20px; border-radius: 3px; }
+.confetti-bit.petal { width: 12px; height: 16px; border-radius: 50% 0 50% 0; }
 .confetti-bit.star {
   width: 16px; height: 16px; border-radius: 0;
   clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
 }
 @keyframes fall { to { transform: translate(var(--drift, 0), 105vh) rotate(var(--spin, 540deg)); opacity: .3; } }
+@keyframes nudge { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(6px); } }
 
 /* ================================================= Grown-up screens === */
 .adult .screen { gap: 16px; }
 
 .back-link {
   display: inline-flex; align-items: center; gap: 2px;
-  color: var(--ink-soft); font-weight: 500; font-size: .9375rem;
+  color: var(--ink-soft); font-weight: 600; font-size: .9375rem;
   padding: 8px 10px 8px 2px; border-radius: 8px; justify-self: start;
 }
 .back-link svg { width: 20px; height: 20px; }
@@ -456,16 +475,15 @@ body.adult #app { max-width: 680px; }
 .adult .primary-btn, .adult .ghost-btn, .secondary-btn, .danger-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   height: 44px; padding: 0 18px; border-radius: 10px;
-  font-size: .9375rem; font-weight: 600; box-shadow: none; transform: none;
+  font-size: .9375rem; font-weight: 700; box-shadow: none; transform: none;
   transition: background-color .12s ease;
 }
-.adult .primary-btn { background: var(--accent); color: #fff; }
-@media (prefers-color-scheme: dark) { .adult .primary-btn { color: #16151b; } }
+.adult .primary-btn { background: var(--accent); color: var(--on-accent); }
 .adult .primary-btn:active { background: color-mix(in srgb, var(--accent) 85%, #000); }
 .adult .ghost-btn, .secondary-btn { background: var(--fill); color: var(--ink); }
 .adult .ghost-btn:active, .secondary-btn:active { background: var(--fill-strong); }
 .danger-btn { background: var(--danger); color: #fff; }
-@media (prefers-color-scheme: dark) { .danger-btn { color: #16151b; } }
+@media (prefers-color-scheme: dark) { .danger-btn { color: #121A16; } }
 .btn-swatch { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
 .secondary-btn svg { width: 18px; height: 18px; }
 
@@ -481,7 +499,7 @@ body.adult #app { max-width: 680px; }
 .gate-lock { color: var(--accent); display: inline-flex; }
 .gate-lock svg { width: 34px; height: 34px; }
 .gate-actions { display: flex; flex-direction: column; gap: 10px; align-items: stretch; margin-top: 18px; }
-.pin-msg { font-weight: 600; font-size: 1.125rem; margin: 10px 0 4px; }
+.pin-msg { font-weight: 700; font-size: 1.125rem; margin: 10px 0 4px; }
 .pin-hint { color: var(--ink-muted); font-size: .8125rem; margin: 0 0 18px; }
 .pin-dots { display: flex; gap: 14px; justify-content: center; margin: 0 0 22px; }
 .pin-dots.shake { animation: nudge .4s ease; }
@@ -490,7 +508,7 @@ body.adult #app { max-width: 680px; }
 .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .pin-key {
   height: 58px; border-radius: 14px; background: var(--fill); color: var(--ink);
-  font-size: 1.375rem; font-weight: 500; font-variant-numeric: tabular-nums;
+  font-size: 1.375rem; font-weight: 600; font-variant-numeric: tabular-nums;
   display: grid; place-items: center; transition: background-color .1s ease;
 }
 .pin-key:active { background: var(--fill-strong); }
@@ -499,8 +517,8 @@ body.adult #app { max-width: 680px; }
 
 /* Header + tabs */
 .g-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; min-height: 44px; }
-.g-head h2 { margin: 0; font-size: 1.0625rem; font-weight: 600; text-align: center; }
-.g-child { justify-self: end; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; font-size: .875rem; color: var(--ink-soft); }
+.g-head h2 { margin: 0; font-size: 1.0625rem; font-weight: 700; text-align: center; }
+.g-child { justify-self: end; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: .875rem; color: var(--ink-soft); }
 .g-child-ava, .g-child-ava svg { width: 28px; height: 28px; display: block; }
 
 .segmented {
@@ -509,17 +527,17 @@ body.adult #app { max-width: 680px; }
 }
 .seg {
   min-height: 36px; padding: 6px 4px; border-radius: 8px;
-  color: var(--ink-soft); font-size: .875rem; font-weight: 500; font-variant-numeric: tabular-nums;
+  color: var(--ink-soft); font-size: .875rem; font-weight: 600; font-variant-numeric: tabular-nums;
   transition: background-color .12s ease, color .12s ease;
 }
-.seg.sel { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(20, 16, 40, .1), 0 0 0 .5px rgba(20, 16, 40, .06); }
+.seg.sel { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(20, 32, 24, .1), 0 0 0 .5px rgba(20, 32, 24, .06); }
 @media (prefers-color-scheme: dark) { .seg.sel { background: var(--fill-strong); } }
 
 /* Grouped sections: a small sentence-case title, a card of rows, and an
    optional caption underneath — the standard settings-list pattern. */
 .g-body { display: flex; flex-direction: column; gap: 22px; padding-bottom: 12px; }
 .g-section { display: flex; flex-direction: column; gap: 8px; }
-.g-section-title { margin: 0 4px; font-size: .8125rem; font-weight: 600; color: var(--ink-soft); }
+.g-section-title { margin: 0 4px; font-size: .8125rem; font-weight: 700; color: var(--ink-soft); }
 .g-caption { margin: 0 4px; font-size: .8125rem; line-height: 1.45; color: var(--ink-muted); }
 .g-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .g-card.pad { padding: 16px; }
@@ -533,7 +551,7 @@ button.g-row:active { background: var(--fill); }
 @media (hover: hover) and (pointer: fine) { button.g-row:not(:disabled):hover { background: var(--fill); filter: none; } }
 .g-row.stack { flex-direction: column; align-items: stretch; gap: 10px; padding: 14px; }
 .g-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.g-row-title { font-size: .9375rem; font-weight: 500; }
+.g-row-title { font-size: .9375rem; font-weight: 600; }
 .g-row-sub { font-size: .8125rem; color: var(--ink-muted); }
 .g-row-end { margin-left: auto; display: flex; align-items: center; gap: 12px; color: var(--ink-soft); font-size: .875rem; font-variant-numeric: tabular-nums; }
 .g-row[aria-disabled="true"] { cursor: default; }
@@ -541,30 +559,32 @@ button.g-row:active { background: var(--fill); }
 .swatch { width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .1); }
 .swatch.sm { width: 14px; height: 14px; border-radius: 4px; }
 @media (prefers-color-scheme: dark) { .swatch, .btn-swatch { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18); } }
+/* A small planted flag standing in for a colour in grown-up lists. */
+.row-flag { width: 22px; height: 34px; flex-shrink: 0; display: inline-flex; }
+.row-flag svg { width: 100%; height: 100%; display: block; overflow: visible; }
 
 .badge {
   display: inline-block; padding: 2px 8px; border-radius: 999px;
-  background: var(--accent-soft); color: var(--accent); font-size: .75rem; font-weight: 600;
+  background: var(--accent-soft); color: var(--accent); font-size: .75rem; font-weight: 700;
 }
 .badge.muted { background: var(--fill); color: var(--ink-soft); }
 
 /* Tick-box indicator for toggling a colour on/off. */
 .check {
   width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
-  display: grid; place-items: center; color: #fff;
+  display: grid; place-items: center; color: var(--on-accent);
   box-shadow: inset 0 0 0 1.5px var(--fill-strong);
 }
 .check svg { width: 14px; height: 14px; opacity: 0; }
 .check.on { background: var(--accent); box-shadow: none; }
 .check.on svg { opacity: 1; }
 .check.locked { opacity: .45; }
-@media (prefers-color-scheme: dark) { .check svg { color: #16151b; } }
 
 /* Disclosure for longer explanations kept out of the way by default. */
 .g-details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
 .g-details summary {
   list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
-  padding: 14px; font-size: .9375rem; font-weight: 500; border-radius: 14px;
+  padding: 14px; font-size: .9375rem; font-weight: 600; border-radius: 14px;
 }
 .g-details summary::-webkit-details-marker { display: none; }
 .g-details summary .btn-ico { margin-left: auto; color: var(--ink-muted); transition: transform .15s ease; }
@@ -586,7 +606,7 @@ button.g-row:active { background: var(--fill); }
 .readiness.ready .r-icon { color: var(--good); }
 .readiness.notyet .r-icon { color: var(--warn); }
 .r-icon svg { width: 20px; height: 20px; }
-.r-title { font-weight: 600; font-size: .9375rem; align-self: end; }
+.r-title { font-weight: 700; font-size: .9375rem; align-self: end; }
 .r-sub { font-size: .875rem; line-height: 1.45; color: var(--ink-soft); }
 .r-pips { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .r-pip {
@@ -601,12 +621,12 @@ button.g-row:active { background: var(--fill); }
 .stat-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stat-tile { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
 .stat-label { font-size: .8125rem; color: var(--ink-soft); }
-.stat-value { font-size: 1.75rem; font-weight: 600; letter-spacing: -.02em; margin-top: 2px; }
+.stat-value { font-size: 1.75rem; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; }
 .stat-note { font-size: .8125rem; color: var(--ink-muted); }
 
 .chart { position: relative; padding: 16px 16px 12px; }
 .chart-head { margin-bottom: 14px; }
-.chart-title { font-size: .9375rem; font-weight: 600; }
+.chart-title { font-size: .9375rem; font-weight: 700; }
 .chart-sub { font-size: .8125rem; color: var(--ink-muted); margin-top: 2px; }
 .chart-plot { position: relative; height: 132px; margin-left: 36px; }
 .chart-grid { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
@@ -621,40 +641,48 @@ button.g-row:active { background: var(--fill); }
 .chart-bar { width: min(62%, 18px); background: var(--accent); border-radius: 4px 4px 0 0; min-height: 2px; }
 .chart-x { display: grid; grid-template-columns: repeat(var(--days), 1fr); margin: 6px 0 0 36px; }
 .chart-x span { text-align: center; font-size: .6875rem; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-.chart-x span.today { color: var(--ink); font-weight: 600; }
+.chart-x span.today { color: var(--ink); font-weight: 700; }
 .chart-tip {
   position: absolute; z-index: 3; pointer-events: none; transform: translate(-50%, -100%);
   background: var(--ink); color: var(--surface); border-radius: 8px; padding: 6px 9px;
   font-size: .75rem; line-height: 1.35; white-space: nowrap; box-shadow: var(--raise);
 }
-.chart-tip strong { display: block; font-weight: 600; }
+.chart-tip strong { display: block; font-weight: 700; }
 .chart-empty { font-size: .875rem; color: var(--ink-muted); padding: 28px 0 20px; text-align: center; }
 
 .acc-grid { display: grid; grid-template-columns: max-content 1fr max-content; align-items: center; gap: 12px 12px; padding: 16px; }
 .acc-row { display: contents; }
-.acc-name { display: inline-flex; align-items: center; gap: 8px; font-size: .9375rem; font-weight: 500; }
+.acc-name { display: inline-flex; align-items: center; gap: 8px; font-size: .9375rem; font-weight: 600; }
 .acc-track { height: 8px; border-radius: 999px; background: var(--fill); overflow: hidden; }
 .acc-fill { height: 100%; border-radius: 999px; transition: width .5s ease; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08); }
 @media (prefers-color-scheme: dark) { .acc-fill { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28); } }
 .acc-nums { text-align: right; font-variant-numeric: tabular-nums; line-height: 1.25; }
-.acc-pct { font-size: .9375rem; font-weight: 600; }
+.acc-pct { font-size: .9375rem; font-weight: 700; }
 .acc-life { font-size: .75rem; color: var(--ink-muted); }
 
-.s-day { padding: 10px 14px 6px; font-size: .75rem; font-weight: 600; color: var(--ink-soft); background: var(--fill); }
+/* Sets per day: a column of five dots per day, one filled per set played. */
+.sets-grid { display: grid; grid-template-columns: repeat(var(--days), minmax(0, 1fr)); align-items: end; padding: 16px 12px 8px; }
+.sets-col { display: flex; flex-direction: column-reverse; align-items: center; gap: 3px; }
+.sets-dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--fill-strong); }
+.sets-dot.on { background: var(--accent); box-shadow: none; }
+.sets-x { display: flex; justify-content: space-between; padding: 0 12px 14px; font-size: .75rem; color: var(--ink-muted); }
+.sets-x .today { color: var(--ink); font-weight: 700; }
+
+.s-day { padding: 10px 14px 6px; font-size: .75rem; font-weight: 700; color: var(--ink-soft); background: var(--fill); }
 .g-list > .s-day + * { border-top: none; }
 .s-row { display: grid; grid-template-columns: 3.5rem 1fr auto; align-items: center; gap: 10px; padding: 11px 14px; font-size: .875rem; }
 .s-time { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .s-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.s-pct { font-weight: 600; font-variant-numeric: tabular-nums; }
+.s-pct { font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .cf-row { display: flex; align-items: center; gap: 8px; padding: 11px 14px; font-size: .875rem; }
-.cf-label { font-weight: 500; }
+.cf-label { font-weight: 600; }
 .cf-as { color: var(--ink-muted); }
-.cf-count { margin-left: auto; font-weight: 600; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.cf-count { margin-left: auto; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
 /* Children + settings */
 .avatar-row, .avatar-row svg { width: 40px; height: 40px; display: block; flex-shrink: 0; }
-.row-remove { color: var(--danger); font-size: .875rem; font-weight: 500; padding: 8px 14px; align-self: stretch; }
+.row-remove { color: var(--danger); font-size: .875rem; font-weight: 600; padding: 8px 14px; align-self: stretch; }
 .row-remove:active { background: var(--danger-soft); }
 .profile-item { display: flex; align-items: stretch; }
 .profile-item .g-row { flex: 1; min-width: 0; }
@@ -692,7 +720,7 @@ button.g-row:active { background: var(--fill); }
 .switch[aria-checked="true"] { background: var(--good); }
 .switch[aria-checked="true"]::after { transform: translateX(20px); }
 
-.danger-row { color: var(--danger); font-weight: 500; justify-content: center; }
+.danger-row { color: var(--danger); font-weight: 600; justify-content: center; }
 .about { margin: 0 4px; font-size: .8125rem; line-height: 1.55; color: var(--ink-muted); }
 .about p { margin: 0 0 6px; }
 

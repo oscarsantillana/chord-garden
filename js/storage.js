@@ -1,5 +1,5 @@
 /*
- * Rainbow Pitch — local persistence.
+ * Chord Garden — local persistence.
  *
  * Everything lives on this device only (no accounts, no cloud). We keep one or
  * more child "profiles" so siblings can practise without mixing up progress.

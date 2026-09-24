@@ -1,5 +1,5 @@
 /*
- * Rainbow Pitch — Eguchi Chord Identification Method data.
+ * Chord Garden — Eguchi Chord Identification Method data.
  *
  * In the Eguchi method a young child learns to recognise chords by ear, and
  * always answers with a COLOR (never a note or chord name). The colour↔chord

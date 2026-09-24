@@ -1,4 +1,4 @@
-# 🌈 Rainbow Pitch
+# Chord Garden
 
 A playful web app that helps young children (about **2–6 years old**) develop
 **perfect (absolute) pitch** using the **Eguchi Chord Identification Method**.
@@ -83,14 +83,14 @@ still works, just without offline caching.
 ## Using the app
 
 ### Child (default)
-1. Tap **Start** (this also wakes up the audio — browsers require a tap first).
+1. Tap **Play** (this also wakes up the audio — browsers require a tap first).
 2. Listen to the chord, then tap the matching colour.
 3. A wrong tap is gentle: the chord replays and nothing is marked "wrong."
 4. Tap **All done** any time — stopping early is fine, never a failure.
 5. Finish the set for a little celebration. 🎉
 
 ### Grown-ups
-Tap the ⚙ gear on the home screen and enter the demo PIN **`2468`**.
+Tap the lock button on the home screen and enter the demo PIN **`2468`**.
 
 - **Colours** — see the readiness signal, add the next colour, or hand-pick the
   active set (keep at least two).
@@ -131,7 +131,7 @@ rainbow-pitch/
 ├─ css/styles.css      # playful child theme + calm guardian theme (light & dark)
 ├─ js/
 │  ├─ data.js          # fixed Eguchi colour ↔ chord mapping
-│  ├─ sprites.js       # custom inline-SVG mascots & UI icons (no emoji)
+│  ├─ sprites.js       # custom inline-SVG mascots, colour flags & UI icons (no emoji)
 │  ├─ audio.js         # Tone.js sampled-piano engine
 │  ├─ chord-detect.js  # pure spectrum/chord classifier
 │  ├─ fresh-chord-gate.js # pure fresh-attack + stable-frame state machine
@@ -143,7 +143,7 @@ rainbow-pitch/
 ├─ sw.js               # service worker — offline cache for the app shell + piano samples
 ├─ tests/              # plain-Node logic, detector, gate, and piano-fixture tests
 ├─ tools/real-piano-acceptance/ # isolated guided physical-test harness
-└─ assets/             # favicon, web-app manifest, app icons, bundled fonts (Fredoka + Inter, OFL)
+└─ assets/             # favicon, web-app manifest, app icons, bundled fonts (Grandstander + Nunito, OFL)
 ```
 
 ## Development
