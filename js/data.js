@@ -31,11 +31,12 @@ const CHORDS = [
   { name: 'brown',  label: 'Brown',  swatch: '#9a6324', text: '#ffffff', chord: 'C/G',  notes: ['G4', 'C5', 'E5'], shape: 'acorn' },
 
   // --- Advanced chords (major triads on the remaining roots) ---
-  { name: 'gray',       label: 'Gray',        swatch: '#8a94a6', text: '#111318', chord: 'A',  notes: ['A3', 'C#4', 'E4'],  shape: 'cloud' },
-  { name: 'tan',        label: 'Tan',         swatch: '#d9b382', text: '#3a2a10', chord: 'D',  notes: ['D4', 'F#4', 'A4'],  shape: 'cookie' },
-  { name: 'lightgreen', label: 'Light Green', swatch: '#8ee06a', text: '#0f3b12', chord: 'E',  notes: ['E4', 'G#4', 'B4'],  shape: 'clover' },
-  { name: 'lightpurple',label: 'Light Purple',swatch: '#c8a2ff', text: '#2a1650', chord: 'Bb', notes: ['Bb3', 'D4', 'F4'],  shape: 'flower' },
-  { name: 'skyblue',    label: 'Sky Blue',    swatch: '#6fd0ff', text: '#053347', chord: 'Eb', notes: ['Eb4', 'G4', 'Bb4'], shape: 'bird' },
+  // `advanced` groups these separately in the grown-up colour list.
+  { name: 'gray',       label: 'Gray',        swatch: '#8a94a6', text: '#111318', chord: 'A',  notes: ['A3', 'C#4', 'E4'],  shape: 'cloud', advanced: true },
+  { name: 'tan',        label: 'Tan',         swatch: '#d9b382', text: '#3a2a10', chord: 'D',  notes: ['D4', 'F#4', 'A4'],  shape: 'cookie', advanced: true },
+  { name: 'lightgreen', label: 'Light Green', swatch: '#8ee06a', text: '#0f3b12', chord: 'E',  notes: ['E4', 'G#4', 'B4'],  shape: 'clover', advanced: true },
+  { name: 'lightpurple',label: 'Light Purple',swatch: '#c8a2ff', text: '#2a1650', chord: 'Bb', notes: ['Bb3', 'D4', 'F4'],  shape: 'flower', advanced: true },
+  { name: 'skyblue',    label: 'Sky Blue',    swatch: '#6fd0ff', text: '#053347', chord: 'Eb', notes: ['Eb4', 'G4', 'Bb4'], shape: 'bird', advanced: true },
 ];
 
 // Fast lookup by colour name.

@@ -143,7 +143,7 @@ rainbow-pitch/
 ├─ sw.js               # service worker — offline cache for the app shell + piano samples
 ├─ tests/              # plain-Node logic, detector, gate, and piano-fixture tests
 ├─ tools/real-piano-acceptance/ # isolated guided physical-test harness
-└─ assets/             # favicon + web-app manifest
+└─ assets/             # favicon, web-app manifest, app icons, bundled fonts (Fredoka + Inter, OFL)
 ```
 
 ## Development

@@ -260,6 +260,16 @@ const Sprites = (() => {
     flag: svg(`
       <path d="M6 3 V21" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/>
       <path d="M6 4 L19 4 L14.5 8.5 L19 13 L6 13 Z" fill="currentColor"/>`, '0 0 24 24'),
+    // Grown-up UI glyphs, drawn to replace text characters (‹ ⬇ ⌫) that
+    // render differently in every font.
+    back: svg(`<path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`, '0 0 24 24'),
+    chevron: svg(`<path d="M6 9 L12 15 L18 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`, '0 0 24 24'),
+    download: svg(`
+      <path d="M12 4 V15 M7 10.5 L12 15.5 L17 10.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5 19.5 H19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`, '0 0 24 24'),
+    backspace: svg(`
+      <path d="M9 5 H19 a2 2 0 0 1 2 2 V17 a2 2 0 0 1 -2 2 H9 L3 12 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M11.5 9.5 L16.5 14.5 M16.5 9.5 L11.5 14.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`, '0 0 24 24'),
   };
 
   function icon(name) {

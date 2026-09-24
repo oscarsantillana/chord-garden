@@ -8,7 +8,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false } =
   const saved = new Map(), windowEvents = {}, played = [], listens = [], pendingStarts = [], pendingChords = [];
   let micStarts = 0, micStops = 0;
   const sandbox = { console, document, ...clock, requestAnimationFrame: callback => callback(),
-    window: { confirm: () => true, addEventListener: (name, callback) => { windowEvents[name] = callback; } },
+    window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
     navigator: {}, localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
     Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '' },
     PianoAudio: {
@@ -26,8 +26,9 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false } =
   vm.runInContext('this.store=Store; Store.updateProfile(Store.activeProfile().id, { realPianoMode: ' + micMode + ', activeColors: ["red"], roundsPerSet: 2 });', sandbox);
   vm.runInContext(fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8'), sandbox);
   const click = async label => {
-    const button = app.querySelectorAll('button').find(node => node.textContent === label);
-    assert.ok(button, `button ${label} is visible: ${app.textContent}`);
+    // Search the whole body: confirmations open as overlays outside #app.
+    const button = document.body.querySelectorAll('button').find(node => node.textContent === label);
+    assert.ok(button, `button ${label} is visible: ${document.body.textContent}`);
     const pending = button.click(); await flush(); return { pending };
   };
   return { app, clock, click, played, listens, pendingStarts, pendingChords, windowEvents,
@@ -79,6 +80,8 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false } =
   ui.app.querySelector('.gear').click();
   for (const digit of ['2', '4', '6', '8']) await ui.click(digit);
   await ui.click('Settings'); await ui.click('Reset this child’s progress');
+  assert.equal(p.events.length, 2, 'reset waits for the in-app confirmation');
+  await ui.click('Reset progress');
   assert.equal(p.events.length, 0); assert.equal(p.sessions.length, 0); assert.equal(Object.keys(p.stats).length, 0);
   const persisted = JSON.parse(ui.saved.get('rainbow-pitch:v1')).profiles[0];
   assert.deepEqual(persisted.events, []); assert.deepEqual(persisted.activeColors, ['red']);
