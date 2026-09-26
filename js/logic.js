@@ -131,6 +131,56 @@ const Logic = {
     }
     return colors[colors.length - 1]; // floating-point safety net
   },
+
+  // ---- Growing garden -----------------------------------------------------
+  // Every saved Practice Set waters that day's plant (see js/storage.js
+  // recordSession). These helpers turn that raw garden data into what the
+  // Home/garden screens draw; they know nothing about Store or the DOM.
+
+  // The LOCAL calendar date a timestamp falls on, as 'YYYY-MM-DD'. Never
+  // toISOString() — that's UTC, and a chord practised late in the evening
+  // must water TODAY's plant, not tomorrow's just because UTC has already
+  // rolled over.
+  dayKey(ts) {
+    const d = new Date(ts);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  },
+
+  // Sets played in a day -> how grown that day's plant is. Clamped so a
+  // marathon day still reads as a full bloom (5) instead of overflowing the
+  // sprite stages Sprites.plant knows how to draw.
+  plantStage(sets) {
+    return Math.max(0, Math.min(5, Math.floor(sets) || 0));
+  },
+
+  // Split a garden (newest first) into today's entry (growing right now) and
+  // every other day (settled on the hill forever). Tolerates a missing or
+  // malformed garden — e.g. a profile normalise() hasn't reached yet — by
+  // treating it as empty rather than throwing.
+  gardenDays(garden, now = Date.now()) {
+    const list = Array.isArray(garden) ? garden : [];
+    const key = Logic.dayKey(now);
+    const today = list.find((entry) => entry && entry.day === key) || null;
+    const past = list.filter((entry) => entry !== today);
+    return { today, past };
+  },
+
+  // De-duplicate colour names and sort them into the fixed order chords are
+  // introduced in (CHORDS' declaration order in data.js) — the order a
+  // bloom's petals should read in, and the order any other colour list
+  // should read in too. Unknown names are dropped, not sorted last, since
+  // there's no swatch to draw them with anyway.
+  orderColors(names) {
+    const list = Array.isArray(names) ? names : [];
+    if (typeof CHORDS === 'undefined') return Array.from(new Set(list));
+    const index = new Map(CHORDS.map((c, i) => [c.name, i]));
+    return Array.from(new Set(list))
+      .filter((n) => index.has(n))
+      .sort((a, b) => index.get(a) - index.get(b));
+  },
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Logic;

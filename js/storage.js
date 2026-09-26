@@ -9,8 +9,7 @@
 const Store = (() => {
   const KEY = 'rainbow-pitch:v1';
   const BACKUP_KEY = 'rainbow-pitch:backup';
-  const VERSION = 4; // bumped: added per-profile `realPianoMode` toggle; events/sessions
-                      // may now carry a `src: 'mic'` tag for real-piano-detected rounds
+  const VERSION = 6; // bumped: added the per-profile `flagPictures` toggle
 
   const DEFAULT_ACTIVE = ['red', 'yellow']; // start with two so there is a real choice
   const DEFAULT_ROUNDS = 20;                // a standard Practice Set
@@ -24,16 +23,40 @@ const Store = (() => {
       activeColors: [...DEFAULT_ACTIVE],
       roundsPerSet: DEFAULT_ROUNDS,
       realPianoMode: false, // guardian-only toggle; Home/Practice is unchanged when false
+      flagPictures: true, // guardian-only toggle; plain colour flags when false
       // Per-colour running tallies, used only for guardian progress + readiness.
       stats: {},          // { colorName: { correct, seen } }
       sessions: [],       // [{ ts, rounds, correct, colors:[...] }]
       events: [],         // [{ c: target, a: answered, ok, ts }] newest-first, for Logic
+      // One entry per local day with at least one saved Practice Set, newest
+      // day first: { day: 'YYYY-MM-DD', sets, colors: [...] }. That day's
+      // plant never wilts once it's in here — see js/logic.js's gardenDays.
+      garden: [],
     };
   }
 
   function defaultData() {
     const first = freshProfile('Little One', 'fox');
     return { version: VERSION, activeProfileId: first.id, profiles: [first], pin: DEFAULT_PIN };
+  }
+
+  // Build a garden from legacy sessions (saved before the garden existed):
+  // one entry per local day with at least one session, newest day first —
+  // so a child who's already been practising opens onto their past days
+  // instead of an empty plot.
+  function gardenFromSessions(sessions) {
+    const byDay = new Map(); // day -> { day, sets, colors: Set }
+    (sessions || []).forEach((s) => {
+      if (typeof s.ts !== 'number') return; // can't place it on a calendar day
+      const day = Logic.dayKey(s.ts);
+      const entry = byDay.get(day) || { day, sets: 0, colors: new Set() };
+      entry.sets += 1;
+      (s.colors || []).forEach((c) => entry.colors.add(c));
+      byDay.set(day, entry);
+    });
+    return Array.from(byDay.values())
+      .sort((a, b) => (a.day < b.day ? 1 : -1)) // 'YYYY-MM-DD' sorts chronologically; newest first
+      .map((e) => ({ day: e.day, sets: e.sets, colors: Logic.orderColors([...e.colors]) }));
   }
 
   // Bring older saved shapes up to date in place: add anything a newer
@@ -43,6 +66,10 @@ const Store = (() => {
     data.profiles.forEach((p) => {
       if (!Array.isArray(p.events)) p.events = [];
       if (typeof p.realPianoMode !== 'boolean') p.realPianoMode = false;
+      if (typeof p.flagPictures !== 'boolean') p.flagPictures = true;
+      // storage.js loads after logic.js (see index.html's script order), so
+      // Logic.* is safe to call here and in recordSession below.
+      if (!Array.isArray(p.garden)) p.garden = gardenFromSessions(p.sessions);
     });
     // The guardian PIN used to be a hard-coded const in app.js; anything
     // saved before it moved into the store needs one filled in here.
@@ -118,7 +145,7 @@ const Store = (() => {
   }
 
   function resetProgress(id) {
-    updateProfile(id, { stats: {}, sessions: [], events: [] });
+    updateProfile(id, { stats: {}, sessions: [], events: [], garden: [] }); // the garden is progress too
   }
 
   // Colour set mutations go through the store (not direct array pokes on the
@@ -164,11 +191,23 @@ const Store = (() => {
     save();
   }
 
-  // Record a finished (or calmly stopped) Practice Set for guardian progress.
+  // Record a finished (or calmly stopped) Practice Set for guardian progress,
+  // and water that day's plant: find or start today's garden entry, add one
+  // set, and fold in whatever colours this set practised (see js/logic.js's
+  // Growing garden helpers for dayKey/orderColors/plantStage).
   function recordSession(session) {
     const p = activeProfile();
     p.sessions.unshift(session);
     p.sessions = p.sessions.slice(0, 60); // keep it small
+    const day = Logic.dayKey(typeof session.ts === 'number' ? session.ts : Date.now());
+    let entry = p.garden.find((e) => e.day === day);
+    if (!entry) {
+      entry = { day, sets: 0, colors: [] };
+      p.garden.unshift(entry);
+    }
+    entry.sets += 1;
+    entry.colors = Logic.orderColors([...entry.colors, ...(session.colors || [])]);
+    p.garden = p.garden.slice(0, 365); // keep it small, like sessions above
     save();
   }
 

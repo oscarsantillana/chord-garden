@@ -53,6 +53,11 @@
   --vine: #5E8F46;
   --vine-track: rgba(255, 255, 255, .8);
   --leaf: #6FA656;
+  --soil: #9B7650;
+  --soil-dark: #7A5B3D;
+  --water: #BFE3F2;
+  --water-ink: #4E8FAE;
+  --glow: rgba(255, 255, 255, .9);
   --accent: var(--ink); /* focus rings and the few accents stay garden ink */
 }
 
@@ -103,6 +108,11 @@
     --vine: #86C27B;
     --vine-track: rgba(255, 255, 255, .16);
     --leaf: #8CC47E;
+    --soil: #6E5236;
+    --soil-dark: #4F3A26;
+    --water: #8CC3DD;
+    --water-ink: #D6ECF5;
+    --glow: rgba(255, 255, 255, .16);
   }
   .adult {
     --bg: #121A16;
@@ -152,6 +162,14 @@ body.adult #scene { display: none; }
 .hill-back { fill: var(--hill-back); }
 .hill-front { fill: var(--hill-front); }
 .grass { stroke: var(--grass); }
+
+/* Past days' flowers (renderGarden in app.js). Must stay in sync with
+   .scene-hills above — flowers are placed by percentages of THIS box,
+   sampled against the hill's own SVG curve (backHillY in app.js), so the
+   box the flowers sit in has to match the hills' box exactly. */
+#garden { position: absolute; left: 0; bottom: 0; width: 100%; height: 42vh; min-height: 260px; }
+.garden-flower { position: absolute; width: 34px; height: 51px; transform: translateX(-50%); }
+.garden-flower svg { width: 100%; height: 100%; display: block; overflow: visible; }
 
 button { font: inherit; color: inherit; cursor: pointer; border: none; background: none; padding: 0; }
 button:focus-visible, [tabindex]:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
@@ -247,12 +265,23 @@ body.adult #app { max-width: 680px; }
 }
 .brand-sub { margin: 8px 0 0; color: var(--ink-soft); font-weight: 700; font-size: 1.15rem; }
 
-/* Five daisies, one in bloom per Practice Set played today — a cadence
-   nudge with no numbers, so a bud just reads as "not yet". */
-.sets-today { display: flex; gap: 14px; justify-content: center; align-items: flex-end; }
-.set-flower { display: inline-flex; }
-.set-flower svg { width: 30px; height: 44px; }
-.set-flower.bloom { animation: pop .4s ease backwards; }
+/* Today's plant: grows a stage per Practice Set played today (Logic.plantStage)
+   — a cadence nudge with no numbers, so a seed or a bud just reads "not yet".
+   A soft glow pulses behind it so it reads as the thing to tend, not just
+   scenery. */
+.today-plant { position: relative; isolation: isolate; width: 64px; height: 96px; }
+.today-plant svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.today-plant::before {
+  content: ''; position: absolute; z-index: -1; left: 50%; top: 50%;
+  width: 120px; height: 120px; margin: -66px 0 0 -60px; border-radius: 50%;
+  background: radial-gradient(circle, var(--glow) 0%, transparent 68%);
+  animation: today-glow 2.4s ease-in-out infinite;
+}
+@keyframes today-glow { 0%, 100% { opacity: .6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.08); } }
+@media (max-height: 700px) { .today-plant { width: 52px; height: 78px; } }
+/* A small phone with its browser bars showing: no taller than the old
+   five-daisies row, so Home fits the way it used to. */
+@media (max-height: 640px) { .today-plant { width: 44px; height: 66px; } }
 @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
 
 /* Today's flags, planted along the front hill; tapping one plays its chord. */
@@ -352,6 +381,19 @@ body.adult #app { max-width: 680px; }
 .journey-mascot.listening::before { width: 10px; height: 10px; margin-top: -5px; right: -3px; }
 .journey-mascot.listening::after { width: 20px; height: 20px; margin-top: -10px; right: -8px; animation-delay: .15s; }
 @keyframes mascot-waves { from { opacity: .35; } to { opacity: 1; } }
+
+/* The watering can at the end of the vine: fills a little every round
+   (--fill, set in JS by fillCan in app.js) and drops a bead of water into
+   itself each time. transform-box/-origin so .can-water (a plain rect,
+   see Sprites.icon('can')) scales up from its own bottom, like water
+   rising, rather than from the SVG's origin. */
+.vine-can { position: relative; flex: 0 0 auto; width: 44px; height: 37px; }
+.vine-can > svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.vine-can .can-water { transform-box: fill-box; transform-origin: 50% 100%; transform: scaleY(var(--fill, 0)); transition: transform .45s ease .15s; }
+.can-drop { position: absolute; left: 36%; top: -16px; width: 12px; height: 16px; opacity: 0; pointer-events: none; }
+.can-drop svg { width: 100%; height: 100%; display: block; }
+.vine-can.splash .can-drop { animation: can-drop .5s ease-in; }
+@keyframes can-drop { 0% { opacity: 0; transform: translateY(-10px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(14px); } }
 
 .calm-stop {
   font-weight: 800; font-size: 1rem; color: var(--ink-soft);
@@ -482,12 +524,93 @@ body.adult #app { max-width: 680px; }
 .cele-mascot svg { width: 150px; height: 150px; display: block; }
 @keyframes cele-jump { 0%, 100% { transform: translateY(0) scale(1); } 30% { transform: translateY(-20px) scale(1.06); } 60% { transform: translateY(0) scale(1.02); } }
 .cele-title { font-family: var(--display); font-size: clamp(2.4rem, 10vw, 2.9rem); font-weight: 800; margin: 4px 0 0; color: var(--ink); line-height: 1.05; }
-.stickers { display: flex; gap: 14px; align-items: flex-end; }
-.sticker { display: inline-flex; animation: pop .5s ease backwards; }
-.sticker svg { width: 36px; height: 53px; }
-.sticker:nth-child(2) { animation-delay: .1s; } .sticker:nth-child(3) { animation-delay: .2s; }
-.sticker:nth-child(4) { animation-delay: .3s; } .sticker:nth-child(5) { animation-delay: .4s; }
-.cele-actions { display: flex; flex-direction: column; gap: 16px; align-items: center; margin-top: 10px; }
+
+/* The watering prompt, under the title — hidden (not removed) once tapped,
+   so the title/garden below it never jump up to fill the gap. */
+.cele-hint { margin: 0; color: var(--ink-soft); font-weight: 800; font-size: 1.1rem; }
+.cele-hint.hidden { visibility: hidden; }
+
+/* The can + plant scene shown after a set that scored anything (see
+   watering in renderCelebration, js/app.js). Fixed-size stage so the can,
+   the pour drops and the plant can all be laid out at absolute pixel spots. */
+.cele-garden { position: relative; width: 340px; max-width: 100%; height: 260px; }
+
+/* The can bounces at rest, with a pulsing ring inviting a tap; both stop
+   and the can tilts to pour once tapped (.watering, set by water() in
+   app.js). */
+.water-can { position: absolute; left: 4px; top: 0; width: 120px; height: 101px; transform-origin: 50% 80%; animation: can-bounce 1.3s ease-in-out infinite; }
+.water-can svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.water-can::before { content: ''; position: absolute; inset: -14px; border-radius: 50%; border: 4px solid var(--card); animation: ring-ping 1.6s ease-out infinite; pointer-events: none; }
+@keyframes can-bounce { 0%, 100% { transform: translateY(0) rotate(0); } 40% { transform: translateY(-10px) rotate(-4deg); } 70% { transform: translateY(0) rotate(2deg); } }
+@keyframes ring-ping { 0% { transform: scale(.85); opacity: .95; } 100% { transform: scale(1.2); opacity: 0; } }
+.cele-garden.watering .water-can { animation: can-tilt .5s ease-out both; }
+@keyframes can-tilt { to { transform: rotate(32deg); } }
+.cele-garden.watering .water-can::before { display: none; }
+
+/* Three drops poised at the can's spout; they only actually fall once
+   .watering is added. */
+.pour-drop { position: absolute; top: 64px; width: 14px; height: 18px; opacity: 0; pointer-events: none; }
+.pour-drop svg { width: 100%; height: 100%; display: block; }
+.pour-drop.d1 { left: 118px; }
+.pour-drop.d2 { left: 132px; animation-delay: .35s; }
+.pour-drop.d3 { left: 146px; animation-delay: .6s; }
+.cele-garden.watering .pour-drop { animation: pour-drop 1s ease-in infinite; }
+@keyframes pour-drop { 0% { opacity: 0; transform: translateY(0); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(48px); } }
+
+/* Today's plant, growing in place: starts at watering.before, then swaps to
+   watering.after and replays a pop once the tap has actually landed (see
+   water() in app.js) — the growth itself is the reward, not a sticker. */
+.cele-plant { position: absolute; left: 50%; bottom: 0; width: 120px; height: 180px; transform: translateX(-50%); }
+.cele-plant svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.cele-plant.grow svg { transform-origin: 50% 100%; animation: grow-pop .7s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes grow-pop { 0% { transform: scale(.6); opacity: .4; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+
+/* A bloom (the 5th set of the day) also twinkles a few sparkles around it. */
+.cele-sparkle { position: absolute; width: 22px; height: 22px; color: var(--card); opacity: 0; filter: drop-shadow(0 0 1px var(--ink-soft)); }
+.cele-sparkle svg { width: 100%; height: 100%; }
+.cele-sparkle.s1 { left: 100px; top: 92px; }
+.cele-sparkle.s2 { left: 222px; top: 100px; animation-delay: .35s; }
+.cele-sparkle.s3 { left: 104px; top: 160px; animation-delay: .7s; }
+.cele-sparkle.s4 { left: 226px; top: 150px; animation-delay: 1.05s; }
+.cele-garden.bloomed .cele-sparkle { animation: twinkle 1.4s ease-in-out infinite; }
+@keyframes twinkle { 0%, 100% { transform: scale(.6); opacity: .35; } 50% { transform: scale(1.1); opacity: 1; } }
+
+/* In the garden the mascot stands small, off to the side — the plant is the
+   star here. The plain (no-watering) celebration below keeps the big
+   bouncing .cele-mascot instead. */
+.cele-garden .cele-mascot { position: absolute; right: 0; bottom: 0; }
+.cele-garden .cele-mascot svg { width: 84px; height: 84px; }
+
+/* Actions wait (invisible, not removed, so nothing jumps) until the child's
+   own tap has watered the plant — see water()'s reasoning in app.js. */
+.cele-actions { display: flex; flex-direction: column; gap: 16px; align-items: center; margin-top: 10px; transition: opacity .4s ease; }
+.cele-actions.waiting { visibility: hidden; opacity: 0; }
+
+/* The watering celebration stands its garden on the front hill: the title
+   goes to the top and the actions get exactly the room between the hill's
+   ridge and the bottom of the screen. The ridge is 65.4% of the hills'
+   height up from the bottom (index.html's .hill-front at the centre, y 117.5
+   of 340) and the hills are max(42vh, 260px) tall (.scene-hills), so these
+   numbers must stay in sync with both. 44px = the 16px .celebrate gap +
+   #app's 24px bottom padding + 4px to settle the plant's soil into the grass. */
+.celebrate-garden { justify-content: flex-end; }
+.cele-top { margin-bottom: auto; padding-top: 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.celebrate-garden .cele-actions {
+  flex-direction: row; justify-content: center; gap: 24px; margin-top: 0;
+  height: calc(max(42vh, 260px) * .654 - 44px);
+}
+.celebrate-garden .cele-actions .play-disc { width: 104px; height: 104px; }
+.celebrate-garden .cele-actions .play-disc svg { width: 42px; height: 42px; }
+/* Short screens leave less hill below the ridge: a smaller disc and label
+   keep Play again inside it instead of spilling off the bottom. */
+@media (max-height: 640px) {
+  .celebrate-garden .cele-top { padding-top: 0; gap: 6px; }
+  .celebrate-garden .cele-title { font-size: 2.1rem; }
+  .celebrate-garden .cele-garden { height: 230px; }
+  .celebrate-garden .cele-actions .play-disc { width: 84px; height: 84px; }
+  .celebrate-garden .cele-actions .play-disc svg { width: 34px; height: 34px; }
+  .celebrate-garden .cele-actions .play-label { font-size: 1.25rem; }
+}
 
 /* ----------------------------------------------------------- Confetti --- */
 /* Petals, circles and little stars in the colours just practised. */
