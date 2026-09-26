@@ -13,7 +13,7 @@
 
 // Bump this on every release: the shell is served cache-first, so returning
 // devices only refetch it when the version (and thus this file) changes.
-const CACHE_NAME = 'rainbow-pitch-v15';
+const CACHE_NAME = 'rainbow-pitch-v16';
 
 // The local app shell: everything needed to boot the app with no network.
 const APP_SHELL = [
@@ -21,6 +21,7 @@ const APP_SHELL = [
   'index.html',
   'css/styles.css',
   'js/data.js',
+  'js/i18n.js',
   'js/sprites.js',
   'js/audio.js',
   'js/logic.js',

@@ -75,7 +75,7 @@
 
   function openDialog({ title, body, confirmLabel, danger = false, onConfirm }) {
     let close = () => {};
-    const cancel = el('button', { class: 'secondary-btn', onclick: () => close() }, 'Cancel');
+    const cancel = el('button', { class: 'secondary-btn', onclick: () => close() }, I18n.t('common.cancel'));
     const card = el('div', { class: 'adult dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
       el('h3', { class: 'dialog-title' }, title),
       el('p', { class: 'dialog-body' }, body),
@@ -106,7 +106,7 @@
     const labelEl = button.querySelector('.play-label') || button;
     const label = labelEl.textContent;
     button.disabled = true;
-    labelEl.textContent = 'Waking the piano…';
+    labelEl.textContent = I18n.t('home.wakingPiano');
     error.hidden = true;
     try {
       await PianoAudio.unlock();
@@ -118,8 +118,8 @@
       button.disabled = false;
       labelEl.textContent = label;
       error.textContent = failure?.name === 'NotAllowedError'
-        ? 'Microphone access was not granted. Please try again or change the real piano setting.'
-        : 'Could not start the piano or microphone. Please try again.';
+        ? I18n.t('errors.micNotGranted')
+        : I18n.t('errors.pianoOrMicFailed');
       error.hidden = false;
     }
   }
@@ -150,7 +150,11 @@
   //  HOME  (Child Start)
   // =======================================================================
   // aria-label text for Sprites.plant's stages 0-5 — see Logic.plantStage.
-  const STAGE_NAMES = ['not planted yet', 'a seed', 'a sprout', 'growing leaves', 'a bud', 'in bloom'];
+  // Translated via I18n.t('flower.stage.' + stage) + the flower.today
+  // template (see todaysFlowerLabel below), not a plain array lookup.
+  function todaysFlowerLabel(stage) {
+    return I18n.t('flower.today', { stage: I18n.t('flower.stage.' + stage) });
+  }
 
   // Colour names -> the swatch hex each one draws with, for Sprites.plant's
   // bud tips/petals — same lookup flag() uses, just plural and tolerant of
@@ -252,8 +256,8 @@
     const flags = el('div', { class: 'today-colors' },
       colors.map((c) => el('button', {
         class: 'today-swatch',
-        title: c.label,
-        'aria-label': c.label,
+        title: I18n.color(c.name),
+        'aria-label': I18n.color(c.name),
         html: Sprites.flag(c, { picture: p.flagPictures }),
         onclick: async () => {
           // Presentation-mode taps are best-effort — if the piano hasn't
@@ -274,31 +278,31 @@
     const { today } = Logic.gardenDays(p.garden);
     const stage = Logic.plantStage(today ? today.sets : 0);
     const todayPlant = el('div', {
-      class: 'today-plant', role: 'img', 'aria-label': `Today's flower: ${STAGE_NAMES[stage]}`,
+      class: 'today-plant', role: 'img', 'aria-label': todaysFlowerLabel(stage),
       html: Sprites.plant(stage, swatchesOf(today ? today.colors : [])),
     });
 
     const startError = el('p', { class: 'start-error', hidden: true },
-      'The piano needs the internet the first time — check your connection and try again.');
-    const startBtn = playButton('Play', startError);
+      I18n.t('errors.startError'));
+    const startBtn = playButton(I18n.t('home.play'), startError);
 
     const profileStrip = el('header', { class: 'home-top' },
-      el('button', { class: 'avatar-chip', title: 'Who is playing?', onclick: openProfilePicker },
+      el('button', { class: 'avatar-chip', title: I18n.t('home.whoIsPlaying'), onclick: openProfilePicker },
         el('span', { class: 'avatar-emoji', html: Sprites.mascot(p.avatar) }),
         el('span', { class: 'avatar-name' }, p.name)),
-      el('button', { class: 'gear', title: 'Grown-ups', 'aria-label': 'Grown-up area', onclick: () => renderGuardianGate(), html: Sprites.icon('lock') }));
+      el('button', { class: 'gear', title: I18n.t('home.grownUpsTitle'), 'aria-label': I18n.t('guardian.area'), onclick: () => renderGuardianGate(), html: Sprites.icon('lock') }));
 
     app.appendChild(el('section', { class: 'screen home' },
       profileStrip,
       el('div', { class: 'home-main' },
         el('div', { class: 'brand' },
-          el('h1', { class: 'brand-title' }, 'Chord Garden'),
-          el('p', { class: 'brand-sub' }, 'Listen, then pick the flag')),
+          el('h1', { class: 'brand-title' }, I18n.t('home.brandTitle')),
+          el('p', { class: 'brand-sub' }, I18n.t('home.brandSub'))),
         startBtn,
         todayPlant,
         startError),
       el('div', { class: 'home-flags' },
-        el('p', { class: 'today-label' }, 'Tap a flag to hear its song'),
+        el('p', { class: 'today-label' }, I18n.t('home.tapFlagHint')),
         flags)));
     renderGarden(p);
   }
@@ -324,14 +328,14 @@
         onclick: () => { Store.setActiveProfile(pr.id); close(); renderHome(); },
       }, el('span', { class: 'avatar-row', html: Sprites.mascot(pr.avatar) }),
          el('span', { class: 'g-row-main' }, el('span', { class: 'g-row-title' }, pr.name)),
-         active ? el('span', { class: 'g-row-end' }, el('span', { class: 'badge' }, 'Playing')) : null));
+         active ? el('span', { class: 'g-row-end' }, el('span', { class: 'badge' }, I18n.t('common.playing'))) : null));
     });
 
-    const card = el('div', { class: 'adult dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Who is playing?' },
-      el('h3', { class: 'dialog-title' }, 'Who is playing?'),
+    const card = el('div', { class: 'adult dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': I18n.t('home.whoIsPlaying') },
+      el('h3', { class: 'dialog-title' }, I18n.t('home.whoIsPlaying')),
       list,
       el('div', { class: 'dialog-actions' },
-        el('button', { class: 'secondary-btn', onclick: () => close() }, 'Cancel')));
+        el('button', { class: 'secondary-btn', onclick: () => close() }, I18n.t('common.cancel'))));
     close = openOverlay(card);
   }
 
@@ -379,29 +383,29 @@
             // Nothing to retry — old browser / insecure context — so the
             // Ready button itself goes away; "Not now" below still gets a
             // grown-up back to Home (and digital mode) in one tap.
-            micError.textContent = "This browser can't access the microphone here — real piano mode needs a modern browser.";
+            micError.textContent = I18n.t('errors.micBrowserUnsupported');
             readyBtn.hidden = true;
           } else {
             // Any denial (blocked, dismissed, OS-level) — deliberately not
             // distinguished further, same reasoning as the existing offline-
             // piano error not trying to diagnose DNS vs. CDN-down.
-            micError.textContent = "Chord Garden can't hear the piano without microphone access — check your browser's site settings and try again.";
+            micError.textContent = I18n.t('errors.micAccessDenied');
           }
           micError.hidden = false;
         }
       },
-    }, 'Ready');
+    }, I18n.t('mic.ready'));
 
     app.appendChild(el('section', { class: 'screen gate' },
       el('div', { class: 'gate-center' },
         el('div', { class: 'gate-card' },
           el('div', { class: 'gate-lock', html: Sprites.icon('mic') }),
-          el('p', { class: 'pin-msg' }, 'Real piano mode'),
-          el('p', {}, 'An adult plays chords on a real piano near this device. Chord Garden listens through the microphone to figure out which chord it heard, then your child taps the colour.'),
-          el('p', { class: 'g-caption' }, 'The sound is analysed right here in the browser and is never recorded, saved, or sent anywhere.'),
+          el('p', { class: 'pin-msg' }, I18n.t('mic.realPianoMode')),
+          el('p', {}, I18n.t('mic.explainer')),
+          el('p', { class: 'g-caption' }, I18n.t('mic.privacyNote')),
           el('div', { class: 'gate-actions' },
             readyBtn,
-            el('button', { class: 'ghost-btn', onclick: renderHome }, 'Not now')),
+            el('button', { class: 'ghost-btn', onclick: renderHome }, I18n.t('mic.notNow'))),
           micError))));
   }
 
@@ -629,9 +633,13 @@
   }
 
   function micStatus() {
-    if (session.showMicRetry || session.current) return 'Paused';
-    if (!session.micInput) return 'Checking input…';
-    return { sound: 'Sound detected', quiet: 'Input quiet', unavailable: 'Input unavailable' }[session.micInput.state];
+    if (session.showMicRetry || session.current) return I18n.t('mic.paused');
+    if (!session.micInput) return I18n.t('mic.checkingInput');
+    return {
+      sound: I18n.t('mic.soundDetected'),
+      quiet: I18n.t('mic.inputQuiet'),
+      unavailable: I18n.t('mic.inputUnavailable'),
+    }[session.micInput.state];
   }
 
   function updateMicInput() {
@@ -685,7 +693,7 @@
       html: Sprites.mascot(p.avatar, baselineMood()),
     });
     const journey = el('div', {
-      class: 'vine', role: 'progressbar', 'aria-label': 'Rounds played',
+      class: 'vine', role: 'progressbar', 'aria-label': I18n.t('practice.roundsPlayed'),
       'aria-valuemin': 0, 'aria-valuemax': session.total, 'aria-valuenow': session.index,
     }, el('div', { class: 'vine-art' }), mascotEl);
 
@@ -715,7 +723,7 @@
         }
       },
     }, el('span', { class: 'listen-icon', html: Sprites.icon('speaker') }),
-       el('span', {}, session.mode === 'mic' ? 'Hear it again' : 'Listen again'));
+       el('span', {}, I18n.t(session.mode === 'mic' ? 'practice.hearAgain' : 'practice.listenAgain')));
 
     // One planted flag per active colour, in a wrapping, centred row — a
     // partial last row centres itself. Flag size and column count are fitted
@@ -727,7 +735,7 @@
     const makeAnswerBtn = (c) => el('button', {
       class: 'color-btn',
       'data-color': c.name,
-      'aria-label': c.label,
+      'aria-label': I18n.color(c.name),
       html: Sprites.flag(c, { picture: p.flagPictures }),
       onclick: () => onAnswer(c),
     });
@@ -751,13 +759,13 @@
       ? (session.current
           ? el('div', { class: 'round-cue mic-heard' + (session.cueing ? '' : ' hidden') },
               el('span', { class: 'round-cue-icon', html: Sprites.icon('check') }),
-              el('span', { class: 'round-cue-label' }, 'Got it!'))
+              el('span', { class: 'round-cue-label' }, I18n.t('mic.gotIt')))
           : el('div', { class: 'round-cue mic-wait' + (session.cueing ? '' : ' hidden') },
               el('span', { class: 'round-cue-icon', html: Sprites.icon('mic') }),
               el('span', { class: 'round-cue-label' },
-                session.micArmed ? 'Play any colour on the piano!' : 'Get ready…'),
+                I18n.t(session.micArmed ? 'mic.playAnyColour' : 'mic.getReady')),
               el('span', { class: 'round-cue-sub' },
-                session.micArmed ? 'Chord Garden is listening.' : 'Waiting for a quiet moment.')))
+                I18n.t(session.micArmed ? 'mic.listening' : 'mic.waitingQuiet'))))
       : null;
 
     // State D — the safety valve: low confidence or nothing ever stabilised.
@@ -765,26 +773,29 @@
     // onLowConfidence branch) — this shows BEFORE the child can tap
     // anything, so it's the room/mic that didn't cooperate, never the
     // child's answer. Same visual family as .start-error (plain, honest,
-    // no "sorry"/"wrong"), laid out centered like .round-cue above it.
+    // no "sorry"/"wrong"), laid out centered like .round-cue above it. The
+    // two variants that name a button (All done / Try again) interpolate its
+    // translated label rather than concatenating fragments, so the sentence
+    // stays one coherent translation unit per language.
     const retryMessage = session.micRetryReason === 'no-input'
-      ? 'No microphone signal reached the app. Check the selected input and microphone level in your device settings, then try again.'
+      ? I18n.t('errors.micNoInput')
       : session.micRetryReason === 'unavailable'
-        ? 'Microphone input is unavailable. Check microphone access, then use All done and start again.'
-        : 'Sound reached the microphone, but the chord could not be matched. Release the keys, tap Try again, and wait for the piano prompt before playing all three keys together.';
+        ? I18n.t('errors.micUnavailable', { allDone: I18n.t('practice.allDone') })
+        : I18n.t('errors.micUnmatched', { tryAgain: I18n.t('mic.tryAgain') });
     const micRetry = (session.mode === 'mic' && session.showMicRetry) ? el('div', { class: 'mic-retry' },
       el('p', {}, retryMessage),
       el('div', { class: 'mic-retry-actions' },
-        el('button', { class: 'primary-btn', onclick: retryMicRound }, 'Try again'),
-        el('button', { class: 'ghost-btn', onclick: skipMicRound }, 'Skip this one'))) : null;
+        el('button', { class: 'primary-btn', onclick: retryMicRound }, I18n.t('mic.tryAgain')),
+        el('button', { class: 'ghost-btn', onclick: skipMicRound }, I18n.t('mic.skipThisOne')))) : null;
 
     // Show measured input while polling; permission alone is not evidence
     // that the selected microphone is supplying audio.
     const micPill = session.mode === 'mic' ? el('div', { class: 'mic-pill' },
       el('span', { class: 'mic-pill-icon', html: Sprites.icon('mic') }),
-      el('meter', { class: 'mic-meter', min: 0, max: 1, value: 0, 'aria-label': 'Microphone input level' }),
+      el('meter', { class: 'mic-meter', min: 0, max: 1, value: 0, 'aria-label': I18n.t('practice.micLevel') }),
       el('span', { class: 'mic-status' }, micStatus())) : null;
 
-    const stopBtn = el('button', { class: 'calm-stop', onclick: calmStop }, 'All done');
+    const stopBtn = el('button', { class: 'calm-stop', onclick: calmStop }, I18n.t('practice.allDone'));
 
     app.appendChild(el('section', { class: 'screen practice' + (continuing ? ' continuing' : '') },
       el('div', { class: 'practice-top' }, journey, can, stopBtn),
@@ -1071,7 +1082,7 @@
     const generation = screenGeneration; // clearScreen() bumps this; guards the watering timers below
     const p = Store.activeProfile();
     const startError = el('p', { class: 'start-error', hidden: true });
-    const again = playButton('Play again', startError);
+    const again = playButton(I18n.t('home.playAgain'), startError);
 
     if (watering === null) {
       // Nothing was scored (a calm stop before any first tap) — there's no
@@ -1080,8 +1091,8 @@
       PianoAudio.playSparkle(); // non-pitched flourish — see audio.js for why
       app.appendChild(el('section', { class: 'screen celebrate' },
         el('div', { class: 'cele-mascot', html: Sprites.mascot(p.avatar, 'happy') }),
-        el('h1', { class: 'cele-title' }, early ? 'Nice listening!' : 'You did it!'),
-        el('div', { class: 'cele-actions' }, again, el('button', { class: 'ghost-btn', onclick: renderHome }, 'Home')),
+        el('h1', { class: 'cele-title' }, I18n.t(early ? 'celebrate.niceListening' : 'celebrate.youDidIt')),
+        el('div', { class: 'cele-actions' }, again, el('button', { class: 'ghost-btn', onclick: renderHome }, I18n.t('celebrate.home'))),
         startError));
       return;
     }
@@ -1091,14 +1102,14 @@
     // finishPractice) and only grows to `watering.after` once the child
     // taps the can — the tap is the reward moment, not just a formality.
     const swatches = swatchesOf(watering.colors);
-    const title = el('h1', { class: 'cele-title' }, early ? 'Nice listening!' : 'You did it!');
-    const hint = el('p', { class: 'cele-hint' }, 'Tap the can to water your flower');
+    const title = el('h1', { class: 'cele-title' }, I18n.t(early ? 'celebrate.niceListening' : 'celebrate.youDidIt'));
+    const hint = el('p', { class: 'cele-hint' }, I18n.t('celebrate.waterHint'));
     const plant = el('div', {
-      class: 'cele-plant', role: 'img', 'aria-label': `Today's flower: ${STAGE_NAMES[watering.before]}`,
+      class: 'cele-plant', role: 'img', 'aria-label': todaysFlowerLabel(watering.before),
       html: Sprites.plant(watering.before, swatches),
     });
     const can = el('button', {
-      class: 'water-can', 'aria-label': 'Water your flower', html: Sprites.icon('can'),
+      class: 'water-can', 'aria-label': I18n.t('celebrate.waterAria'), html: Sprites.icon('can'),
       onclick: () => water(),
     });
     const garden = el('div', { class: 'cele-garden' },
@@ -1117,7 +1128,7 @@
     // reward moment by accident. The safety valve below still shows them if
     // the can is never tapped, so nobody gets stuck here either.
     const actions = el('div', { class: 'cele-actions waiting' },
-      again, el('button', { class: 'ghost-btn', onclick: renderHome }, 'Home'));
+      again, el('button', { class: 'ghost-btn', onclick: renderHome }, I18n.t('celebrate.home')));
 
     let watered = false;
     function water() {
@@ -1129,14 +1140,14 @@
       setTimeout(() => {
         if (generation !== screenGeneration) return;
         plant.innerHTML = Sprites.plant(watering.after, swatches);
-        plant.setAttribute('aria-label', `Today's flower: ${STAGE_NAMES[watering.after]}`);
+        plant.setAttribute('aria-label', todaysFlowerLabel(watering.after));
         plant.classList.remove('grow');
         void plant.offsetWidth; // restart the grow animation
         plant.classList.add('grow');
         PianoAudio.playSparkle();
         title.textContent = watering.after === 5 && watering.before < 5
-          ? 'Your flower bloomed!'
-          : watering.after > watering.before ? 'It grew!' : 'Your flower loves it!';
+          ? I18n.t('celebrate.bloomed')
+          : watering.after > watering.before ? I18n.t('celebrate.itGrew') : I18n.t('celebrate.lovesIt');
         if (watering.after === 5) garden.classList.add('bloomed');
         actions.classList.remove('waiting');
       }, 900);
@@ -1167,7 +1178,7 @@
     setMode('adult');
     let entered = '';
     const dots = el('div', { class: 'pin-dots', 'aria-hidden': 'true' });
-    const msg = el('p', { class: 'pin-msg', 'aria-live': 'polite' }, 'Grown-ups only');
+    const msg = el('p', { class: 'pin-msg', 'aria-live': 'polite' }, I18n.t('pin.grownUpsOnly'));
 
     function refresh() {
       clear(dots);
@@ -1179,7 +1190,7 @@
       if (entered.length === 4) {
         if (entered === Store.getPin()) renderGuardian('colors');
         else {
-          msg.textContent = 'That PIN didn’t match. Try again.';
+          msg.textContent = I18n.t('pin.noMatch');
           dots.classList.add('shake');
           entered = '';
           setTimeout(() => { dots.classList.remove('shake'); refresh(); }, 400);
@@ -1191,7 +1202,7 @@
         if (k === '') return el('span', {});
         if (k === 'back') {
           return el('button', {
-            class: 'pin-key pin-back', 'aria-label': 'Delete', html: Sprites.icon('backspace'),
+            class: 'pin-key pin-back', 'aria-label': I18n.t('pin.delete'), html: Sprites.icon('backspace'),
             onclick: () => { entered = entered.slice(0, -1); refresh(); },
           });
         }
@@ -1204,23 +1215,28 @@
     // defeat the point of changing it.
     const showHint = Store.getPin() === Store.DEFAULT_PIN;
     app.appendChild(el('section', { class: 'screen gate' },
-      el('div', {}, backButton('Back to play', renderHome)),
+      el('div', {}, backButton(I18n.t('pin.backToPlay'), renderHome)),
       el('div', { class: 'gate-center' },
         el('div', { class: 'gate-card' },
           el('div', { class: 'gate-lock', html: Sprites.icon('lock') }),
           msg,
-          el('p', { class: 'pin-hint' }, showHint ? `Demo PIN: ${Store.DEFAULT_PIN}` : 'Enter your 4-digit PIN'),
+          el('p', { class: 'pin-hint' }, showHint ? I18n.t('pin.demoHint', { pin: Store.DEFAULT_PIN }) : I18n.t('pin.enterHint')),
           dots, pad))));
   }
 
-  const GUARDIAN_TABS = [['colors', 'Colours'], ['progress', 'Progress'], ['profiles', 'Children'], ['settings', 'Settings']];
+  const GUARDIAN_TABS = () => [
+    ['colors', I18n.t('guardian.tabColours')],
+    ['progress', I18n.t('guardian.tabProgress')],
+    ['profiles', I18n.t('guardian.tabChildren')],
+    ['settings', I18n.t('guardian.tabSettings')],
+  ];
 
   function renderGuardian(tab) {
     clearScreen();
     setMode('adult');
     const p = Store.activeProfile();
-    const tabs = el('nav', { class: 'segmented g-tabs', 'aria-label': 'Grown-up sections' },
-      GUARDIAN_TABS.map(([id, lbl]) => el('button', {
+    const tabs = el('nav', { class: 'segmented g-tabs', 'aria-label': I18n.t('guardian.sectionsAria') },
+      GUARDIAN_TABS().map(([id, lbl]) => el('button', {
         class: 'seg g-tab' + (tab === id ? ' sel' : ''),
         'aria-current': tab === id ? 'page' : null,
         onclick: () => renderGuardian(id),
@@ -1234,8 +1250,8 @@
 
     app.appendChild(el('section', { class: 'screen guardian' },
       el('header', { class: 'g-head' },
-        backButton('Done', renderHome),
-        el('h2', {}, 'Grown-up area'),
+        backButton(I18n.t('guardian.done'), renderHome),
+        el('h2', {}, I18n.t('guardian.area')),
         el('span', { class: 'g-child' },
           el('span', { class: 'g-child-ava', html: Sprites.mascot(p.avatar) }),
           p.name)),
@@ -1260,14 +1276,12 @@
       el('div', { class: 'g-details-body' }, paragraphs.map((t) => el('p', {}, t))));
   }
 
-  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-
   function avatarPicker(selected, onPick) {
-    const row = el('div', { class: 'avatar-picker', role: 'radiogroup', 'aria-label': 'Look' });
+    const row = el('div', { class: 'avatar-picker', role: 'radiogroup', 'aria-label': I18n.t('settings.lookTitle') });
     AVATARS.forEach((a) => {
       const btn = el('button', {
         class: 'avatar-opt' + (a === selected ? ' sel' : ''),
-        role: 'radio', 'aria-checked': a === selected ? 'true' : 'false', 'aria-label': a,
+        role: 'radio', 'aria-checked': a === selected ? 'true' : 'false', 'aria-label': I18n.t('avatar.' + a),
         html: Sprites.mascot(a),
         onclick: () => {
           row.querySelectorAll('.avatar-opt').forEach((b) => { b.classList.remove('sel'); b.setAttribute('aria-checked', 'false'); });
@@ -1293,8 +1307,8 @@
     if (!next) {
       return el('div', { class: 'readiness ready' },
         el('span', { class: 'r-icon', html: Sprites.icon('trophy') }),
-        el('div', { class: 'r-title' }, 'All colours added'),
-        el('div', { class: 'r-sub' }, `${p.name} is practising the full set.`));
+        el('div', { class: 'r-title' }, I18n.t('colors.allAdded')),
+        el('div', { class: 'r-sub' }, I18n.t('colors.practisingFullSet', { name: p.name })));
     }
     const active = p.activeColors;
     const readyNames = new Set(Logic.readyColors(p.events, active));
@@ -1306,21 +1320,23 @@
         const c = CHORD_BY_NAME[name];
         const ok = readyNames.has(name);
         return el('span', {
-          class: 'r-pip' + (ok ? ' ok' : ''), title: c.label,
+          class: 'r-pip' + (ok ? ' ok' : ''), title: I18n.color(c.name),
           style: `background:${c.swatch};color:${c.text}`,
           html: ok ? Sprites.icon('check') : '',
         });
       }));
     return el('div', { class: 'readiness ' + (ready ? 'ready' : 'notyet') },
       el('span', { class: 'r-icon', html: Sprites.icon(ready ? 'check' : 'hourglass') }),
-      el('div', { class: 'r-title' }, ready ? `Ready for ${next.label}` : `${readyNames.size} of ${plural(active.length, 'colour')} ready`),
+      el('div', { class: 'r-title' }, ready
+        ? I18n.t('colors.readyForNext', { color: I18n.color(next.name) })
+        : I18n.plural('colors.someReady', active.length, { ready: readyNames.size })),
       el('div', { class: 'r-sub' }, ready
-        ? `${p.name} is recognising every current colour reliably.`
-        : `Add ${next.label} once every colour is at 90% or better over its recent tries.`),
+        ? I18n.t('colors.recognisingReliably', { name: p.name })
+        : I18n.t('colors.addNextHint', { color: I18n.color(next.name) })),
       pips,
       ready ? el('div', { class: 'r-actions' },
         el('button', { class: 'primary-btn', onclick: () => { Store.addColor(next.name); renderGuardian('colors'); } },
-          el('span', { class: 'btn-swatch', style: `background:${next.swatch}` }), `Add ${next.label}`)) : null);
+          el('span', { class: 'btn-swatch', style: `background:${next.swatch}` }), I18n.t('colors.addButton', { color: I18n.color(next.name) }))) : null);
   }
 
   function guardianColors(body) {
@@ -1337,15 +1353,16 @@
         class: 'g-row',
         'aria-pressed': on ? 'true' : 'false',
         'aria-disabled': locked ? 'true' : null,
-        title: locked ? 'At least one colour stays on' : null,
+        title: locked ? I18n.t('colors.lockedTitle') : null,
         onclick: () => { if (!locked) toggleColor(c.name); },
       },
         el('span', { class: 'row-flag', html: Sprites.flag(c, { picture: p.flagPictures }) }),
         el('span', { class: 'g-row-main' },
-          el('span', { class: 'g-row-title' }, c.label),
-          el('span', { class: 'g-row-sub', title: 'Chord (grown-up only)' }, 'Chord ' + c.chord)),
+          el('span', { class: 'g-row-title' }, I18n.color(c.name)),
+          el('span', { class: 'g-row-sub', title: I18n.t('colors.chordTitle') },
+            I18n.t('colors.chordAndNotes', { chord: I18n.chord(c.chord), notes: I18n.notes(c.notes) }))),
         el('span', { class: 'g-row-end' },
-          c === next ? el('span', { class: 'badge' }, 'Next') : null,
+          c === next ? el('span', { class: 'badge' }, I18n.t('colors.next')) : null,
           acc != null ? el('span', {}, acc + '%') : null,
           el('span', { class: 'check' + (on ? ' on' : '') + (locked ? ' locked' : ''), html: Sprites.icon('check') })));
     };
@@ -1356,13 +1373,13 @@
     const advanced = CHORDS.filter((c) => c.advanced && !active.includes(c.name));
 
     body.appendChild(readinessCard(p, next));
-    body.appendChild(section(`Practising (${practising.length})`, list(practising),
-      lastOne ? 'At least one colour always stays on.' : 'Percentages are right-first-time over each colour’s last 20 tries. Tap a colour to turn it off.'));
-    if (core.length) body.appendChild(section('Up next', list(core), 'The method adds these one at a time, in this order.'));
-    if (advanced.length) body.appendChild(section('Advanced', list(advanced), 'The remaining major chords, for after the first nine.'));
-    body.appendChild(disclosure('How colours are introduced',
-      'Each colour always stands for the same chord. Introduce new colours one at a time: the classic method adds the next colour only once the current ones are known with near-perfect accuracy, usually about every two weeks.',
-      'One colour on its own is pure listening for a brand-new learner. Two or more turn it into real practice at telling chords apart.'));
+    body.appendChild(section(I18n.t('colors.practisingSection', { count: practising.length }), list(practising),
+      lastOne ? I18n.t('colors.lastOneHint') : I18n.t('colors.percentagesHint')));
+    if (core.length) body.appendChild(section(I18n.t('colors.upNext'), list(core), I18n.t('colors.upNextHint')));
+    if (advanced.length) body.appendChild(section(I18n.t('colors.advanced'), list(advanced), I18n.t('colors.advancedHint')));
+    body.appendChild(disclosure(I18n.t('colors.howIntroducedSummary'),
+      I18n.t('colors.howIntroducedP1'),
+      I18n.t('colors.howIntroducedP2')));
   }
 
   function toggleColor(name) {
@@ -1377,14 +1394,14 @@
   }
 
   // --- Guardian: Progress -------------------------------------------------
-  const fmtDay = (ts) => new Date(ts).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  const fmtDay = (ts) => I18n.date(ts, { weekday: 'short', day: 'numeric', month: 'short' });
 
   function dayLabel(ts) {
     const day = new Date(ts);
     day.setHours(0, 0, 0, 0);
     const daysAgo = Math.round((startOfToday() - day.getTime()) / 86400000);
-    if (daysAgo === 0) return 'Today';
-    if (daysAgo === 1) return 'Yesterday';
+    if (daysAgo === 0) return I18n.t('progress.today');
+    if (daysAgo === 1) return I18n.t('progress.yesterday');
     return fmtDay(ts);
   }
 
@@ -1402,14 +1419,14 @@
   function accuracyChart(days) {
     const chart = el('div', { class: 'chart', style: `--days:${days.length}` },
       el('div', { class: 'chart-head' },
-        el('div', { class: 'chart-title' }, 'First-try accuracy by day'),
-        el('div', { class: 'chart-sub' }, 'Last 14 days of app practice. The line marks 90%, the level for adding a colour.')));
+        el('div', { class: 'chart-title' }, I18n.t('progress.chartTitle')),
+        el('div', { class: 'chart-sub' }, I18n.t('progress.chartSub'))));
     if (!days.some((d) => d.seen)) {
-      chart.appendChild(el('p', { class: 'chart-empty' }, 'Practice from the last 14 days will show here.'));
+      chart.appendChild(el('p', { class: 'chart-empty' }, I18n.t('progress.chartEmpty')));
       return chart;
     }
 
-    const describe = (d) => (d.seen ? `${d.pct}%, ${d.correct} of ${d.seen} right first time` : 'No practice');
+    const describe = (d) => (d.seen ? I18n.t('progress.dayDescribe', { pct: d.pct, correct: d.correct, seen: d.seen }) : I18n.t('progress.noPractice'));
     const tip = el('div', { class: 'chart-tip', hidden: true });
     const plot = el('div', { class: 'chart-plot' });
     [100, 50, 0].forEach((v) => {
@@ -1436,7 +1453,7 @@
 
     const cols = el('div', { class: 'chart-cols' }, days.map((d) => {
       const col = el('div', {
-        class: 'chart-col', tabindex: '0', 'aria-label': `${fmtDay(d.start)}: ${describe(d)}`,
+        class: 'chart-col', tabindex: '0', 'aria-label': I18n.t('progress.dayAria', { day: fmtDay(d.start), describe: describe(d) }),
         onmouseenter: () => showTip(col, d), onfocus: () => showTip(col, d),
         onmouseleave: hideTip, onblur: hideTip,
       }, d.seen ? el('div', { class: 'chart-bar', style: `height:${d.pct}%` }) : null);
@@ -1450,8 +1467,8 @@
       days.map((d, i) => el('span', { class: i === last ? 'today' : '' }, String(new Date(d.start).getDate())))));
     chart.appendChild(tip);
     chart.appendChild(el('table', { class: 'sr-only' },
-      el('caption', {}, 'First-try accuracy by day'),
-      el('tr', {}, el('th', {}, 'Day'), el('th', {}, 'Accuracy')),
+      el('caption', {}, I18n.t('progress.chartTitle')),
+      el('tr', {}, el('th', {}, I18n.t('progress.dayColumn')), el('th', {}, I18n.t('progress.accuracyColumn'))),
       days.map((d) => el('tr', {}, el('td', {}, fmtDay(d.start)), el('td', {}, describe(d))))));
     return chart;
   }
@@ -1463,25 +1480,25 @@
     const right = days.reduce((n, d) => n + d.correct, 0);
 
     body.appendChild(el('div', { class: 'stat-tiles' },
-      statTile('Sets today', String(setsToday(p)), 'Aim for about 5 short sets'),
-      statTile('Last 14 days', seen ? Math.round((right / seen) * 100) + '%' : '—',
-        seen ? `${right} of ${seen} right first time` : 'No practice yet')));
+      statTile(I18n.t('progress.setsToday'), String(setsToday(p)), I18n.t('progress.aimFiveSets')),
+      statTile(I18n.t('progress.last14Days'), seen ? Math.round((right / seen) * 100) + '%' : '—',
+        seen ? I18n.t('progress.rightFirstTime', { right, seen }) : I18n.t('progress.noPracticeYet'))));
     body.appendChild(el('div', { class: 'g-card' }, accuracyChart(days)));
 
     // Cadence: the method asks for about five short sets a day. One column
     // of five dots per day, filled per set played (more than five still
     // shows five; the tooltip has the real count).
     const setDays = Logic.dailySets(p.sessions, { days: 14 });
-    body.appendChild(section('Sets per day', el('div', { class: 'g-card' },
+    body.appendChild(section(I18n.t('progress.setsPerDay'), el('div', { class: 'g-card' },
       el('div', {
         class: 'sets-grid', style: `--days:${setDays.length}`, role: 'img',
-        'aria-label': 'Sets per day, last 14 days: ' + setDays.map((d) => `${fmtDay(d.start)} ${d.sets}`).join(', '),
-      }, setDays.map((d) => el('div', { class: 'sets-col', title: `${fmtDay(d.start)}: ${plural(d.sets, 'set')}` },
+        'aria-label': I18n.t('progress.setsPerDayAria', { list: setDays.map((d) => `${fmtDay(d.start)} ${d.sets}`).join(', ') }),
+      }, setDays.map((d) => el('div', { class: 'sets-col', title: I18n.plural('progress.setsTooltip', d.sets, { day: fmtDay(d.start) }) },
         Array.from({ length: 5 }, (_, i) => el('span', { class: 'sets-dot' + (i < d.sets ? ' on' : '') }))))),
       el('div', { class: 'sets-x', 'aria-hidden': 'true' },
-        el('span', {}, new Date(setDays[0].start).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })),
-        el('span', { class: 'today' }, 'Today'))),
-      'Each dot is one set. Aim for about 5 short sets a day.'));
+        el('span', {}, I18n.date(setDays[0].start, { day: 'numeric', month: 'short' })),
+        el('span', { class: 'today' }, I18n.t('progress.today')))),
+      I18n.t('progress.eachDotHint')));
 
     const grid = el('div', { class: 'acc-grid' });
     p.activeColors.forEach((name) => {
@@ -1489,15 +1506,15 @@
       const recent = Logic.recentAccuracy(p.events, name);
       const s = p.stats[name] || { correct: 0, seen: 0 };
       grid.appendChild(el('div', { class: 'acc-row' },
-        el('span', { class: 'acc-name' }, el('span', { class: 'swatch sm', style: `background:${c.swatch}` }), c.label),
+        el('span', { class: 'acc-name' }, el('span', { class: 'swatch sm', style: `background:${c.swatch}` }), I18n.color(c.name)),
         el('div', { class: 'acc-track' }, el('div', { class: 'acc-fill', style: `width:${recent.pct || 0}%;background:${c.swatch}` })),
         el('div', { class: 'acc-nums' },
           el('div', { class: 'acc-pct' }, recent.pct == null ? '—' : recent.pct + '%'),
-          el('div', { class: 'acc-life' }, s.seen ? `${s.correct}/${s.seen} all time` : 'Not tried yet'))));
+          el('div', { class: 'acc-life' }, s.seen ? I18n.t('progress.allTime', { correct: s.correct, seen: s.seen }) : I18n.t('progress.notTriedYet')))));
     });
     const anyPractice = p.activeColors.some((n) => p.stats[n]);
-    body.appendChild(section('Accuracy by colour', el('div', { class: 'g-card' }, grid),
-      anyPractice ? 'Right first time over each colour’s last 20 tries.' : 'No practice recorded yet. Tap Done, then let your child play a set.'));
+    body.appendChild(section(I18n.t('progress.accuracyByColour'), el('div', { class: 'g-card' }, grid),
+      anyPractice ? I18n.t('progress.rightFirstTimeHint') : I18n.t('progress.noPracticeRecorded', { done: I18n.t('guardian.done') })));
 
     // Visible but explicitly separate from the accuracy/readiness signal —
     // real-piano detection accuracy hasn't been validated the way the
@@ -1505,11 +1522,11 @@
     const micEvents = p.events.filter((e) => e.src === 'mic');
     if (micEvents.length) {
       const matched = micEvents.filter((e) => e.ok).length;
-      body.appendChild(section('Real piano practice', el('div', { class: 'g-card g-list' },
+      body.appendChild(section(I18n.t('progress.realPianoPractice'), el('div', { class: 'g-card g-list' },
         el('div', { class: 'g-row' },
-          el('span', { class: 'g-row-main' }, el('span', { class: 'g-row-title' }, plural(micEvents.length, 'attempt'))),
-          el('span', { class: 'g-row-end' }, `${matched} matched`))),
-        'Kept out of the accuracy figures above until real-piano detection is validated.'));
+          el('span', { class: 'g-row-main' }, el('span', { class: 'g-row-title' }, I18n.plural('progress.attempts', micEvents.length))),
+          el('span', { class: 'g-row-end' }, I18n.t('progress.matched', { count: matched })))),
+        I18n.t('progress.realPianoHint')));
     }
 
     if (p.sessions.length) {
@@ -1520,17 +1537,17 @@
         if (day !== lastDay) { list.appendChild(el('div', { class: 's-day' }, dayLabel(se.ts))); lastDay = day; }
         const pct = se.rounds ? Math.round((se.correct / se.rounds) * 100) : null;
         list.appendChild(el('div', { class: 's-row' },
-          el('span', { class: 's-time' }, new Date(se.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+          el('span', { class: 's-time' }, I18n.time(se.ts, { hour: '2-digit', minute: '2-digit' })),
           el('span', { class: 's-main' },
-            se.rounds ? `${se.correct} of ${se.rounds} right` : 'No rounds finished',
-            se.early ? el('span', { class: 'badge muted' }, 'Stopped early') : null,
-            se.src === 'mic' ? el('span', { class: 'badge muted' }, 'Real piano') : null),
+            se.rounds ? I18n.t('progress.rightOf', { correct: se.correct, rounds: se.rounds }) : I18n.t('progress.noRoundsFinished'),
+            se.early ? el('span', { class: 'badge muted' }, I18n.t('progress.stoppedEarly')) : null,
+            se.src === 'mic' ? el('span', { class: 'badge muted' }, I18n.t('progress.realPianoBadge')) : null),
           el('span', { class: 's-pct' }, pct == null ? '' : pct + '%')));
       });
-      body.appendChild(section('Recent sessions', list));
+      body.appendChild(section(I18n.t('progress.recentSessions'), list));
     } else {
-      body.appendChild(section('Recent sessions', el('div', { class: 'g-card pad' },
-        el('p', { class: 'g-caption' }, 'Finished sets will appear here.'))));
+      body.appendChild(section(I18n.t('progress.recentSessions'), el('div', { class: 'g-card pad' },
+        el('p', { class: 'g-caption' }, I18n.t('progress.finishedSetsHere')))));
     }
 
     // Mix-ups: which wrong colour a child taps most often for each target,
@@ -1542,18 +1559,18 @@
         const answered = CHORD_BY_NAME[m.answered];
         return el('div', { class: 'cf-row' },
           el('span', { class: 'swatch sm', style: `background:${target.swatch}` }),
-          el('span', { class: 'cf-label' }, target.label),
-          el('span', { class: 'cf-as' }, 'mistaken for'),
+          el('span', { class: 'cf-label' }, I18n.color(target.name)),
+          el('span', { class: 'cf-as' }, I18n.t('progress.mistakenFor')),
           el('span', { class: 'swatch sm', style: `background:${answered.swatch}` }),
-          el('span', { class: 'cf-label' }, answered.label),
-          el('span', { class: 'cf-count' }, m.count + '×'));
+          el('span', { class: 'cf-label' }, I18n.color(answered.name)),
+          el('span', { class: 'cf-count' }, I18n.t('progress.countTimes', { count: m.count })));
       }));
-      body.appendChild(section('Mix-ups', list, 'The colour that was played, and the colour tapped instead.'));
+      body.appendChild(section(I18n.t('progress.mixups'), list, I18n.t('progress.mixupsHint')));
     }
 
     body.appendChild(el('div', {},
       el('button', { class: 'secondary-btn', onclick: () => exportData(p) },
-        el('span', { class: 'btn-ico', html: Sprites.icon('download') }), 'Export progress (JSON)')));
+        el('span', { class: 'btn-ico', html: Sprites.icon('download') }), I18n.t('progress.exportButton'))));
   }
 
   function exportData(p) {
@@ -1578,126 +1595,167 @@
           el('span', { class: 'avatar-row', html: Sprites.mascot(pr.avatar) }),
           el('span', { class: 'g-row-main' },
             el('span', { class: 'g-row-title' }, pr.name),
-            el('span', { class: 'g-row-sub' }, `${plural(pr.activeColors.length, 'colour')}, ${plural(pr.sessions.length, 'set')}`)),
-          active ? el('span', { class: 'g-row-end' }, el('span', { class: 'badge' }, 'Playing')) : null),
+            el('span', { class: 'g-row-sub' }, I18n.t('children.summary', {
+              colours: I18n.plural('children.colourCount', pr.activeColors.length),
+              sets: I18n.plural('children.setCount', pr.sessions.length),
+            }))),
+          active ? el('span', { class: 'g-row-end' }, el('span', { class: 'badge' }, I18n.t('common.playing'))) : null),
         data.profiles.length > 1 ? el('button', {
-          class: 'row-remove', 'aria-label': `Remove ${pr.name}`,
+          class: 'row-remove', 'aria-label': I18n.t('children.removeAria', { name: pr.name }),
           onclick: () => openDialog({
-            title: `Remove ${pr.name}?`,
-            body: `This deletes ${pr.name}’s colours and progress from this device. It can’t be undone.`,
-            confirmLabel: 'Remove', danger: true,
+            title: I18n.t('children.removeTitle', { name: pr.name }),
+            body: I18n.t('children.removeBody', { name: pr.name }),
+            confirmLabel: I18n.t('children.removeConfirm'), danger: true,
             onConfirm: () => { Store.removeProfile(pr.id); renderGuardian('profiles'); },
           }),
-        }, 'Remove') : null));
+        }, I18n.t('children.removeConfirm')) : null));
     });
-    body.appendChild(section('Children on this device', list, 'Tap a child to make them the one playing.'));
+    body.appendChild(section(I18n.t('children.onThisDevice'), list, I18n.t('children.tapToSwitch')));
 
     let name = '';
     let avatar = AVATARS[0];
     const nameInput = el('input', {
-      class: 'text-input', type: 'text', placeholder: 'Name', maxlength: '20', 'aria-label': "Child's name",
+      class: 'text-input', type: 'text', placeholder: I18n.t('children.namePlaceholder'), maxlength: '20', 'aria-label': I18n.t('children.nameAria'),
       oninput: (e) => { name = e.target.value; },
     });
-    body.appendChild(section('Add a child', el('div', { class: 'g-card pad form-stack' },
+    body.appendChild(section(I18n.t('children.addChildSection'), el('div', { class: 'g-card pad form-stack' },
       nameInput,
       avatarPicker(avatar, (a) => { avatar = a; }),
       el('div', {}, el('button', { class: 'primary-btn', onclick: () => {
-        Store.addProfile(name.trim() || 'Little One', avatar);
+        Store.addProfile(name.trim() || I18n.t('child.defaultName'), avatar);
         renderGuardian('profiles');
-      } }, 'Add child')))));
+      } }, I18n.t('children.addChildButton'))))));
   }
 
   // --- Guardian: Settings -------------------------------------------------
+  // Language and note names are whole-device preferences (like the PIN), so
+  // they read/write Store's top-level getters/setters, not updateProfile —
+  // and both go through I18n's own setter too, so the rest of this render
+  // (built after these two rows) immediately reflects the new choice.
+  function languageSection() {
+    const langPref = Store.getLanguage();
+    const langOptions = [{ value: 'auto', label: I18n.t('settings.language.automatic') },
+      ...I18n.LANGUAGES.map((l) => ({ value: l.code, label: l.name }))];
+    const langSeg = el('div', { class: 'segmented', role: 'radiogroup', 'aria-label': I18n.t('settings.language.section') },
+      langOptions.map((opt) => el('button', {
+        class: 'seg' + (langPref === opt.value ? ' sel' : ''),
+        role: 'radio', 'aria-checked': langPref === opt.value ? 'true' : 'false',
+        onclick: () => { Store.setLanguage(opt.value); I18n.setLanguage(opt.value); renderGuardian('settings'); },
+      }, opt.label)));
+    const detected = I18n.LANGUAGES.find((l) => l.code === I18n.detectLanguage()) || I18n.LANGUAGES[0];
+
+    const notePref = Store.getNoteNames();
+    const noteOptions = [
+      { value: 'auto', label: I18n.t('settings.language.automatic') },
+      { value: 'letters', label: I18n.t('settings.noteNames.letters') },
+      { value: 'solfege', label: I18n.t('settings.noteNames.solfege') },
+    ];
+    const noteSeg = el('div', { class: 'segmented', role: 'radiogroup', 'aria-label': I18n.t('settings.noteNames.section') },
+      noteOptions.map((opt) => el('button', {
+        class: 'seg' + (notePref === opt.value ? ' sel' : ''),
+        role: 'radio', 'aria-checked': notePref === opt.value ? 'true' : 'false',
+        onclick: () => { Store.setNoteNames(opt.value); I18n.setNoteNames(opt.value); renderGuardian('settings'); },
+      }, opt.label)));
+
+    return section(I18n.t('settings.language.sectionTitle'), el('div', { class: 'g-card g-list' },
+      el('div', { class: 'g-row stack' }, el('span', { class: 'g-row-title' }, I18n.t('settings.language.section')), langSeg),
+      el('p', { class: 'g-row-sub' }, I18n.t('settings.language.footnoteAuto', { language: detected.name })),
+      el('div', { class: 'g-row stack' }, el('span', { class: 'g-row-title' }, I18n.t('settings.noteNames.section')), noteSeg),
+      el('p', { class: 'g-row-sub' }, I18n.t('settings.noteNames.footnote'))));
+  }
+
   function guardianSettings(body) {
     const p = Store.activeProfile();
 
-    const lengths = el('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Rounds per set' },
+    body.appendChild(languageSection());
+
+    const lengths = el('div', { class: 'segmented', role: 'radiogroup', 'aria-label': I18n.t('settings.roundsPerSet') },
       [10, 15, 20, 25].map((n) => el('button', {
         class: 'seg' + (p.roundsPerSet === n ? ' sel' : ''),
         role: 'radio', 'aria-checked': p.roundsPerSet === n ? 'true' : 'false',
         onclick: () => { Store.updateProfile(p.id, { roundsPerSet: n }); renderGuardian('settings'); },
       }, String(n))));
-    body.appendChild(section('Practice', el('div', { class: 'g-card g-list' },
-      el('div', { class: 'g-row stack' }, el('span', { class: 'g-row-title' }, 'Rounds per set'), lengths)),
-      'A standard set is 20 rounds, about 2–3 minutes. Short, frequent sets work best.'));
+    body.appendChild(section(I18n.t('settings.practiceSection'), el('div', { class: 'g-card g-list' },
+      el('div', { class: 'g-row stack' }, el('span', { class: 'g-row-title' }, I18n.t('settings.roundsPerSet')), lengths)),
+      I18n.t('settings.practiceHint')));
 
     const pictureSwitch = el('button', {
-      class: 'switch', role: 'switch', 'aria-checked': p.flagPictures ? 'true' : 'false', 'aria-label': 'Pictures on the flags',
+      class: 'switch', role: 'switch', 'aria-checked': p.flagPictures ? 'true' : 'false', 'aria-label': I18n.t('settings.picturesAria'),
       onclick: () => { Store.updateProfile(p.id, { flagPictures: !p.flagPictures }); renderGuardian('settings'); },
     });
-    body.appendChild(section('Flags', el('div', { class: 'g-card g-list' },
+    body.appendChild(section(I18n.t('settings.flagsSection'), el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row' },
         el('span', { class: 'g-row-main' },
-          el('span', { class: 'g-row-title' }, 'Pictures on the flags')),
+          el('span', { class: 'g-row-title' }, I18n.t('settings.picturesAria'))),
         pictureSwitch)),
-      'Each colour has its own picture, like an apple for red and a star for yellow. It helps a child who finds some colours hard to tell apart: about 1 in 12 boys has some colour blindness. Turn it off for plain colour flags.'));
+      I18n.t('settings.flagsHint')));
 
     const micSwitch = el('button', {
-      class: 'switch', role: 'switch', 'aria-checked': p.realPianoMode ? 'true' : 'false', 'aria-label': 'Real piano mode',
+      class: 'switch', role: 'switch', 'aria-checked': p.realPianoMode ? 'true' : 'false', 'aria-label': I18n.t('mic.realPianoMode'),
       onclick: () => { Store.updateProfile(p.id, { realPianoMode: !p.realPianoMode }); renderGuardian('settings'); },
     });
-    const micSection = section('Real piano mode', el('div', { class: 'g-card g-list' },
+    const micSection = section(I18n.t('mic.realPianoMode'), el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row' },
         el('span', { class: 'g-row-main' },
-          el('span', { class: 'g-row-title' }, 'Listen to a real piano'),
-          el('span', { class: 'g-row-sub' }, 'Experimental')),
+          el('span', { class: 'g-row-title' }, I18n.t('settings.listenToRealPiano')),
+          el('span', { class: 'g-row-sub' }, I18n.t('settings.experimental'))),
         micSwitch)),
-      'A grown-up plays a chord on a nearby piano instead of the app choosing one, and your child still taps the colour. Sound is analysed on this device only; it is never recorded, saved, or sent.');
-    micSection.appendChild(disclosure('How real piano detection works',
-      'It checks for all three keys, listens for a fresh attack, and uses the lowest key it hears to tell inversions apart.',
-      'If the room, instrument, or microphone makes the evidence unclear, it asks to try again instead of assigning a colour.'));
+      I18n.t('mic.explainer'));
+    micSection.appendChild(disclosure(I18n.t('mic.howDetectionWorks'),
+      I18n.t('mic.detectionP1'),
+      I18n.t('mic.detectionP2')));
     body.appendChild(micSection);
 
-    const nameInput = el('input', { class: 'text-input', type: 'text', value: p.name, maxlength: '20', 'aria-label': 'Name' });
-    body.appendChild(section('Child', el('div', { class: 'g-card g-list' },
+    const nameInput = el('input', { class: 'text-input', type: 'text', value: p.name, maxlength: '20', 'aria-label': I18n.t('settings.nameTitle') });
+    body.appendChild(section(I18n.t('settings.childSection'), el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row stack' },
-        el('span', { class: 'g-row-title' }, 'Name'),
+        el('span', { class: 'g-row-title' }, I18n.t('settings.nameTitle')),
         el('div', { class: 'input-row' }, nameInput,
           el('button', { class: 'primary-btn', onclick: () => {
             Store.updateProfile(p.id, { name: nameInput.value.trim() || p.name });
             renderGuardian('settings');
-          } }, 'Save'))),
+          } }, I18n.t('common.save')))),
       el('div', { class: 'g-row stack' },
-        el('span', { class: 'g-row-title' }, 'Look'),
+        el('span', { class: 'g-row-title' }, I18n.t('settings.lookTitle')),
         avatarPicker(p.avatar, (a) => { Store.updateProfile(p.id, { avatar: a }); renderGuardian('settings'); })))));
 
     const pinInput = el('input', {
       class: 'text-input pin-input', type: 'password', inputmode: 'numeric', pattern: '[0-9]*',
-      maxlength: '4', placeholder: '••••', autocomplete: 'new-password', 'aria-label': 'New PIN',
+      maxlength: '4', placeholder: I18n.t('settings.pinPlaceholder'), autocomplete: 'new-password', 'aria-label': I18n.t('settings.newPinTitle'),
     });
     const pinMsg = el('p', { class: 'form-msg', 'aria-live': 'polite' });
-    body.appendChild(section('Grown-up PIN', el('div', { class: 'g-card g-list' },
+    body.appendChild(section(I18n.t('settings.pinSection'), el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row stack' },
-        el('span', { class: 'g-row-title' }, 'New PIN'),
+        el('span', { class: 'g-row-title' }, I18n.t('settings.newPinTitle')),
         el('div', { class: 'input-row' }, pinInput,
           el('button', { class: 'primary-btn', onclick: () => {
             const v = pinInput.value.trim();
             if (!/^\d{4}$/.test(v)) {
-              pinMsg.textContent = 'Enter exactly 4 digits.';
+              pinMsg.textContent = I18n.t('settings.pinInvalid');
               pinMsg.classList.add('bad');
               return;
             }
             Store.setPin(v);
             pinInput.value = '';
             pinMsg.classList.remove('bad');
-            pinMsg.textContent = 'Saved. Use the new PIN next time.';
-          } }, 'Save')),
+            pinMsg.textContent = I18n.t('settings.pinSaved');
+          } }, I18n.t('common.save'))),
         pinMsg)),
       Store.getPin() === Store.DEFAULT_PIN
-        ? `The lock screen shows the demo PIN (${Store.DEFAULT_PIN}) until you set your own. It keeps little fingers out; it isn't real security.`
-        : 'It keeps little fingers out of this area; it isn’t real security.'));
+        ? I18n.t('settings.pinDemoHint', { pin: Store.DEFAULT_PIN })
+        : I18n.t('settings.pinHint')));
 
-    body.appendChild(section('Progress', el('div', { class: 'g-card g-list' },
+    body.appendChild(section(I18n.t('settings.progressSection'), el('div', { class: 'g-card g-list' },
       el('button', { class: 'g-row danger-row', onclick: () => openDialog({
-        title: `Reset ${p.name}’s progress?`,
-        body: 'This clears every practice session, accuracy figure and mix-up for this child. Their colours and settings stay. It can’t be undone.',
-        confirmLabel: 'Reset progress', danger: true,
+        title: I18n.t('settings.resetTitle', { name: p.name }),
+        body: I18n.t('settings.resetBody'),
+        confirmLabel: I18n.t('settings.resetConfirm'), danger: true,
         onConfirm: () => { Store.resetProgress(p.id); renderGuardian('settings'); },
-      }) }, 'Reset this child’s progress'))));
+      }) }, I18n.t('settings.resetButton')))));
 
     body.appendChild(el('div', { class: 'about' },
-      el('p', {}, 'Chord Garden uses the Eguchi Chord Identification Method: children aged about 2–6 learn absolute pitch by matching piano chords to fixed colours. Practise about 5 short times a day.'),
-      el('p', {}, 'All data stays on this device.')));
+      el('p', {}, I18n.t('settings.aboutP1')),
+      el('p', {}, I18n.t('settings.aboutP2'))));
   }
 
   // =======================================================================
@@ -1737,5 +1795,10 @@
   });
 
   // ---- boot --------------------------------------------------------------
+  // Apply the saved (or 'auto') language/note-name preferences before the
+  // very first render — I18n already boots into the browser's language on
+  // its own (see js/i18n.js), but a guardian's saved override has to win.
+  I18n.setLanguage(Store.getLanguage());
+  I18n.setNoteNames(Store.getNoteNames());
   renderHome();
 })();

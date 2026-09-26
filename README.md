@@ -98,7 +98,10 @@ Tap the lock button on the home screen and enter the demo PIN **`2468`**.
 - **Children** — add/switch/remove child profiles (siblings each keep their own
   progress).
 - **Settings** — set length, rename a child, reset progress, turn the pictures
-  on the flags on or off; also **Real piano mode** (below).
+  on the flags on or off; also **Real piano mode** (below). The whole app's
+  **language** (English or Spanish; follows the browser by default, can be
+  changed here) and **note names** (C D E or Do Re Mi) are set here too —
+  device-wide preferences, like the PIN, not per child.
 
 > The PIN is a light gate for demos, **not real security**. All data is stored
 > **only on this device** (browser `localStorage`); nothing is uploaded.
@@ -131,6 +134,7 @@ rainbow-pitch/
 ├─ css/styles.css      # playful child theme + calm guardian theme (light & dark)
 ├─ js/
 │  ├─ data.js          # fixed Eguchi colour ↔ chord mapping
+│  ├─ i18n.js          # English/Spanish strings, note-name spelling (C D E / Do Re Mi)
 │  ├─ sprites.js       # custom inline-SVG mascots, colour flags & UI icons (no emoji)
 │  ├─ audio.js         # Tone.js sampled-piano engine
 │  ├─ chord-detect.js  # pure spectrum/chord classifier

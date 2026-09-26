@@ -9,16 +9,17 @@
 const Store = (() => {
   const KEY = 'rainbow-pitch:v1';
   const BACKUP_KEY = 'rainbow-pitch:backup';
-  const VERSION = 6; // bumped: added the per-profile `flagPictures` toggle
+  const VERSION = 7; // bumped: added top-level `language` and `noteNames` device preferences
 
   const DEFAULT_ACTIVE = ['red', 'yellow']; // start with two so there is a real choice
   const DEFAULT_ROUNDS = 20;                // a standard Practice Set
   const DEFAULT_PIN = '2468';               // demo gate only — not real security
+  const DEFAULT_NAME = () => (typeof I18n !== 'undefined' ? I18n.t('child.defaultName') : 'Little One');
 
   function freshProfile(name, avatar) {
     return {
       id: 'p_' + Math.random().toString(36).slice(2, 9),
-      name: name || 'Little One',
+      name: name || DEFAULT_NAME(),
       avatar: avatar || 'fox',
       activeColors: [...DEFAULT_ACTIVE],
       roundsPerSet: DEFAULT_ROUNDS,
@@ -36,8 +37,12 @@ const Store = (() => {
   }
 
   function defaultData() {
-    const first = freshProfile('Little One', 'fox');
-    return { version: VERSION, activeProfileId: first.id, profiles: [first], pin: DEFAULT_PIN };
+    const first = freshProfile(DEFAULT_NAME(), 'fox');
+    return {
+      version: VERSION, activeProfileId: first.id, profiles: [first], pin: DEFAULT_PIN,
+      language: 'auto',   // whole-device preference, like the PIN — not per child
+      noteNames: 'auto',  // ditto; see js/i18n.js for what 'auto' resolves to
+    };
   }
 
   // Build a garden from legacy sessions (saved before the garden existed):
@@ -59,6 +64,16 @@ const Store = (() => {
       .map((e) => ({ day: e.day, sets: e.sets, colors: Logic.orderColors([...e.colors]) }));
   }
 
+  // Valid language codes are whatever js/i18n.js currently supports (or just
+  // 'en'/'es' if it hasn't loaded — storage.js's own script tag can in
+  // principle run standalone, e.g. in tests that don't load i18n.js).
+  function isValidLanguage(v) {
+    if (v === 'auto') return true;
+    if (typeof I18n !== 'undefined') return I18n.LANGUAGES.some((l) => l.code === v);
+    return v === 'en' || v === 'es';
+  }
+  function isValidNoteNames(v) { return v === 'auto' || v === 'letters' || v === 'solfege'; }
+
   // Bring older saved shapes up to date in place: add anything a newer
   // version of the app would have written, without touching what's already
   // there. Runs silently on every load so old localStorage never gets lost.
@@ -74,6 +89,12 @@ const Store = (() => {
     // The guardian PIN used to be a hard-coded const in app.js; anything
     // saved before it moved into the store needs one filled in here.
     if (typeof data.pin !== 'string' || !/^\d{4}$/.test(data.pin)) data.pin = DEFAULT_PIN;
+    // Whole-device preferences (like the PIN, not per child) added for
+    // language/note-name support — missing or invalid values fall back to
+    // 'auto' rather than any particular language, same reasoning as the PIN
+    // above: an old or corrupted save should never crash, just fall back.
+    if (!isValidLanguage(data.language)) data.language = 'auto';
+    if (!isValidNoteNames(data.noteNames)) data.noteNames = 'auto';
     data.version = VERSION;
     return data;
   }
@@ -222,6 +243,24 @@ const Store = (() => {
     return true;
   }
 
+  // Language and note-name spelling are whole-device preferences (like the
+  // PIN above), not per child — a shared device shouldn't switch languages
+  // every time a guardian picks a different profile.
+  function getLanguage() { return data.language || 'auto'; }
+  function setLanguage(pref) {
+    if (!isValidLanguage(pref)) return false;
+    data.language = pref;
+    save();
+    return true;
+  }
+  function getNoteNames() { return data.noteNames || 'auto'; }
+  function setNoteNames(pref) {
+    if (!isValidNoteNames(pref)) return false;
+    data.noteNames = pref;
+    save();
+    return true;
+  }
+
   return {
     all,
     activeProfile, setActiveProfile,
@@ -229,6 +268,7 @@ const Store = (() => {
     addColor, removeColor,
     recordRound, recordSession, recordRealPianoRound,
     getPin, setPin,
+    getLanguage, setLanguage, getNoteNames, setNoteNames,
     DEFAULT_PIN,
   };
 })();

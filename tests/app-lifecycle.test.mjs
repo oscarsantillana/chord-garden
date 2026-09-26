@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { fakeDom, fakeClock } from './helpers/fake-dom.mjs';
 const flush = () => new Promise(resolve => setImmediate(resolve));
-function setup({ micMode = false, deferredMic = false, deferredChord = false, ringing = true, colors = ['red'] } = {}) {
+function setup({ micMode = false, deferredMic = false, deferredChord = false, ringing = true, colors = ['red'], navigator = {} } = {}) {
   const { app, document } = fakeDom(), clock = fakeClock();
   // The growing garden's past-days layer (see index.html's #garden, right
   // after the hills svg) — not part of fakeDom() itself since only this
@@ -13,7 +13,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   let micStarts = 0, micStops = 0;
   const sandbox = { console, document, ...clock, requestAnimationFrame: callback => callback(),
     window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
-    navigator: {}, localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
+    navigator, localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
     Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '',
       // Reveals whether a caller passed { picture: false } (the flagPictures
       // toggle — see js/storage.js/js/app.js), without needing real SVG markup.
@@ -32,7 +32,10 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
     },
   };
   vm.createContext(sandbox);
-  for (const file of ['data', 'logic', 'storage']) vm.runInContext(fs.readFileSync(new URL(`../js/${file}.js`, import.meta.url), 'utf8'), sandbox);
+  // i18n.js loads right after data.js (same order as index.html) — the
+  // sandbox's navigator defaults to {} (English), so existing label-based
+  // clicks below keep working unless a test explicitly asks for another one.
+  for (const file of ['data', 'i18n', 'logic', 'storage']) vm.runInContext(fs.readFileSync(new URL(`../js/${file}.js`, import.meta.url), 'utf8'), sandbox);
   vm.runInContext('this.store=Store; Store.updateProfile(Store.activeProfile().id, { realPianoMode: ' + micMode + ', activeColors: ' + JSON.stringify(colors) + ', roundsPerSet: 2 });', sandbox);
   vm.runInContext(fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8'), sandbox);
   const chordByName = vm.runInContext('CHORD_BY_NAME', sandbox); // for tests that need to know the (randomly picked) target
@@ -44,7 +47,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   };
   const colorBtn = name => app.querySelector(`.color-btn[data-color="${name}"]`);
   return { app, document, garden, clock, click, played, listens, pendingStarts, pendingChords, windowEvents, rewards,
-    store: sandbox.store, saved, chordByName, colorBtn, get micStarts() { return micStarts; }, get micStops() { return micStops; } };
+    store: sandbox.store, i18n: sandbox.I18n, saved, chordByName, colorBtn, get micStarts() { return micStarts; }, get micStops() { return micStops; } };
 }
 // With two+ active colours the round's target is picked at random; the only
 // way to know which one without reaching into session state is to match the
@@ -366,3 +369,52 @@ console.log('ok - Celebration: nothing scored means nothing to water');
   assert.equal(ui.app.querySelector('.color-btn').textContent, 'plain-flag', 'and a practice round\'s answer flags too');
 }
 console.log('ok - Settings: the flagPictures toggle plainifies Home and practice flags');
+
+{
+  // The whole app follows the browser's language by default (I18n.detectLanguage,
+  // see js/i18n.js) — a Spanish browser sees the Spanish Home screen and gets
+  // <html lang="es">, with no guardian involvement at all.
+  const ui = setup({ navigator: { languages: ['es-ES'] } });
+  assert.equal(ui.app.querySelector('.play-label').textContent, 'Jugar', 'Home shows the Spanish Play label');
+  assert.equal(ui.document.documentElement.lang, 'es', 'the fake <html> gets the resolved language');
+}
+console.log('ok - I18n: a Spanish browser language shows the Spanish Home screen');
+
+{
+  // A guardian can override the language in Settings; it takes effect
+  // immediately (no reload), same as any other Settings toggle.
+  const ui = setup({ navigator: { languages: ['es-ES'] } });
+  assert.equal(ui.app.querySelector('.play-label').textContent, 'Jugar');
+  ui.app.querySelector('.gear').click();
+  for (const digit of ['2', '4', '6', '8']) await ui.click(digit);
+  await ui.click('Ajustes'); // the Settings tab itself is already in Spanish at this point
+  const englishBtn = ui.app.querySelectorAll('button').find((b) => b.textContent === 'English');
+  assert.ok(englishBtn, 'the English option is offered by its own name, untranslated');
+  englishBtn.click(); await flush();
+  await ui.click('Done'); // the Settings screen already re-rendered in English by this point
+  assert.equal(ui.app.querySelector('.play-label').textContent, 'Play', 'overriding to English updates Home immediately');
+  assert.equal(ui.document.documentElement.lang, 'en');
+}
+console.log('ok - I18n: overriding the language in Settings updates the app immediately');
+
+{
+  // The grown-up Colours list shows each chord's name and its notes low to
+  // high, via I18n.chord/I18n.notes — letters in English, solfège in Spanish
+  // (auto note names follow the language; see js/i18n.js's noteNames()).
+  const rowSubFor = (ui, colorLabel) => {
+    const mains = ui.app.querySelectorAll('.g-row-main');
+    const main = mains.find((m) => m.children[0].textContent === colorLabel);
+    assert.ok(main, `a row for "${colorLabel}" is visible`);
+    return main.children[1].textContent;
+  };
+  const en = setup();
+  en.app.querySelector('.gear').click();
+  for (const digit of ['2', '4', '6', '8']) await en.click(digit);
+  assert.equal(rowSubFor(en, 'Yellow'), 'Chord F/C · C F A');
+
+  const es = setup({ navigator: { languages: ['es-ES'] } });
+  es.app.querySelector('.gear').click();
+  for (const digit of ['2', '4', '6', '8']) await es.click(digit);
+  assert.equal(rowSubFor(es, 'Amarillo'), 'Acorde Fa/Do · Do Fa La');
+}
+console.log('ok - I18n: the Colours list shows chord names and notes in the current language/note-name spelling');
