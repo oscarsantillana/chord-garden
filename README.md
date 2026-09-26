@@ -165,7 +165,9 @@ rainbow-pitch/
 ## Development
 
 No build step — this is still a static site, so there's nothing to compile
-or bundle.
+or bundle. Before changing the code, by hand or with a coding agent, read
+[AGENTS.md](AGENTS.md): the release and version rules, the things that must
+never be renamed, the product rules, and the test harness's quirks.
 
 Run all regression tests, including the 405-condition detector sweep:
 
