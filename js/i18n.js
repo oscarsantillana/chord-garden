@@ -255,6 +255,18 @@ const I18n = (() => {
       'settings.aboutP1': 'Chord Garden uses the Eguchi Chord Identification Method: children aged about 2–6 learn absolute pitch by matching piano chords to fixed colours. Practise about 5 short times a day.',
       'settings.aboutP2': 'All data stays on this device.',
 
+      // ---- Settings: About (version + manual update check) ------------------
+      'settings.about.section': 'About',
+      'settings.about.version': 'Version {version}',
+      'settings.about.check': 'Check for updates',
+      'settings.about.checking': 'Checking…',
+      'settings.about.upToDate': 'You’re up to date.',
+      'settings.about.updating': 'Updating…',
+      'settings.about.offline': 'Couldn’t check. Are you online?',
+      'settings.about.unsupported': 'This browser always loads the newest version.',
+      'settings.about.updated': 'Updated to version {version}.',
+      'settings.about.footnote': 'New versions also install by themselves and switch over the next time the home screen is showing.',
+
       // ---- Settings: language + note names (new in this change) --------------
       'settings.language.section': 'Language',
       'settings.language.sectionTitle': 'Language and notes',
@@ -484,6 +496,17 @@ const I18n = (() => {
       'settings.resetConfirm': 'Reiniciar progreso',
       'settings.aboutP1': 'Chord Garden usa el método de identificación de acordes de Eguchi: los niños de unos 2 a 6 años desarrollan el oído absoluto asociando acordes de piano a colores fijos. Practica unas 5 veces al día, en sesiones cortas.',
       'settings.aboutP2': 'Todos los datos se quedan en este dispositivo.',
+
+      'settings.about.section': 'Acerca de',
+      'settings.about.version': 'Versión {version}',
+      'settings.about.check': 'Buscar actualizaciones',
+      'settings.about.checking': 'Buscando…',
+      'settings.about.upToDate': 'Ya tienes la última versión.',
+      'settings.about.updating': 'Actualizando…',
+      'settings.about.offline': 'No se pudo comprobar. ¿Tienes conexión?',
+      'settings.about.unsupported': 'Este navegador siempre carga la última versión.',
+      'settings.about.updated': 'Actualizada a la versión {version}.',
+      'settings.about.footnote': 'Las versiones nuevas también se instalan solas y se aplican la próxima vez que aparece la pantalla de inicio.',
 
       'settings.language.section': 'Idioma',
       'settings.language.sectionTitle': 'Idioma y notas',

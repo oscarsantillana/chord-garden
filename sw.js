@@ -13,7 +13,10 @@
 
 // Bump this on every release: the shell is served cache-first, so returning
 // devices only refetch it when the version (and thus this file) changes.
-const CACHE_NAME = 'rainbow-pitch-v17';
+// It carries APP_VERSION from js/app.js (a test in tests/version.test.mjs
+// enforces this) — browsers decide a new sw.js exists by diffing this file's
+// bytes, so the version has to live here literally, not in an imported script.
+const CACHE_NAME = 'rainbow-pitch-v0.1.0';
 
 // The local app shell: everything needed to boot the app with no network.
 const APP_SHELL = [
@@ -29,6 +32,7 @@ const APP_SHELL = [
   'js/fresh-chord-gate.js',
   'js/mic-capture.js',
   'js/storage.js',
+  'js/updates.js',
   'js/app.js',
   'assets/favicon.svg',
   'assets/manifest.json',
@@ -68,6 +72,13 @@ self.addEventListener('install', (event) => {
       }
     })
   );
+});
+
+// The page asks a waiting version to take over once it's safe to reload (see
+// js/updates.js's apply()) — this is what lets skipWaiting happen only at a
+// moment app.js chooses, never the instant a new version finishes installing.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

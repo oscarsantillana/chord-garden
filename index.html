@@ -51,19 +51,7 @@
   <script src="js/fresh-chord-gate.js" defer></script>
   <script src="js/mic-capture.js" defer></script>
   <script src="js/storage.js" defer></script>
+  <script src="js/updates.js" defer></script>
   <script src="js/app.js" defer></script>
-
-  <script>
-    // Register the service worker so the app shell, Tone.js, and the piano
-    // samples all keep working offline after the first visit. Guarded on
-    // http(s) because file:// (opening index.html directly) can't register
-    // a SW at all — it should just keep working as before, minus offline
-    // support, rather than throwing in the console.
-    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js');
-      });
-    }
-  </script>
 </body>
 </html>
