@@ -78,6 +78,17 @@ whole app — including the piano samples — working fully offline when served
 over http(s) (e.g. GitHub Pages). Opening `index.html` directly via `file://`
 still works, just without offline caching.
 
+An installed copy also updates itself: a new version downloads in the
+background and switches over automatically the next time the child Home
+screen is showing (never mid-set or mid-celebration), which matters on
+iPhone/iPad where an installed PWA can stay open in the app switcher for
+days. Settings → About shows the running version and a "Check for updates"
+button for a grown-up who wants to update right away. Release checklist:
+bump the version on every release, as MAJOR.MINOR.PATCH (a patch for a fix,
+a minor for new features; 1.0.0 once the app is ready), in `APP_VERSION` in
+`js/app.js` and `CACHE_NAME` in `sw.js` together — a test
+(`tests/version.test.mjs`) fails the suite if they drift apart.
+
 ---
 
 ## Using the app
@@ -143,6 +154,7 @@ rainbow-pitch/
 │  ├─ real-piano-acceptance.js # pure ground-truth acceptance recorder
 │  ├─ storage.js       # profiles, stats & sessions in localStorage
 │  ├─ logic.js         # pure decision logic: readiness, weighted picking, confusions
+│  ├─ updates.js       # service-worker registration + app-update lifecycle
 │  └─ app.js           # all screens & the practice loop
 ├─ sw.js               # service worker — offline cache for the app shell + piano samples
 ├─ tests/              # plain-Node logic, detector, gate, and piano-fixture tests

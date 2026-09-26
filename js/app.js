@@ -11,6 +11,18 @@
  */
 
 (() => {
+  // The release, as MAJOR.MINOR.PATCH: bump the patch for a fix, the minor
+  // for new features, and 1.0.0 once the app is ready. Bump it on EVERY
+  // release, together with sw.js's CACHE_NAME, which must carry the same
+  // version (tests/version.test.mjs enforces this). Shown in Settings →
+  // About and compared against Store's persisted seenVersion at boot, below.
+  const APP_VERSION = '0.1.0';
+  // Set once at boot (below) when the persisted seenVersion is a different
+  // version — i.e. this app session is running right after an update, not a
+  // first install. Read by guardianSettings' About section to show
+  // "Updated to version N." for the rest of this session only.
+  let updatedTo = null;
+
   const AVATARS = Sprites.animals; // custom SVG mascots (see sprites.js)
 
   const app = document.getElementById('app');
@@ -243,6 +255,16 @@
     return btn;
   }
 
+  // True only when the child Home screen is what's actually showing — no
+  // practice session running (a set, mic priming, or the celebration all
+  // leave `session` set until they finish) and no guardian screen in its
+  // place. This is the one moment an app update is safe to apply and reload
+  // without surprising or interrupting anyone — see the Updates.init/
+  // renderHome calls below and at the bottom of this file.
+  function onChildHome() {
+    return !session && !!app.querySelector('.home');
+  }
+
   function renderHome() {
     clearScreen();
     clearConfetti();
@@ -305,6 +327,10 @@
         el('p', { class: 'today-label' }, I18n.t('home.tapFlagHint')),
         flags)));
     renderGarden(p);
+    // An update that arrived mid-set, mid-celebration, or during a guardian
+    // visit couldn't apply then (see onChildHome above) — Home showing again
+    // is the next safe moment, so catch up on it now.
+    if (Updates.hasUpdate()) Updates.apply();
   }
 
   // A lightweight in-app overlay instead of window.confirm — with 3+ kids
@@ -1664,6 +1690,47 @@
       el('p', { class: 'g-row-sub' }, I18n.t('settings.noteNames.footnote'))));
   }
 
+  // The version row + manual "Check for updates" — see js/updates.js for the
+  // actual mechanics. The status line starts already showing "Updated to
+  // version N." when this session just started right after an update
+  // (updatedTo, set once at boot below); a manual check overwrites it with
+  // its own outcome, same as any other button-triggered status message.
+  function aboutSection() {
+    const status = el('span', { class: 'g-row-sub about-status', 'aria-live': 'polite' },
+      updatedTo ? I18n.t('settings.about.updated', { version: updatedTo }) : '');
+    const checkBtn = el('button', {
+      class: 'secondary-btn',
+      onclick: async () => {
+        checkBtn.disabled = true;
+        status.classList.remove('bad');
+        status.textContent = I18n.t('settings.about.checking');
+        const result = await Updates.check();
+        if (result === 'updating') {
+          // A reload is imminent (Updates.check() already called apply()) —
+          // leave the button disabled rather than re-enabling it for an
+          // instant right before the page goes away.
+          status.textContent = I18n.t('settings.about.updating');
+          return;
+        }
+        checkBtn.disabled = false;
+        status.textContent = {
+          unsupported: I18n.t('settings.about.unsupported'),
+          offline: I18n.t('settings.about.offline'),
+          none: I18n.t('settings.about.upToDate'),
+        }[result] || '';
+        if (result === 'offline') status.classList.add('bad');
+      },
+    }, I18n.t('settings.about.check'));
+
+    return section(I18n.t('settings.about.section'), el('div', { class: 'g-card g-list' },
+      el('div', { class: 'g-row' },
+        el('span', { class: 'g-row-main' },
+          el('span', { class: 'g-row-title' }, I18n.t('settings.about.version', { version: APP_VERSION })),
+          status),
+        checkBtn)),
+      I18n.t('settings.about.footnote'));
+  }
+
   function guardianSettings(body) {
     const p = Store.activeProfile();
 
@@ -1753,6 +1820,7 @@
         onConfirm: () => { Store.resetProgress(p.id); renderGuardian('settings'); },
       }) }, I18n.t('settings.resetButton')))));
 
+    body.appendChild(aboutSection());
     body.appendChild(el('div', { class: 'about' },
       el('p', {}, I18n.t('settings.aboutP1')),
       el('p', {}, I18n.t('settings.aboutP2'))));
@@ -1800,5 +1868,23 @@
   // its own (see js/i18n.js), but a guardian's saved override has to win.
   I18n.setLanguage(Store.getLanguage());
   I18n.setNoteNames(Store.getNoteNames());
+
+  // A different stored seenVersion means this session just started right
+  // after an update (not a first install, where seenVersion is null) —
+  // remember that for the About section, then record the version now running
+  // either way, so it's only ever shown once per update. "Different", not
+  // "older": versions are strings, and the only way to a different one is a
+  // release.
+  const seenVersion = Store.getSeenVersion();
+  if (seenVersion !== null && seenVersion !== APP_VERSION) updatedTo = APP_VERSION;
+  Store.setSeenVersion(APP_VERSION);
+
+  // Register the service worker and watch for a waiting update. Applying it
+  // is only ever safe while the child Home screen is showing (never mid-set,
+  // mid-celebration, or during a guardian visit) — see onChildHome above and
+  // renderHome's own check for an update that arrives while Home is already
+  // showing.
+  Updates.init({ onReady: () => { if (onChildHome()) Updates.apply(); } });
+
   renderHome();
 })();

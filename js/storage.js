@@ -9,7 +9,7 @@
 const Store = (() => {
   const KEY = 'rainbow-pitch:v1';
   const BACKUP_KEY = 'rainbow-pitch:backup';
-  const VERSION = 7; // bumped: added top-level `language` and `noteNames` device preferences
+  const VERSION = 8; // bumped: added top-level `seenVersion` device preference (see js/updates.js)
 
   const DEFAULT_ACTIVE = ['red', 'yellow']; // start with two so there is a real choice
   const DEFAULT_ROUNDS = 20;                // a standard Practice Set
@@ -42,6 +42,7 @@ const Store = (() => {
       version: VERSION, activeProfileId: first.id, profiles: [first], pin: DEFAULT_PIN,
       language: 'auto',   // whole-device preference, like the PIN — not per child
       noteNames: 'auto',  // ditto; see js/i18n.js for what 'auto' resolves to
+      seenVersion: null,  // ditto; null means "first install" — see js/app.js's boot sequence
     };
   }
 
@@ -95,6 +96,10 @@ const Store = (() => {
     // above: an old or corrupted save should never crash, just fall back.
     if (!isValidLanguage(data.language)) data.language = 'auto';
     if (!isValidNoteNames(data.noteNames)) data.noteNames = 'auto';
+    // A version string (one this device has already booted into) or null
+    // (never recorded / corrupted) — anything else falls back to null,
+    // same reasoning as language/noteNames above.
+    if (typeof data.seenVersion !== 'string') data.seenVersion = null;
     data.version = VERSION;
     return data;
   }
@@ -261,6 +266,15 @@ const Store = (() => {
     return true;
   }
 
+  // The app version (js/app.js's APP_VERSION) this device last booted into —
+  // used only to show a one-session "Updated to version N" line in Settings
+  // (see js/app.js's boot sequence), never to gate anything.
+  function getSeenVersion() { return typeof data.seenVersion === 'string' ? data.seenVersion : null; }
+  function setSeenVersion(v) {
+    data.seenVersion = typeof v === 'string' ? v : null;
+    save();
+  }
+
   return {
     all,
     activeProfile, setActiveProfile,
@@ -269,6 +283,7 @@ const Store = (() => {
     recordRound, recordSession, recordRealPianoRound,
     getPin, setPin,
     getLanguage, setLanguage, getNoteNames, setNoteNames,
+    getSeenVersion, setSeenVersion,
     DEFAULT_PIN,
   };
 })();

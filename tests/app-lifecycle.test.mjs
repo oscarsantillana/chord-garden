@@ -3,17 +3,25 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { fakeDom, fakeClock } from './helpers/fake-dom.mjs';
 const flush = () => new Promise(resolve => setImmediate(resolve));
-function setup({ micMode = false, deferredMic = false, deferredChord = false, ringing = true, colors = ['red'], navigator = {} } = {}) {
+function setup({ micMode = false, deferredMic = false, deferredChord = false, ringing = true, colors = ['red'], navigator = {}, seed = {} } = {}) {
+  // Only the update-check tests below pass a `navigator.serviceWorker` — by
+  // default it's {} (no serviceWorker), so js/updates.js's Updates.init()
+  // stays inert, same as opening the app via file:// or in an old browser.
+  const location = { protocol: 'https:', reload: () => {} };
   const { app, document } = fakeDom(), clock = fakeClock();
   // The growing garden's past-days layer (see index.html's #garden, right
   // after the hills svg) — not part of fakeDom() itself since only this
   // suite's Home/garden tests need it.
   const garden = document.createElement('div'); garden.id = 'garden'; document.body.appendChild(garden);
   const saved = new Map(), windowEvents = {}, played = [], listens = [], pendingStarts = [], pendingChords = [], rewards = [];
+  // Seeded BEFORE storage.js runs below, so its very first `load()` (at
+  // module eval time) reads it back — same as a returning device.
+  Object.entries(seed).forEach(([k, v]) => saved.set(k, v));
   let micStarts = 0, micStops = 0;
   const sandbox = { console, document, ...clock, requestAnimationFrame: callback => callback(),
     window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
-    navigator, localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
+    navigator, location,
+    localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
     Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '',
       // Reveals whether a caller passed { picture: false } (the flagPictures
       // toggle — see js/storage.js/js/app.js), without needing real SVG markup.
@@ -35,7 +43,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   // i18n.js loads right after data.js (same order as index.html) — the
   // sandbox's navigator defaults to {} (English), so existing label-based
   // clicks below keep working unless a test explicitly asks for another one.
-  for (const file of ['data', 'i18n', 'logic', 'storage']) vm.runInContext(fs.readFileSync(new URL(`../js/${file}.js`, import.meta.url), 'utf8'), sandbox);
+  for (const file of ['data', 'i18n', 'logic', 'storage', 'updates']) vm.runInContext(fs.readFileSync(new URL(`../js/${file}.js`, import.meta.url), 'utf8'), sandbox);
   vm.runInContext('this.store=Store; Store.updateProfile(Store.activeProfile().id, { realPianoMode: ' + micMode + ', activeColors: ' + JSON.stringify(colors) + ', roundsPerSet: 2 });', sandbox);
   vm.runInContext(fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8'), sandbox);
   const chordByName = vm.runInContext('CHORD_BY_NAME', sandbox); // for tests that need to know the (randomly picked) target
@@ -418,3 +426,78 @@ console.log('ok - I18n: overriding the language in Settings updates the app imme
   assert.equal(rowSubFor(es, 'Amarillo'), 'Acorde Fa/Do · Do Fa La');
 }
 console.log('ok - I18n: the Colours list shows chord names and notes in the current language/note-name spelling');
+
+// A fake navigator.serviceWorker whose register() resolves to a fake
+// registration (no waiting/installing worker by default, i.e. "nothing to
+// update") — see js/updates.js for the shape it expects.
+function fakeServiceWorker(registrationOverrides = {}) {
+  const registration = {
+    waiting: null, installing: null,
+    update: async () => {},
+    addEventListener() {},
+    ...registrationOverrides,
+  };
+  return { controller: null, register: async () => registration, addEventListener() {} };
+}
+const openSettings = async (ui) => {
+  ui.app.querySelector('.gear').click();
+  for (const digit of ['2', '4', '6', '8']) await ui.click(digit);
+  await ui.click('Settings');
+};
+
+{
+  // Settings → About: the version row is always shown; with no
+  // navigator.serviceWorker at all (this suite's default sandbox — same as
+  // file:// or an old browser), a manual check can only ever report that.
+  const ui = setup();
+  await openSettings(ui);
+  const versionRow = ui.app.querySelectorAll('.g-row-title').find((n) => n.textContent === 'Version 0.1.0');
+  assert.ok(versionRow, 'About shows "Version 0.1.0"');
+  await ui.click('Check for updates');
+  assert.equal(ui.app.querySelector('.about-status').textContent, 'This browser always loads the newest version.');
+}
+console.log('ok - Settings → About: shows the version, and checking without a service worker explains why');
+
+{
+  // With a (fake) service worker registered but nothing new to offer,
+  // "Check for updates" reports up to date. Updates.init() only registers on
+  // 'load' here (document.readyState is unset in this sandbox — see
+  // js/updates.js), so the test fires it manually first.
+  const ui = setup({ navigator: { serviceWorker: fakeServiceWorker() } });
+  ui.windowEvents.load(); await flush();
+  await openSettings(ui);
+  await ui.click('Check for updates');
+  assert.equal(ui.app.querySelector('.about-status').textContent, 'You’re up to date.');
+}
+console.log('ok - Settings → About: "Check for updates" reports up to date when nothing new is found');
+
+{
+  // seenVersion (js/storage.js): non-strings normalise to null, version
+  // strings round-trip.
+  const ui = setup();
+  ui.store.setSeenVersion(18);
+  assert.equal(ui.store.getSeenVersion(), null, 'a non-string normalises to null');
+  ui.store.setSeenVersion('0.0.9');
+  assert.equal(ui.store.getSeenVersion(), '0.0.9');
+}
+console.log('ok - Store: seenVersion normalises non-strings to null and keeps version strings');
+
+{
+  // A device that last ran an older version (not a first install, which
+  // stores seenVersion: null) sees "Updated to version 0.1.0." in About as soon
+  // as as Settings is opened, for the rest of this session.
+  const seedProfile = {
+    id: 'p1', name: 'Kid', avatar: 'fox',
+    activeColors: ['red', 'yellow'], roundsPerSet: 20, realPianoMode: false, flagPictures: true,
+    stats: {}, sessions: [], events: [], garden: [],
+  };
+  const seedData = {
+    version: 8, activeProfileId: seedProfile.id, profiles: [seedProfile], pin: '2468',
+    language: 'auto', noteNames: 'auto', seenVersion: '0.0.9',
+  };
+  const ui = setup({ seed: { 'rainbow-pitch:v1': JSON.stringify(seedData) } });
+  await openSettings(ui);
+  assert.equal(ui.app.querySelector('.about-status').textContent, 'Updated to version 0.1.0.');
+  assert.equal(ui.store.getSeenVersion(), '0.1.0', 'the newly-running version is persisted right away');
+}
+console.log('ok - Settings → About: a different stored seenVersion shows "Updated to version 0.1.0." for this session');

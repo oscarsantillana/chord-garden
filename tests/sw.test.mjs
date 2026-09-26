@@ -7,6 +7,7 @@ const entries = new Map([[root + 'index.html', new Response('main app')]]);
 const writes = [];
 let precached = [];
 let offline = false;
+let skipWaitingCalls = 0;
 const cache = {
   async addAll(requests) { precached = requests; },
   async add() {},
@@ -18,7 +19,11 @@ const cache = {
 };
 const context = {
   URL, Request, console,
-  self: { location: { href: root + 'sw.js' }, addEventListener: (name, callback) => { handlers[name] = callback; } },
+  self: {
+    location: { href: root + 'sw.js' },
+    addEventListener: (name, callback) => { handlers[name] = callback; },
+    skipWaiting() { skipWaitingCalls++; },
+  },
   caches: { async open() { return cache; }, match: cache.match },
   async fetch(request) {
     if (offline) throw new Error('offline');
@@ -45,3 +50,13 @@ assert.equal(await (await dispatch('index.html')).text(), 'fresh app');
 assert.equal(await (await dispatch('./')).text(), 'fresh app');
 assert.equal(dispatch('tools/real-piano-acceptance/'), undefined, 'offline tool navigation must not receive the main shell');
 console.log('ok - service worker keeps app and tool documents separate, with an offline app fallback');
+
+// The page (js/updates.js) asks a waiting version to take over by posting
+// this message; every other message must be ignored.
+handlers.message({ data: { type: 'SKIP_WAITING' } });
+assert.equal(skipWaitingCalls, 1, 'a SKIP_WAITING message calls self.skipWaiting()');
+handlers.message({ data: { type: 'something-else' } });
+handlers.message({ data: null });
+handlers.message({});
+assert.equal(skipWaitingCalls, 1, 'any other message is ignored');
+console.log('ok - service worker calls skipWaiting only for a SKIP_WAITING message');
