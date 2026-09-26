@@ -169,3 +169,30 @@ await new Promise((resolve) => setTimeout(resolve, 150));
 assert.equal(ringingAudio.isChordRinging(), false, 'a short chord should stop ringing once its delay+duration has passed');
 
 console.log('ok - isChordRinging tracks held pitched output through play, stop, and natural end');
+
+// unlock() asks iOS for a media-playback audio session, so an iPhone in
+// silent mode still plays the piano; a browser that rejects it still starts.
+for (const [label, audioSession] of [
+  ['supported', { type: 'auto' }],
+  ['rejected', Object.defineProperty({}, 'type', { get() { return 'auto'; }, set() { throw new TypeError('unsupported'); } })],
+]) {
+  const sessionSandbox = {
+    console,
+    setTimeout,
+    clearTimeout,
+    Date,
+    navigator: { audioSession },
+    Tone: {
+      Sampler: FakeSampler,
+      NoiseSynth: FakeNoiseSynth,
+      async start() {},
+      now() { return 0; },
+    },
+  };
+  vm.createContext(sessionSandbox);
+  vm.runInContext(`${audioSource}\nthis.PianoAudio = PianoAudio;`, sessionSandbox);
+  await sessionSandbox.PianoAudio.unlock();
+  if (label === 'supported') assert.equal(audioSession.type, 'playback', 'unlock should request a playback audio session');
+}
+
+console.log('ok - unlock requests a playback audio session where the browser offers one');

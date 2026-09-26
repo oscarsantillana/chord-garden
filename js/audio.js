@@ -95,6 +95,15 @@ const PianoAudio = (() => {
     if (typeof Tone === 'undefined') {
       throw new Error('The audio library did not load — check your connection and try again.');
     }
+    // iPhones mute Web Audio while the Ring/Silent switch (or Silent mode)
+    // is on, unless the page declares it plays media like a music app does
+    // (the Audio Session API, Safari 16.4+). The piano is the whole point of
+    // this app, so ask for 'playback' before starting the context; it also
+    // pauses other apps' audio, like any music player. Browsers without the
+    // API skip this, and older iPhones still need silent mode switched off.
+    try {
+      if (typeof navigator !== 'undefined' && navigator.audioSession) navigator.audioSession.type = 'playback';
+    } catch (e) { /* unsupported session type — nothing else to try */ }
     await Tone.start();
     started = true;
     await ensureSampler();
