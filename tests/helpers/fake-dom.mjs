@@ -32,7 +32,11 @@ export function fakeDom() {
   const body = new Element('body');
   const app = body.appendChild(new Element('main')); app.id = 'app';
   const confetti = body.appendChild(new Element('div')); confetti.id = 'confetti';
-  return { app, document: { body, createElement: tag => new Element(tag), createTextNode: text => new Element('#text', text),
+  // documentElement + title exist so js/i18n.js's setLanguage() (which sets
+  // document.documentElement.lang and document.title) has somewhere to
+  // write, same as a real page's <html> and <title>.
+  return { app, document: { body, documentElement: new Element('html'), title: '',
+    createElement: tag => new Element(tag), createTextNode: text => new Element('#text', text),
     getElementById(id) { return [body, ...body.querySelectorAll('')].find(node => node.id === id) || null; },
   } };
 }
