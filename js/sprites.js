@@ -389,7 +389,11 @@ const Sprites = (() => {
   // shape in its ink tone; poles, knob and mound are styled from CSS
   // (.flag-pole etc.) so the day/night garden themes can recolour them.
   // .flag-cloth is the group that waves when the flag is picked.
-  function flag(chord) {
+  //
+  // `picture` (default true) draws the shape on the cloth as a second,
+  // colour-independent cue (see the comment in data.js); a guardian can turn
+  // it off per child for plain colour flags, which just skips that one group.
+  function flag(chord, { picture = true } = {}) {
     const body = SHAPE_BODIES[chord.shape] || '';
     return `<svg viewBox="0 0 110 168" xmlns="http://www.w3.org/2000/svg" class="sprite flag" aria-hidden="true" focusable="false">
       <ellipse class="flag-mound" cx="18" cy="164" rx="15" ry="4"/>
@@ -398,7 +402,7 @@ const Sprites = (() => {
       <g class="flag-cloth">
         <path class="flag-fabric" d="M22 16 C44 6 70 26 104 14 L104 90 C70 102 44 82 22 92 Z" fill="${chord.swatch}"/>
         <path d="M22 16 C44 6 70 26 104 14 L104 24 C70 36 44 16 22 26 Z" fill="#fff" opacity=".16"/>
-        <g transform="translate(40 30) scale(0.46)" style="color:${chord.text}">${body}</g>
+        ${picture ? `<g transform="translate(40 30) scale(0.46)" style="color:${chord.text}">${body}</g>` : ''}
       </g>
     </svg>`;
   }

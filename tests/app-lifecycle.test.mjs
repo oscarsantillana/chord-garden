@@ -14,7 +14,11 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   const sandbox = { console, document, ...clock, requestAnimationFrame: callback => callback(),
     window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
     navigator: {}, localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
-    Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '', flag: () => '', plant: (stage) => `plant-${stage}` },
+    Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '',
+      // Reveals whether a caller passed { picture: false } (the flagPictures
+      // toggle — see js/storage.js/js/app.js), without needing real SVG markup.
+      flag: (c, o = {}) => (o.picture === false ? 'plain-flag' : 'picture-flag'),
+      plant: (stage) => `plant-${stage}` },
     PianoAudio: {
       async unlock() {}, stopAll() {}, async whenOutputSilent() {}, playSparkle() {},
       isChordRinging: () => ringing,
@@ -346,3 +350,19 @@ console.log('ok - Celebration: the actions show themselves after 8s even if the 
   assert.equal(ui.app.querySelector('.cele-actions').classList.contains('waiting'), false);
 }
 console.log('ok - Celebration: nothing scored means nothing to water');
+
+{
+  // The guardian-only flagPictures toggle (default on): Home's flags and a
+  // practice round's flags follow it, without anything else changing.
+  const ui = setup();
+  const p = ui.store.activeProfile();
+  assert.equal(ui.app.querySelector('.today-swatch').textContent, 'picture-flag', 'Home flags show pictures by default');
+
+  ui.store.updateProfile(p.id, { flagPictures: false });
+  await ui.click('Play'); await ui.click('All done'); await ui.click('Home');
+  assert.equal(ui.app.querySelector('.today-swatch').textContent, 'plain-flag', 'turning pictures off plainifies Home\'s flags');
+
+  await ui.click('Play'); await ui.clock.tick(500);
+  assert.equal(ui.app.querySelector('.color-btn').textContent, 'plain-flag', 'and a practice round\'s answer flags too');
+}
+console.log('ok - Settings: the flagPictures toggle plainifies Home and practice flags');

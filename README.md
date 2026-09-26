@@ -97,8 +97,8 @@ Tap the lock button on the home screen and enter the demo PIN **`2468`**.
 - **Progress** — accuracy per colour, recent sessions, and a JSON export.
 - **Children** — add/switch/remove child profiles (siblings each keep their own
   progress).
-- **Settings** — set length, rename a child, reset progress; also **Real piano
-  mode** (below).
+- **Settings** — set length, rename a child, reset progress, turn the pictures
+  on the flags on or off; also **Real piano mode** (below).
 
 > The PIN is a light gate for demos, **not real security**. All data is stored
 > **only on this device** (browser `localStorage`); nothing is uploaded.

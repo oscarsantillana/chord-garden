@@ -9,8 +9,7 @@
 const Store = (() => {
   const KEY = 'rainbow-pitch:v1';
   const BACKUP_KEY = 'rainbow-pitch:backup';
-  const VERSION = 5; // bumped: added per-profile `garden` — one entry per local day
-                      // with at least one saved Practice Set, for the growing-garden feature
+  const VERSION = 6; // bumped: added the per-profile `flagPictures` toggle
 
   const DEFAULT_ACTIVE = ['red', 'yellow']; // start with two so there is a real choice
   const DEFAULT_ROUNDS = 20;                // a standard Practice Set
@@ -24,6 +23,7 @@ const Store = (() => {
       activeColors: [...DEFAULT_ACTIVE],
       roundsPerSet: DEFAULT_ROUNDS,
       realPianoMode: false, // guardian-only toggle; Home/Practice is unchanged when false
+      flagPictures: true, // guardian-only toggle; plain colour flags when false
       // Per-colour running tallies, used only for guardian progress + readiness.
       stats: {},          // { colorName: { correct, seen } }
       sessions: [],       // [{ ts, rounds, correct, colors:[...] }]
@@ -66,6 +66,7 @@ const Store = (() => {
     data.profiles.forEach((p) => {
       if (!Array.isArray(p.events)) p.events = [];
       if (typeof p.realPianoMode !== 'boolean') p.realPianoMode = false;
+      if (typeof p.flagPictures !== 'boolean') p.flagPictures = true;
       // storage.js loads after logic.js (see index.html's script order), so
       // Logic.* is safe to call here and in recordSession below.
       if (!Array.isArray(p.garden)) p.garden = gardenFromSessions(p.sessions);

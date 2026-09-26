@@ -209,6 +209,45 @@ function plain(value) {
   console.log('ok - Store: old saved data without a garden is backfilled from sessions on load');
 }
 
+// --- Store: flagPictures defaults and normalises --------------------------------
+
+{
+  const { Store } = loadContext();
+  assert.equal(Store.activeProfile().flagPictures, true, 'a fresh profile defaults to pictures on');
+  console.log('ok - Store: a fresh profile starts with flagPictures true');
+}
+{
+  const oldProfile = {
+    id: 'p_old2', name: 'Kid', avatar: 'fox',
+    activeColors: ['red', 'yellow'], roundsPerSet: 20, realPianoMode: false,
+    stats: {}, sessions: [], events: [], garden: [],
+    // deliberately no `flagPictures` — a v5-shaped save from before this toggle existed
+  };
+  const oldData = { version: 5, activeProfileId: oldProfile.id, profiles: [oldProfile], pin: '2468' };
+  const { Store } = loadContext({ seed: { 'rainbow-pitch:v1': JSON.stringify(oldData) } });
+  assert.equal(Store.activeProfile().flagPictures, true, 'saved data without the field normalises to true');
+  console.log('ok - Store: old saved data without flagPictures normalises to true');
+}
+
+// --- Sprites.flag: the picture option ----------------------------------------------
+
+{
+  const Sprites = loadSprites();
+  const { CHORDS } = loadContext({ withStore: false });
+  const red = CHORDS.find((c) => c.name === 'red'); // apple shape
+
+  const withPicture = Sprites.flag(red);
+  assert.ok(withPicture.includes('<circle cx="50" cy="66" r="27"'), 'default includes the apple picture group');
+  assert.ok(withPicture.includes('scale(0.46)'));
+  assert.ok(withPicture.includes(`fill="${red.swatch}"`), 'and still carries the swatch fill');
+
+  const plain = Sprites.flag(red, { picture: false });
+  assert.equal(plain.includes('<circle cx="50" cy="66" r="27"'), false, 'picture: false leaves out the apple picture group');
+  assert.equal(plain.includes('scale(0.46)'), false);
+  assert.ok(plain.includes(`fill="${red.swatch}"`), 'the swatch fill is unchanged');
+  console.log('ok - Sprites.flag: { picture: false } leaves out the picture group but keeps the swatch');
+}
+
 // --- Sprites.plant: petal counts ----------------------------------------------------
 
 {

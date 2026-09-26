@@ -254,7 +254,7 @@
         class: 'today-swatch',
         title: c.label,
         'aria-label': c.label,
-        html: Sprites.flag(c),
+        html: Sprites.flag(c, { picture: p.flagPictures }),
         onclick: async () => {
           // Presentation-mode taps are best-effort — if the piano hasn't
           // loaded yet, the Play button above is where a real retry with a
@@ -667,6 +667,7 @@
     // under the correct-answer confetti.
     const continuing = !!app.querySelector('.practice');
     clearScreen();
+    const p = Store.activeProfile();
     // How far along the set the child is, as a fraction of the vine.
     const target = session.total > 0 ? Math.min(1, session.index / session.total) : 0;
 
@@ -681,7 +682,7 @@
     const mascotEl = el('div', {
       class: 'journey-mascot' + (session.mode !== 'mic' && session.cueing ? ' listening' : ''),
       id: 'mascot',
-      html: Sprites.mascot(Store.activeProfile().avatar, baselineMood()),
+      html: Sprites.mascot(p.avatar, baselineMood()),
     });
     const journey = el('div', {
       class: 'vine', role: 'progressbar', 'aria-label': 'Rounds played',
@@ -727,7 +728,7 @@
       class: 'color-btn',
       'data-color': c.name,
       'aria-label': c.label,
-      html: Sprites.flag(c),
+      html: Sprites.flag(c, { picture: p.flagPictures }),
       onclick: () => onAnswer(c),
     });
 
@@ -1339,7 +1340,7 @@
         title: locked ? 'At least one colour stays on' : null,
         onclick: () => { if (!locked) toggleColor(c.name); },
       },
-        el('span', { class: 'row-flag', html: Sprites.flag(c) }),
+        el('span', { class: 'row-flag', html: Sprites.flag(c, { picture: p.flagPictures }) }),
         el('span', { class: 'g-row-main' },
           el('span', { class: 'g-row-title' }, c.label),
           el('span', { class: 'g-row-sub', title: 'Chord (grown-up only)' }, 'Chord ' + c.chord)),
@@ -1619,6 +1620,17 @@
     body.appendChild(section('Practice', el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row stack' }, el('span', { class: 'g-row-title' }, 'Rounds per set'), lengths)),
       'A standard set is 20 rounds, about 2–3 minutes. Short, frequent sets work best.'));
+
+    const pictureSwitch = el('button', {
+      class: 'switch', role: 'switch', 'aria-checked': p.flagPictures ? 'true' : 'false', 'aria-label': 'Pictures on the flags',
+      onclick: () => { Store.updateProfile(p.id, { flagPictures: !p.flagPictures }); renderGuardian('settings'); },
+    });
+    body.appendChild(section('Flags', el('div', { class: 'g-card g-list' },
+      el('div', { class: 'g-row' },
+        el('span', { class: 'g-row-main' },
+          el('span', { class: 'g-row-title' }, 'Pictures on the flags')),
+        pictureSwitch)),
+      'Each colour has its own picture, like an apple for red and a star for yellow. It helps a child who finds some colours hard to tell apart: about 1 in 12 boys has some colour blindness. Turn it off for plain colour flags.'));
 
     const micSwitch = el('button', {
       class: 'switch', role: 'switch', 'aria-checked': p.realPianoMode ? 'true' : 'false', 'aria-label': 'Real piano mode',
