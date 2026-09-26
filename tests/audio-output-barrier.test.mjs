@@ -67,7 +67,7 @@ assert.equal(resolved, false, 'the barrier must remain closed during the sampler
 
 await silence;
 const elapsed = Date.now() - startedAt;
-assert.ok(elapsed >= 1050, `the barrier resolved too early for a 1.2s release tail (${elapsed}ms)`);
+assert.ok(elapsed >= 250, `the barrier resolved too early for a 0.3s release tail (${elapsed}ms)`);
 assert.ok(releaseCalls >= 2, 'playback and stop should both release prior sampler voices');
 
 const alreadySilentAt = Date.now();
@@ -137,3 +137,35 @@ assert.equal(
 );
 
 console.log('ok - audio output barrier: waits through release tails and cancelled in-flight loading');
+
+// isChordRinging() — a fresh sandbox/sampler so its state starts clean.
+const ringingSandbox = {
+  console,
+  setTimeout,
+  clearTimeout,
+  Date,
+  Tone: {
+    Sampler: FakeSampler,
+    NoiseSynth: FakeNoiseSynth,
+    async start() {},
+    now() { return 0; },
+  },
+};
+vm.createContext(ringingSandbox);
+vm.runInContext(`${audioSource}\nthis.PianoAudio = PianoAudio;`, ringingSandbox);
+const ringingAudio = ringingSandbox.PianoAudio;
+
+assert.equal(ringingAudio.isChordRinging(), false, 'nothing has played yet');
+
+await ringingAudio.playChord(['C4', 'E4', 'G4'], 0.2);
+assert.equal(ringingAudio.isChordRinging(), true, 'a chord that was just triggered should still be ringing');
+
+ringingAudio.stopAll();
+assert.equal(ringingAudio.isChordRinging(), false, 'stopAll should end the ringing chord');
+
+await ringingAudio.playChord(['C4', 'E4', 'G4'], 0.05);
+assert.equal(ringingAudio.isChordRinging(), true, 'a freshly played short chord should still be ringing');
+await new Promise((resolve) => setTimeout(resolve, 150));
+assert.equal(ringingAudio.isChordRinging(), false, 'a short chord should stop ringing once its delay+duration has passed');
+
+console.log('ok - isChordRinging tracks held pitched output through play, stop, and natural end');

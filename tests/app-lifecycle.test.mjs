@@ -3,16 +3,18 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { fakeDom, fakeClock } from './helpers/fake-dom.mjs';
 const flush = () => new Promise(resolve => setImmediate(resolve));
-function setup({ micMode = false, deferredMic = false, deferredChord = false } = {}) {
+function setup({ micMode = false, deferredMic = false, deferredChord = false, ringing = true } = {}) {
   const { app, document } = fakeDom(), clock = fakeClock();
-  const saved = new Map(), windowEvents = {}, played = [], listens = [], pendingStarts = [], pendingChords = [];
+  const saved = new Map(), windowEvents = {}, played = [], listens = [], pendingStarts = [], pendingChords = [], rewards = [];
   let micStarts = 0, micStops = 0;
   const sandbox = { console, document, ...clock, requestAnimationFrame: callback => callback(),
     window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
     navigator: {}, localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
     Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '', flag: () => '' },
     PianoAudio: {
-      async unlock() {}, stopAll() {}, async whenOutputSilent() {}, playCue() {}, playPop() {}, playSparkle() {}, async playReward() {},
+      async unlock() {}, stopAll() {}, async whenOutputSilent() {}, playSparkle() {},
+      isChordRinging: () => ringing,
+      async playReward(notes) { rewards.push([...notes]); },
       playChord(notes) { played.push([...notes]); return deferredChord ? new Promise(resolve => pendingChords.push(resolve)) : Promise.resolve(); },
     },
     MicCapture: {
@@ -31,7 +33,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false } =
     assert.ok(button, `button ${label} is visible: ${document.body.textContent}`);
     const pending = button.click(); await flush(); return { pending };
   };
-  return { app, clock, click, played, listens, pendingStarts, pendingChords, windowEvents,
+  return { app, clock, click, played, listens, pendingStarts, pendingChords, windowEvents, rewards,
     store: sandbox.store, saved, get micStarts() { return micStarts; }, get micStops() { return micStops; } };
 }
 {
@@ -50,7 +52,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false } =
 }
 {
   const ui = setup();
-  await ui.click('Play'); await ui.clock.tick(1050);
+  await ui.click('Play'); await ui.clock.tick(500);
   ui.app.querySelector('.color-btn').click();
   await ui.click('All done'); await ui.click('Play again');
   await ui.clock.tick(2200);
@@ -59,19 +61,46 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false } =
 }
 {
   const ui = setup({ deferredChord: true });
-  await ui.click('Play'); await ui.clock.tick(1050);
+  await ui.click('Play'); await ui.clock.tick(500);
   await ui.click('All done'); await ui.click('Play again');
   ui.pendingChords[0](); await flush();
   assert.ok(ui.app.querySelector('.answers').classList.contains('waiting'), 'old playback completion cannot unlock a new round');
-  await ui.clock.tick(1050); ui.pendingChords[1](); await flush();
+  await ui.clock.tick(500); ui.pendingChords[1](); await flush();
   assert.equal(ui.app.querySelector('.answers').classList.contains('waiting'), false);
 }
 {
   const ui = setup();
-  await ui.click('Play'); await ui.click('All done'); await ui.click('Play again'); await ui.clock.tick(1050);
-  assert.equal(ui.played.length, 1, 'stopping during the cue cancels the old chord timer');
+  await ui.click('Play'); await ui.click('All done'); await ui.click('Play again'); await ui.clock.tick(500);
+  assert.equal(ui.played.length, 1, 'stopping before the chord cancels the old chord timer');
   ui.windowEvents.pagehide(); await ui.clock.tick(5000);
   ui.windowEvents.pageshow({ persisted: true }); assert.ok(ui.app.querySelector('.home'));
+}
+{
+  // ringing (default): a correct tap lands while the just-played chord is
+  // still ringing, so it isn't replayed and the next round follows at the
+  // shorter 800ms beat.
+  const ui = setup();
+  await ui.click('Play'); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  assert.equal(ui.rewards.length, 0, 'a still-ringing chord is not replayed');
+  await ui.clock.tick(799);
+  assert.equal(ui.played.length, 1, 'the next round has not started yet');
+  await ui.clock.tick(1); await ui.clock.tick(500);
+  assert.equal(ui.played.length, 2, "next round's chord sounds 800 + 500 ms after the tap");
+}
+{
+  // not ringing (a slow answer, or real-piano mode where the app never
+  // played the chord itself): the correct tap replays the chord softly, and
+  // the round waits the longer 1100ms beat so that replay is heard.
+  const ui = setup({ ringing: false });
+  await ui.click('Play'); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  assert.equal(ui.rewards.length, 1, 'a faded chord is replayed once');
+  assert.deepEqual(ui.rewards[0], ui.played[0], 'the replay uses the target chord notes');
+  await ui.clock.tick(1099);
+  assert.equal(ui.played.length, 1, 'the next round has not started yet');
+  await ui.clock.tick(1); await ui.clock.tick(500);
+  assert.equal(ui.played.length, 2, "next round's chord sounds 1100 + 500 ms after the tap");
 }
 {
   const ui = setup(); const p = ui.store.activeProfile();

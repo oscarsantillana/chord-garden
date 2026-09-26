@@ -8,8 +8,8 @@
  * Samples: the public "Salamander" grand piano set hosted on the Tone.js CDN.
  * These load lazily on first use and are cached by the browser afterwards.
  *
- * Public API: unlock, playChord, playReward, playCue, playPop, playSparkle,
- * stopAll, whenOutputSilent.
+ * Public API: unlock, playChord, playReward, playSparkle, stopAll,
+ * whenOutputSilent, isChordRinging.
  */
 
 const PianoAudio = (() => {
@@ -26,7 +26,10 @@ const PianoAudio = (() => {
   // onload would just never fire — this bounds how long the Start button can
   // sit on "Waking the piano…" before we give up and let the grown-up retry.
   const LOAD_TIMEOUT_MS = 20000;
-  const RELEASE_SECONDS = 1.2;
+  // A damper-like key release, not a long concert-hall tail — short enough
+  // that clearRoundWork()'s stopAll() at the top of nextRound() leaves a
+  // clean gap before the next chord instead of bleeding into it.
+  const RELEASE_SECONDS = 0.3;
 
   let sampler = null;
   let started = false;
@@ -34,6 +37,11 @@ const PianoAudio = (() => {
   // A stop invalidates playback that crossed an async load boundary.
   let pitchedOperationGeneration = 0;
   let pitchedOutputUntil = 0;
+  // When the most recent pitched output stops being HELD (i.e. when its
+  // attack+sustain ends and only the release tail remains) — see
+  // isChordRinging(), which treats a chord still in its release as no longer
+  // "ringing" for reward-replay purposes.
+  let pitchedHeldUntil = 0;
 
   // Build the sampler on demand and remember the "loaded" promise.
   let loadPromise = null;
@@ -111,12 +119,13 @@ const PianoAudio = (() => {
         pitchedOutputUntil,
         Date.now() + (delay + duration + RELEASE_SECONDS) * 1000
       );
+      pitchedHeldUntil = Math.max(pitchedHeldUntil, Date.now() + (delay + duration) * 1000);
     } finally {
       pendingPitchedOperations -= 1;
     }
   }
 
-  function playChord(notes, duration = 2.2) {
+  function playChord(notes, duration = 3.0) {
     return playPitched(notes, duration, 1);
   }
 
@@ -159,82 +168,24 @@ const PianoAudio = (() => {
     }
   }
 
-  let cueSynth = null;
-  function ensureCueSynth() {
-    if (cueSynth) return cueSynth;
-    // A soft filtered-noise tick — the "new round, ears on" attention cue
-    // that lands right before a chord plays (see nextRound() in app.js).
-    // Deliberately its own drier sound rather than reusing the sparkle
-    // flourish, so the two stay easy to tell apart by ear: this one means
-    // "listen now", sparkle means "you finished". Non-pitched for the same
-    // reason as every other decorative sound here — see the file header for
-    // why pitch content is reserved for the piano. Raised from -28 to -20
-    // (same level as the sparkle) after feedback that the original tick was
-    // too subtle to notice on a phone speaker.
-    cueSynth = new Tone.NoiseSynth({
-      noise: { type: 'pink' },
-      envelope: { attack: 0.001, decay: 0.05, sustain: 0 },
-    }).toDestination();
-    cueSynth.volume.value = -20;
-    return cueSynth;
-  }
-
-  /**
-   * Two quick gentle non-pitched ticks ("knock knock, ears on") played just
-   * before a chord sounds, so the child learns "this sound = new round" —
-   * distinct enough from a single ambient noise to actually be noticed —
-   * instead of the reward replay and the next chord blurring into one
-   * stream of piano.
-   */
-  async function playCue() {
-    try {
-      if (typeof Tone === 'undefined') return; // nothing to do without Tone
-      const synth = ensureCueSynth();
-      const now = Tone.now();
-      synth.triggerAttackRelease('32n', now);
-      synth.triggerAttackRelease('32n', now + 0.18);
-    } catch (e) {
-      // Purely decorative — never let a synth hiccup hold up a round.
-    }
-  }
-
-  let popSynth = null;
-  function ensurePopSynth() {
-    if (popSynth) return popSynth;
-    // The tap-time "yes!" for a correct answer — brighter and quicker than
-    // the cue tick above, but still just filtered noise, never a pitched
-    // note. The chord reward replay (playReward) stays the one actual
-    // "reward sound"; this is only the tactile pop underneath it.
-    popSynth = new Tone.NoiseSynth({
-      noise: { type: 'white' },
-      envelope: { attack: 0.001, decay: 0.12, sustain: 0 },
-    }).toDestination();
-    popSynth.volume.value = -16; // brighter than the cue tick, still gentle
-    return popSynth;
-  }
-
-  /**
-   * A soft non-pitched "pop" at the instant a correct tap lands — distinct
-   * from both the cue tick and the chord reward replay (see playReward for
-   * why that one stays the acoustic centrepiece of a correct answer).
-   */
-  async function playPop() {
-    try {
-      if (typeof Tone === 'undefined') return; // nothing to do without Tone
-      const synth = ensurePopSynth();
-      synth.triggerAttackRelease('16n', Tone.now());
-    } catch (e) {
-      // Purely decorative — never let a synth hiccup interrupt success feedback.
-    }
-  }
-
   function stopAll() {
     pitchedOperationGeneration += 1;
+    pitchedHeldUntil = 0;
     if (!sampler) return;
     sampler.releaseAll();
     if (pitchedOutputUntil > Date.now()) {
       pitchedOutputUntil = Date.now() + RELEASE_SECONDS * 1000;
     }
+  }
+
+  /**
+   * Whether the most recently played chord is still sounding (scheduled or
+   * actually held) rather than fading through its release tail or already
+   * silent. A correct tap that lands while this is true doesn't need a
+   * separate reward replay — the chord it's rewarding is already ringing.
+   */
+  function isChordRinging() {
+    return pendingPitchedOperations > 0 || Date.now() < pitchedHeldUntil;
   }
 
   // Resolves only after every pending piano scheduling operation has settled
@@ -259,10 +210,9 @@ const PianoAudio = (() => {
     unlock,
     playChord,
     playReward,
-    playCue,
-    playPop,
     playSparkle,
     stopAll,
     whenOutputSilent,
+    isChordRinging,
   };
 })();
