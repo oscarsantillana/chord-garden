@@ -97,6 +97,7 @@
       MicCapture.stop();
     }
     clear(app);
+    clearGarden(); // every screen but Home shows the bare hills — see renderHome for where it's filled back in
   }
 
   async function beginPractice(button, error) {
@@ -148,6 +149,87 @@
   // =======================================================================
   //  HOME  (Child Start)
   // =======================================================================
+  // aria-label text for Sprites.plant's stages 0-5 — see Logic.plantStage.
+  const STAGE_NAMES = ['not planted yet', 'a seed', 'a sprout', 'growing leaves', 'a bud', 'in bloom'];
+
+  // Colour names -> the swatch hex each one draws with, for Sprites.plant's
+  // bud tips/petals — same lookup flag() uses, just plural and tolerant of
+  // an unknown/missing name (a colour later removed from CHORDS shouldn't
+  // blank out a past day's whole flower).
+  function swatchesOf(names) {
+    return (names || []).map((n) => CHORD_BY_NAME[n]).filter(Boolean).map((c) => c.swatch);
+  }
+
+  // The back hill's ridge height (0-340, the hills SVG's own viewBox) at a
+  // horizontal fraction of its width — so a garden flower's `bottom` can
+  // rest right on the drawn hill instead of a flat line. Mirrors
+  // index.html's `.hill-back` path (`M0 90 C90 30 200 40 390 74`) exactly;
+  // the two must stay in sync. Bézier x(t) isn't easily invertible, so this
+  // samples t in 0..1 and interpolates — x(t)/390 is monotonic across the
+  // curve, so a linear search is enough.
+  const HILL_BACK = [[0, 90], [90, 30], [200, 40], [390, 74]];
+  function backHillY(xFrac) {
+    const x = xFrac * 390;
+    const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = HILL_BACK;
+    const steps = 64;
+    let prevX = x0, prevY = y0;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const mt = 1 - t;
+      const px = mt * mt * mt * x0 + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t * x3;
+      const py = mt * mt * mt * y0 + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y3;
+      if (x <= px) {
+        const span = px - prevX;
+        const frac = span > 0 ? (x - prevX) / span : 0;
+        return prevY + (py - prevY) * frac;
+      }
+      prevX = px; prevY = py;
+    }
+    return y3;
+  }
+
+  // Empties the garden layer — every screen but Home shows the bare hills
+  // (see clearScreen below). Tolerates the layer not existing (older test
+  // sandboxes, or index.html not yet loaded).
+  function clearGarden() {
+    const layer = document.getElementById('garden');
+    if (layer) clear(layer);
+  }
+
+  // Draws every PAST day's plant along the back hill (today's plant lives in
+  // .today-plant on the home screen itself, not here — see renderHome).
+  // Flowers are placed by percentage of #garden, which is styled to match
+  // .scene-hills exactly (see styles.css), because the hills stretch
+  // non-uniformly with the viewport; percentages of that box are what keep
+  // a flower sitting on the ridge at any width.
+  function renderGarden(p) {
+    clearGarden();
+    const layer = document.getElementById('garden');
+    if (!layer) return;
+    const { past } = Logic.gardenDays(p.garden);
+    if (!past.length) return;
+    const width = window.innerWidth || 390;
+    const n = Math.max(4, Math.floor(width / 36));
+    // One slot per hill position, nearest-to-centre first, skipping the gap
+    // reserved for today's plant (centred in #app).
+    const slots = [];
+    for (let i = 0; i < n; i++) {
+      const xFrac = (i + 0.5) / n;
+      if (Math.abs(xFrac - 0.5) * width < 50) continue;
+      slots.push(xFrac);
+    }
+    slots.sort((a, b) => Math.abs(a - 0.5) - Math.abs(b - 0.5));
+    past.slice(0, slots.length).forEach((day, i) => {
+      const xFrac = slots[i];
+      const y = backHillY(xFrac);
+      layer.appendChild(el('div', {
+        class: 'garden-flower',
+        style: `left:${(xFrac * 100).toFixed(2)}%;bottom:calc(${((340 - y) / 340 * 100).toFixed(2)}% - 4px)`,
+        html: Sprites.plant(Logic.plantStage(day.sets), swatchesOf(day.colors)),
+      }));
+    });
+  }
+
   // The big round Play button (home and celebration). The label sits inside
   // the button, under the disc, so the whole thing is one tap target.
   function playButton(label, error) {
@@ -184,13 +266,17 @@
         },
       })));
 
-    // Five daisies, one in bloom per Practice Set played today — a gentle
-    // cadence nudge with no numbers and nothing to feel bad about (a bud is
-    // just "not yet", never "0 of 5").
-    const played = Math.min(setsToday(p), 5);
-    const setsRow = el('div', { class: 'sets-today', role: 'img', 'aria-label': `Sets played today: ${played} of 5` },
-      Array.from({ length: 5 }, (_, i) =>
-        el('span', { class: 'set-flower' + (i < played ? ' bloom' : ''), html: Sprites.icon(i < played ? 'daisy' : 'bud') })));
+    // Today's own plant, growing a stage per Practice Set played today
+    // (Logic.plantStage) — a gentle cadence nudge with no numbers and
+    // nothing to feel bad about (a seed or a bud just reads "not yet",
+    // never "0 of 5"). It's the same plant that joins the garden on the
+    // back hill forever once today is over (see renderGarden).
+    const { today } = Logic.gardenDays(p.garden);
+    const stage = Logic.plantStage(today ? today.sets : 0);
+    const todayPlant = el('div', {
+      class: 'today-plant', role: 'img', 'aria-label': `Today's flower: ${STAGE_NAMES[stage]}`,
+      html: Sprites.plant(stage, swatchesOf(today ? today.colors : [])),
+    });
 
     const startError = el('p', { class: 'start-error', hidden: true },
       'The piano needs the internet the first time — check your connection and try again.');
@@ -209,11 +295,12 @@
           el('h1', { class: 'brand-title' }, 'Chord Garden'),
           el('p', { class: 'brand-sub' }, 'Listen, then pick the flag')),
         startBtn,
-        setsRow,
+        todayPlant,
         startError),
       el('div', { class: 'home-flags' },
         el('p', { class: 'today-label' }, 'Tap a flag to hear its song'),
         flags)));
+    renderGarden(p);
   }
 
   // A lightweight in-app overlay instead of window.confirm — with 3+ kids
@@ -601,6 +688,14 @@
       'aria-valuemin': 0, 'aria-valuemax': session.total, 'aria-valuenow': session.index,
     }, el('div', { class: 'vine-art' }), mascotEl);
 
+    // The watering can at the end of the vine — fills to the same fraction
+    // the vine has grown to (`target`, above); fillCan() tops it up further
+    // as rounds are played without a full rebuild (see moveOnWithChord).
+    const can = el('div', {
+      class: 'vine-can', 'aria-hidden': 'true', style: `--fill:${target}`,
+      html: Sprites.icon('can') + `<span class="can-drop">${Sprites.icon('drop')}</span>`,
+    });
+
     // In mic mode there's nothing to replay until a chord has actually been
     // heard (State A has no session.current yet) — the button only appears
     // once it does, relabelled "Hear it again" (the app replaying its own
@@ -691,7 +786,7 @@
     const stopBtn = el('button', { class: 'calm-stop', onclick: calmStop }, 'All done');
 
     app.appendChild(el('section', { class: 'screen practice' + (continuing ? ' continuing' : '') },
-      el('div', { class: 'practice-top' }, journey, stopBtn),
+      el('div', { class: 'practice-top' }, journey, can, stopBtn),
       el('div', { class: 'listen-wrap' }, micPill, listenBtn),
       el('div', { class: 'answers-wrap' }, answers, roundCue, micRetry)));
     fitAnswers();
@@ -775,6 +870,10 @@
   window.addEventListener('resize', () => {
     fitAnswers();
     if (session) drawVine(vineProgress, vineProgress);
+    // The garden's flower slots are laid out from window width (renderGarden
+    // above), so a rotation/resize on Home needs a redraw to keep them
+    // spaced right, same as the vine/flags above.
+    if (!session && app.querySelector('.home')) renderGarden(Store.activeProfile());
   });
 
   // Swaps the live #mascot element's face in place (no full re-render) —
@@ -896,7 +995,23 @@
     const replay = !PianoAudio.isChordRinging();
     if (replay) PianoAudio.playReward(session.current.notes).catch(() => {});
     session.index += 1;
+    fillCan();
     scheduleRound(nextRound, replay ? 1100 : 800);
+  }
+
+  // Tops up the watering can every round, right or wrong — the reveal
+  // confirm (confirmReveal) goes through moveOnWithChord too, so a missed
+  // round still fills it same as a correct one. Restart-safe like
+  // flutterFlags: removing then re-adding `splash` lets the drop animation
+  // replay even though the class is already present from the last round.
+  function fillCan() {
+    const can = app.querySelector('.vine-can');
+    if (!can || !session) return;
+    const fraction = session.total > 0 ? Math.min(1, session.index / session.total) : 0;
+    can.style.cssText = `--fill:${fraction}`;
+    can.classList.remove('splash');
+    void can.offsetWidth; // restart the animation if it's already run
+    can.classList.add('splash');
   }
 
   function cheer() {
@@ -924,8 +1039,12 @@
     // it would light a star on Home and list a "0 of 0" in Progress.
     // `rounds` counts scored rounds, so a round stopped after a first miss
     // counts (its miss is already in the stats) and a skipped real-piano
-    // round doesn't.
+    // round doesn't. Same reasoning applies to the garden: nothing scored
+    // means nothing to water, so `watering` stays null and the celebration
+    // shows no can at all.
+    let watering = null;
     if (session.played > 0) {
+      const before = Logic.plantStage((Logic.gardenDays(Store.activeProfile().garden).today || { sets: 0 }).sets);
       Store.recordSession({
         ts: Date.now(),
         rounds: session.played,
@@ -935,29 +1054,102 @@
         early,
         ...(session.mode === 'mic' ? { src: 'mic' } : {}),
       });
+      const today = Logic.gardenDays(Store.activeProfile().garden).today;
+      watering = { before, after: Logic.plantStage(today.sets), colors: today.colors };
     }
-    renderCelebration(early, session.colors);
+    renderCelebration(early, session.colors, watering);
     session = null;
   }
 
   // =======================================================================
   //  CELEBRATION  (Child Celebration)
   // =======================================================================
-  function renderCelebration(early, colors) {
+  function renderCelebration(early, colors, watering) {
     clearScreen();
     burstConfetti(70, colors);
-    PianoAudio.playSparkle(); // non-pitched flourish — see audio.js for why
+    const generation = screenGeneration; // clearScreen() bumps this; guards the watering timers below
     const p = Store.activeProfile();
     const startError = el('p', { class: 'start-error', hidden: true });
     const again = playButton('Play again', startError);
-    // A row of daisies bursting into bloom, one after another.
-    app.appendChild(el('section', { class: 'screen celebrate' },
-      el('div', { class: 'cele-mascot', html: Sprites.mascot(p.avatar, 'happy') }),
-      el('h1', { class: 'cele-title' }, early ? 'Nice listening!' : 'You did it!'),
-      el('div', { class: 'stickers', 'aria-hidden': 'true' }, Array.from({ length: 5 }, () => el('span', { class: 'sticker', html: Sprites.icon('daisy') }))),
-      el('div', { class: 'cele-actions' },
-        again,
-        el('button', { class: 'ghost-btn', onclick: renderHome }, 'Home')), startError));
+
+    if (watering === null) {
+      // Nothing was scored (a calm stop before any first tap) — there's no
+      // plant to water, so this is the old layout minus the stickers row:
+      // mascot, title and actions all shown right away.
+      PianoAudio.playSparkle(); // non-pitched flourish — see audio.js for why
+      app.appendChild(el('section', { class: 'screen celebrate' },
+        el('div', { class: 'cele-mascot', html: Sprites.mascot(p.avatar, 'happy') }),
+        el('h1', { class: 'cele-title' }, early ? 'Nice listening!' : 'You did it!'),
+        el('div', { class: 'cele-actions' }, again, el('button', { class: 'ghost-btn', onclick: renderHome }, 'Home')),
+        startError));
+      return;
+    }
+
+    // Something was scored: today's plant grew, and watering it is the
+    // celebration. The plant starts at its stage from BEFORE this set (see
+    // finishPractice) and only grows to `watering.after` once the child
+    // taps the can — the tap is the reward moment, not just a formality.
+    const swatches = swatchesOf(watering.colors);
+    const title = el('h1', { class: 'cele-title' }, early ? 'Nice listening!' : 'You did it!');
+    const hint = el('p', { class: 'cele-hint' }, 'Tap the can to water your flower');
+    const plant = el('div', {
+      class: 'cele-plant', role: 'img', 'aria-label': `Today's flower: ${STAGE_NAMES[watering.before]}`,
+      html: Sprites.plant(watering.before, swatches),
+    });
+    const can = el('button', {
+      class: 'water-can', 'aria-label': 'Water your flower', html: Sprites.icon('can'),
+      onclick: () => water(),
+    });
+    const garden = el('div', { class: 'cele-garden' },
+      can,
+      el('span', { class: 'pour-drop d1', 'aria-hidden': 'true', html: Sprites.icon('drop') }),
+      el('span', { class: 'pour-drop d2', 'aria-hidden': 'true', html: Sprites.icon('drop') }),
+      el('span', { class: 'pour-drop d3', 'aria-hidden': 'true', html: Sprites.icon('drop') }),
+      plant,
+      el('span', { class: 'cele-sparkle s1', 'aria-hidden': 'true', html: Sprites.icon('sparkle') }),
+      el('span', { class: 'cele-sparkle s2', 'aria-hidden': 'true', html: Sprites.icon('sparkle') }),
+      el('span', { class: 'cele-sparkle s3', 'aria-hidden': 'true', html: Sprites.icon('sparkle') }),
+      el('span', { class: 'cele-sparkle s4', 'aria-hidden': 'true', html: Sprites.icon('sparkle') }),
+      el('div', { class: 'cele-mascot', html: Sprites.mascot(p.avatar, 'happy') }));
+    // Actions wait (hidden, not gone — see .waiting in styles.css) until the
+    // plant has grown, so a stray tap on Play again/Home can't skip past the
+    // reward moment by accident. The safety valve below still shows them if
+    // the can is never tapped, so nobody gets stuck here either.
+    const actions = el('div', { class: 'cele-actions waiting' },
+      again, el('button', { class: 'ghost-btn', onclick: renderHome }, 'Home'));
+
+    let watered = false;
+    function water() {
+      if (watered || generation !== screenGeneration) return;
+      watered = true;
+      can.disabled = true;
+      garden.classList.add('watering');
+      hint.classList.add('hidden');
+      setTimeout(() => {
+        if (generation !== screenGeneration) return;
+        plant.innerHTML = Sprites.plant(watering.after, swatches);
+        plant.setAttribute('aria-label', `Today's flower: ${STAGE_NAMES[watering.after]}`);
+        plant.classList.remove('grow');
+        void plant.offsetWidth; // restart the grow animation
+        plant.classList.add('grow');
+        PianoAudio.playSparkle();
+        title.textContent = watering.after === 5 && watering.before < 5
+          ? 'Your flower bloomed!'
+          : watering.after > watering.before ? 'It grew!' : 'Your flower loves it!';
+        if (watering.after === 5) garden.classList.add('bloomed');
+        actions.classList.remove('waiting');
+      }, 900);
+    }
+    // If the can is never tapped, show the actions anyway — the reward is
+    // nice to have, never a gate a child can get stuck behind.
+    setTimeout(() => {
+      if (generation !== screenGeneration) return;
+      actions.classList.remove('waiting');
+    }, 8000);
+
+    // .celebrate-garden stands the garden on the front hill (see styles.css).
+    app.appendChild(el('section', { class: 'screen celebrate celebrate-garden' },
+      el('div', { class: 'cele-top' }, title, hint), garden, actions, startError));
   }
 
   // =======================================================================

@@ -87,7 +87,7 @@ still works, just without offline caching.
 2. Listen to the chord, then tap the matching colour.
 3. A wrong tap is gentle: the right flag glows while the chord plays again, and tapping it moves on. Nothing is marked "wrong."
 4. Tap **All done** any time — stopping early is fine, never a failure.
-5. Finish the set for a little celebration. 🎉
+5. Finish (or stop) the set, then tap the watering can to water today's flower. Each set helps it grow — seed, sprout, leaves, bud — and the fifth set of the day makes it bloom in the colours just practised. Every day's flower stays in the garden on the home screen.
 
 ### Grown-ups
 Tap the lock button on the home screen and enter the demo PIN **`2468`**.

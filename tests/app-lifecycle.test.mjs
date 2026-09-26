@@ -5,12 +5,16 @@ import { fakeDom, fakeClock } from './helpers/fake-dom.mjs';
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function setup({ micMode = false, deferredMic = false, deferredChord = false, ringing = true, colors = ['red'] } = {}) {
   const { app, document } = fakeDom(), clock = fakeClock();
+  // The growing garden's past-days layer (see index.html's #garden, right
+  // after the hills svg) — not part of fakeDom() itself since only this
+  // suite's Home/garden tests need it.
+  const garden = document.createElement('div'); garden.id = 'garden'; document.body.appendChild(garden);
   const saved = new Map(), windowEvents = {}, played = [], listens = [], pendingStarts = [], pendingChords = [], rewards = [];
   let micStarts = 0, micStops = 0;
   const sandbox = { console, document, ...clock, requestAnimationFrame: callback => callback(),
     window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
     navigator: {}, localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
-    Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '', flag: () => '' },
+    Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '', flag: () => '', plant: (stage) => `plant-${stage}` },
     PianoAudio: {
       async unlock() {}, stopAll() {}, async whenOutputSilent() {}, playSparkle() {},
       isChordRinging: () => ringing,
@@ -35,7 +39,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
     const pending = button.click(); await flush(); return { pending };
   };
   const colorBtn = name => app.querySelector(`.color-btn[data-color="${name}"]`);
-  return { app, document, clock, click, played, listens, pendingStarts, pendingChords, windowEvents, rewards,
+  return { app, document, garden, clock, click, played, listens, pendingStarts, pendingChords, windowEvents, rewards,
     store: sandbox.store, saved, chordByName, colorBtn, get micStarts() { return micStarts; }, get micStops() { return micStops; } };
 }
 // With two+ active colours the round's target is picked at random; the only
@@ -241,3 +245,104 @@ console.log('ok - digital mode drops the Listen card for a listening mascot and 
   assert.equal(ui.played.length, 3, 'ticking further does not start an extra round');
 }
 console.log('ok - a wrong tap reveals the answer, waits for it to be confirmed, and falls back if it never is');
+
+{
+  // Home: a fresh profile hasn't planted anything yet, and no past day sits
+  // in the garden. Recording sets (two today, one yesterday) and coming
+  // back to Home should show today's plant grown and yesterday's flower
+  // settled on the back hill.
+  const ui = setup();
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-0');
+  assert.equal(ui.garden.querySelector('.garden-flower'), null);
+
+  const today = Date.now();
+  const yesterday = today - 24 * 60 * 60 * 1000;
+  ui.store.recordSession({ ts: today, rounds: 2, correct: 2, colors: ['red'] });
+  ui.store.recordSession({ ts: today, rounds: 2, correct: 2, colors: ['red'] });
+  ui.store.recordSession({ ts: yesterday, rounds: 2, correct: 2, colors: ['red'] });
+
+  // Navigate away (an empty set — nothing scored) and back so Home re-renders.
+  await ui.click('Play'); await ui.click('All done'); await ui.click('Home');
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-2');
+  const flowers = ui.garden.querySelectorAll('.garden-flower');
+  assert.equal(flowers.length, 1);
+  assert.equal(flowers[0].textContent, 'plant-1');
+}
+console.log('ok - Home: today\'s plant grows with sets played today, and past days join the garden');
+
+{
+  // The watering can at the end of the vine fills a fraction of the set
+  // every round, right or wrong.
+  const ui = setup();
+  await ui.click('Play');
+  const can = ui.app.querySelector('.vine-can');
+  assert.equal(can.style.cssText, '--fill:0');
+  await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  assert.equal(can.style.cssText, '--fill:0.5');
+  assert.ok(can.classList.contains('splash'));
+}
+console.log('ok - Practice: the watering can fills as the set is played');
+
+{
+  // Finishing a set that scored something shows the can+plant scene,
+  // waiting for the child's own tap before the plant actually grows.
+  const ui = setup();
+  await ui.click('Play'); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  await ui.clock.tick(800); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  await ui.clock.tick(800);
+  assert.ok(ui.app.querySelector('.water-can'));
+  assert.ok(ui.app.querySelector('.cele-actions').classList.contains('waiting'));
+  assert.equal(ui.app.querySelector('.cele-plant').textContent, 'plant-0');
+
+  ui.app.querySelector('.water-can').click();
+  await ui.clock.tick(900);
+  assert.equal(ui.app.querySelector('.cele-plant').textContent, 'plant-1');
+  assert.equal(ui.app.querySelector('.cele-title').textContent, 'It grew!');
+  assert.equal(ui.app.querySelector('.cele-actions').classList.contains('waiting'), false);
+}
+console.log('ok - Celebration: tapping the can grows today\'s plant');
+
+{
+  // The 5th set of the day blooms the flower, in the colours just practised.
+  const ui = setup();
+  const today = Date.now();
+  for (let i = 0; i < 4; i++) ui.store.recordSession({ ts: today, rounds: 2, correct: 2, colors: ['red'] });
+  await ui.click('Play'); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  await ui.clock.tick(800); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  await ui.clock.tick(800);
+  ui.app.querySelector('.water-can').click();
+  await ui.clock.tick(900);
+  assert.equal(ui.app.querySelector('.cele-title').textContent, 'Your flower bloomed!');
+  assert.ok(ui.app.querySelector('.cele-garden').classList.contains('bloomed'));
+}
+console.log('ok - Celebration: the 5th set of the day blooms the flower');
+
+{
+  // A child who never taps the can still gets to Play again / Home — the
+  // reward is nice to have, never a gate.
+  const ui = setup();
+  await ui.click('Play'); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  await ui.clock.tick(800); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  await ui.clock.tick(800);
+  assert.ok(ui.app.querySelector('.cele-actions').classList.contains('waiting'));
+  await ui.clock.tick(8000);
+  assert.equal(ui.app.querySelector('.cele-actions').classList.contains('waiting'), false);
+}
+console.log('ok - Celebration: the actions show themselves after 8s even if the can is never tapped');
+
+{
+  // Nothing scored (a calm stop before any first tap) means nothing to
+  // water — no can, and the actions are never hidden waiting for one.
+  const ui = setup();
+  await ui.click('Play'); await ui.click('All done');
+  assert.equal(ui.app.querySelector('.water-can'), null);
+  assert.equal(ui.app.querySelector('.cele-actions').classList.contains('waiting'), false);
+}
+console.log('ok - Celebration: nothing scored means nothing to water');

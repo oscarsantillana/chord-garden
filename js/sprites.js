@@ -260,15 +260,6 @@ const Sprites = (() => {
     flag: svg(`
       <path d="M6 3 V21" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/>
       <path d="M6 4 L19 4 L14.5 8.5 L19 13 L6 13 Z" fill="currentColor"/>`, '0 0 24 24'),
-    // Home's "sets today" row: a bloomed daisy per set played, a bud per set
-    // still to come. Fixed colours, like the mascots.
-    daisy: svg(`
-      <path d="M15 20 V44" stroke="#5E8F46" stroke-width="3"/>
-      <g fill="#fff"><circle cx="21" cy="12" r="5"/><circle cx="18" cy="18.2" r="5"/><circle cx="12" cy="18.2" r="5"/><circle cx="9" cy="12" r="5"/><circle cx="12" cy="5.8" r="5"/><circle cx="18" cy="5.8" r="5"/></g>
-      <circle cx="15" cy="12" r="4.5" fill="#E9A92A"/>`, '0 0 30 44'),
-    bud: svg(`
-      <path d="M15 22 V44" stroke="#5E8F46" stroke-width="3"/>
-      <ellipse cx="15" cy="17" rx="5" ry="8" fill="#6FA656"/>`, '0 0 30 44'),
     // Grown-up UI glyphs, drawn to replace text characters (‹ ⬇ ⌫) that
     // render differently in every font.
     back: svg(`<path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`, '0 0 24 24'),
@@ -279,6 +270,23 @@ const Sprites = (() => {
     backspace: svg(`
       <path d="M9 5 H19 a2 2 0 0 1 2 2 V17 a2 2 0 0 1 -2 2 H9 L3 12 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
       <path d="M11.5 9.5 L16.5 14.5 M16.5 9.5 L11.5 14.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`, '0 0 24 24'),
+    // The growing garden's watering can: it fills a little every round (at
+    // the end of the practice vine) and waters today's plant after a set.
+    // Themed fills/strokes (unlike the plain currentColor icons above) so it
+    // matches day/night like the plant sprite; the water is a pale tint no
+    // chord uses, so it never reads as a flag colour. `.can-water` is a
+    // plain rect the CSS scales to show how full the can is.
+    can: svg(`
+      <path d="M40 24 C40 6 10 6 10 28 C10 40 18 46 26 46" fill="none" stroke-width="5" stroke-linecap="round" style="stroke:var(--ink,#1F3A2E)"/>
+      <path d="M70 58 L90 30" stroke-width="9" stroke-linecap="round" style="stroke:var(--ink,#1F3A2E)"/>
+      <path d="M70 58 L90 30" stroke-width="4" stroke-linecap="round" style="stroke:var(--card,#fff)"/>
+      <ellipse cx="91" cy="26" rx="8" ry="5" transform="rotate(35 91 26)" stroke-width="3" style="fill:var(--card,#fff);stroke:var(--ink,#1F3A2E)"/>
+      <rect x="22" y="24" width="50" height="50" rx="10" stroke-width="4" style="fill:var(--card,#fff);stroke:var(--ink,#1F3A2E)"/>
+      <rect class="can-water" x="26" y="32" width="42" height="38" rx="6" style="fill:var(--water,#BFE3F2)"/>
+      <rect x="19" y="19" width="56" height="8" rx="4" style="fill:var(--ink,#1F3A2E)"/>`, '0 0 100 84'),
+    // One drop of the can's water: it falls into the can after a round and
+    // out of it onto the plant.
+    drop: svg(`<path d="M10 1 C13 7 17 11 17 16 A7 7 0 0 1 3 16 C3 11 7 7 10 1 Z" stroke-width="1.6" style="fill:var(--water,#BFE3F2);stroke:var(--water-ink,#4E8FAE)"/>`, '0 0 20 26'),
   };
 
   function icon(name) {
@@ -395,5 +403,125 @@ const Sprites = (() => {
     </svg>`;
   }
 
-  return { mascot, icon, animals, shape, flag };
+  // ---- Growing garden plant ----------------------------------------------
+  // The day's plant, stages 0 (unplanted) through 5 (bloom) — see
+  // js/logic.js's Logic.plantStage for how a set count maps to a stage.
+  // Unlike the icons/shapes above, stems/leaves/soil are themed (they sit on
+  // the garden scene, which recolours for day/night), while the chord
+  // swatches used for bud tips and bloom petals are fixed, like flag().
+
+  const round2 = (n) => Math.round(n * 100) / 100;
+
+  // How many petals a bloom gets, and where — one petal per practised
+  // colour when there's room to read them individually (n <= 9); past that
+  // a single ring gets too crowded to tell petals apart, so it splits into
+  // an outer and inner ring instead. Below 5 colours the ring repeats (mod
+  // n) so the bloom still reads as a full flower rather than a sparse one.
+  // Petal ORDER is colour order — the order the colours were learned in
+  // (see Logic.orderColors) — so the oldest-known colour always leads.
+  function petalLayout(n) {
+    if (n <= 3) {
+      return Array.from({ length: 6 }, (_, i) => ({ color: i % n, D: 11, RX: 7.5, RY: 10.5, angle: 60 * i }));
+    }
+    if (n === 4) {
+      return Array.from({ length: 8 }, (_, i) => ({ color: i % 4, D: 11.5, RX: 5.8, RY: 10.5, angle: 45 * i }));
+    }
+    if (n <= 9) {
+      const D = 11 + Math.max(0, n - 6) / 3;
+      const RX = Math.min(7.5, 46 / n);
+      return Array.from({ length: n }, (_, i) => ({ color: i, D, RX, RY: 10.5, angle: (360 * i) / n }));
+    }
+    const outer = Math.ceil(n / 2);
+    const inner = n - outer;
+    const outerRX = Math.min(6.2, 43 / outer);
+    const outerPetals = Array.from({ length: outer }, (_, i) =>
+      ({ color: i, D: 13.5, RX: outerRX, RY: 10.5, angle: (360 * i) / outer }));
+    const innerPetals = Array.from({ length: inner }, (_, i) =>
+      ({ color: outer + i, D: 7.5, RX: 3.8, RY: 6.5, angle: (360 * i) / inner + 180 / outer }));
+    return [...outerPetals, ...innerPetals]; // outer ring drawn first, inner ring on top
+  }
+
+  // Stage 4's bud tips hint at the colours about to bloom without yet
+  // committing to petalLayout()'s full ring: 1–2 colours get one tip each;
+  // 3+ collapses to first/middle/last so the still-closed bud doesn't get
+  // crowded before it's even open.
+  function budTips(swatches) {
+    const n = swatches.length;
+    if (n <= 1) {
+      const c = swatches[0] || '#FFFFFF';
+      return `<ellipse class="bud-tip" cx="27" cy="22" rx="3.4" ry="7.5" fill="${c}" transform="rotate(-14 27 22)"/>`
+        + `<ellipse class="bud-tip" cx="33" cy="22" rx="3.4" ry="7.5" fill="${c}" transform="rotate(14 33 22)"/>`;
+    }
+    if (n === 2) {
+      return `<ellipse class="bud-tip" cx="27" cy="22" rx="3.4" ry="7.5" fill="${swatches[0]}" transform="rotate(-14 27 22)"/>`
+        + `<ellipse class="bud-tip" cx="33" cy="22" rx="3.4" ry="7.5" fill="${swatches[1]}" transform="rotate(14 33 22)"/>`;
+    }
+    const mid = swatches[Math.floor((n - 1) / 2)];
+    return `<ellipse class="bud-tip" cx="24.5" cy="23" rx="3" ry="7" fill="${swatches[0]}" transform="rotate(-24 24.5 23)"/>`
+      + `<ellipse class="bud-tip" cx="35.5" cy="23" rx="3" ry="7" fill="${swatches[n - 1]}" transform="rotate(24 35.5 23)"/>`
+      + `<ellipse class="bud-tip" cx="30" cy="20" rx="3.2" ry="7.5" fill="${mid}"/>`;
+  }
+
+  // Stage 5's bloom: petalLayout() picks the ring(s), this just draws them
+  // plus the flower's centre "heart". The thin outline is set once on the
+  // group (not per petal) so it applies to the heart too, keeping every
+  // shape readable against similar-hued neighbours without a heavier stroke
+  // on any one of them.
+  function bloom(swatches) {
+    const colors = swatches.length ? swatches : ['#FFFFFF'];
+    const layout = petalLayout(colors.length);
+    const petals = layout.map((p) => {
+      const d = round2(p.D), rx = round2(p.RX), ry = round2(p.RY), angle = round2(p.angle);
+      return `<ellipse class="petal" cx="0" cy="-${d}" rx="${rx}" ry="${ry}" fill="${colors[p.color]}" transform="rotate(${angle})"/>`;
+    }).join('');
+    const [r1, r2] = colors.length >= 10 ? [5.5, 2.4] : [7, 3]; // smaller heart for the denser two-ring blooms
+    return `<g transform="translate(30 27)" stroke="#1F3A2E" stroke-opacity=".22" stroke-width="1">${petals}`
+      + `<circle class="plant-heart" cx="0" cy="0" r="${r1}" fill="#FFF4D6" stroke-opacity=".3"/>`
+      + `<circle cx="0" cy="0" r="${r2}" fill="#EAD7A6" stroke="none"/></g>`;
+  }
+
+  function plant(stage, swatches) {
+    const st = Math.max(0, Math.min(5, Math.floor(stage) || 0));
+    const colors = Array.isArray(swatches) ? swatches : [];
+    const soil = `<ellipse class="plant-soil" cx="30" cy="87" rx="13" ry="4.5" style="fill:var(--soil,#9B7650)"/>`;
+    const leaf = (d) => `<path class="plant-leaf" d="${d}" style="fill:var(--leaf,#6FA656)"/>`;
+    const stem = (d, width) => `<path class="plant-stem" d="${d}" style="stroke:var(--vine,#5E8F46)" stroke-width="${width}" fill="none" stroke-linecap="round"/>`;
+    let body;
+    if (st === 0) {
+      // Not planted yet: just the plot, with a hole waiting for a seed.
+      body = `<ellipse class="plant-soil" cx="30" cy="86" rx="15" ry="5.5" style="fill:var(--soil,#9B7650)"/>`
+        + `<ellipse cx="30" cy="84.5" rx="5" ry="1.8" style="fill:var(--soil-dark,#7A5B3D)"/>`;
+    } else if (st === 1) {
+      // Seed drawn first, soil second so it covers the seed's lower half —
+      // "just planted" rather than "sitting on top of the ground".
+      body = `<ellipse class="plant-seed" cx="30" cy="80" rx="4.2" ry="5.4" fill="#C9A26B"/>`
+        + `<ellipse class="plant-soil" cx="30" cy="86" rx="15" ry="6" style="fill:var(--soil,#9B7650)"/>`;
+    } else if (st === 2) {
+      body = stem('M30 86 C30 81 30 77 30 72', 3)
+        + leaf('M30 75 C24 74 20 70 19 66 C24 66 28 69 30 73 Z')
+        + leaf('M30 73 C36 72 40 68 41 64 C36 64 32 67 30 71 Z')
+        + soil;
+    } else if (st === 3) {
+      body = stem('M30 87 C30 76 30 64 30 50', 3.5)
+        + leaf('M30 76 C21 75 15 69 13 62 C21 62 27 66 30 72 Z')
+        + leaf('M30 68 C39 67 45 61 47 54 C39 54 33 58 30 64 Z')
+        + leaf('M30 55 C25 54 21 50 20 46 C25 46 28 49 30 52 Z')
+        + leaf('M30 53 C35 52 39 48 40 44 C35 44 32 47 30 50 Z')
+        + soil;
+    } else {
+      // Stages 4 and 5 share the same taller stem shape + two upper leaves;
+      // only the top of the plant (closed bud vs. open bloom) differs.
+      const shared = stem(st === 4 ? 'M30 87 C30 72 31 54 30 38' : 'M30 87 C30 72 31 54 30 36', 3.5)
+        + leaf('M30 72 C21 71 15 65 13 58 C21 58 27 62 30 68 Z')
+        + leaf('M30 62 C39 61 45 55 47 48 C39 48 33 52 30 58 Z')
+        + soil;
+      body = st === 4
+        ? shared + budTips(colors)
+          + `<path d="M21 26 C21 35 25 40 30 40 C35 40 39 35 39 26 C36 29 33 30 30 30 C27 30 24 29 21 26 Z" style="fill:var(--leaf,#6FA656)"/>`
+        : shared + bloom(colors);
+    }
+    return `<svg viewBox="0 0 60 90" xmlns="http://www.w3.org/2000/svg" class="sprite plant" aria-hidden="true" focusable="false">${body}</svg>`;
+  }
+
+  return { mascot, icon, animals, shape, flag, plant };
 })();
