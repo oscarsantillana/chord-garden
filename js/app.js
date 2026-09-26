@@ -422,10 +422,9 @@
     if (!session) return; // a calm stop may have ended the set already
     if (session.mode === 'mic') { nextMicRound(); return; }
     if (session.index >= session.total) return finishPractice(false);
-    // Stop any still-ringing sound from the PREVIOUS round (the reward replay
-    // or a two-miss reveal chord) right away, so its release fade happens
-    // during this round's cue beat instead of bleeding into the new chord
-    // below.
+    // Stop any still-ringing sound from the PREVIOUS round (a reward replay,
+    // in the rare case it played, or a two-miss reveal chord) right away, so
+    // its short damper fade finishes well before the new chord below.
     clearRoundWork();
     session.current = pickTarget();
     session.attempted = false;
@@ -439,22 +438,18 @@
     const roundId = session.roundId = ++roundSequence;
     renderPractice();
     const notes = session.current.notes;
-    // Timings: a beat longer than before (was 500/900ms) to give the stopAll
-    // fade above and the prominent "Listen…" overlay + double-tick cue room
-    // to land as their own unmistakable "new round, ears on" moment —
-    // otherwise the previous chord's tail and this round's chord blur into
-    // one stream of piano.
-    scheduleRound(() => {
-      if (!session || session.roundId !== roundId) return;
-      PianoAudio.playCue();
-    }, 600);
+    // Timings: 500ms gives clearRoundWork()'s stopAll() above its 0.3s
+    // damper fade plus a short silence, so the previous chord never bleeds
+    // into this one. The visual "Listen…" overlay (session.cueing, above) is
+    // the new-round cue now — no audible tick is needed, since a correct
+    // answer no longer re-strikes the chord for the child to mistake it for.
     scheduleRound(() => {
       if (!session) return;
       // If the chord genuinely fails to play (e.g. the sampler load timed
       // out), unlock the answer grid anyway — a silent, chordless round is
       // better than a frozen screen the child can't get past.
       PianoAudio.playChord(notes).then(() => unlockAnswers(roundId), () => unlockAnswers(roundId));
-    }, 1050);
+    }, 500);
   }
 
   // Which colours the adult may play from in real-piano mode — always the
@@ -773,23 +768,25 @@
       if (firstAttempt) session.streak += 1;
       btn.classList.add('correct');
       cheer();
-      // A little burst of non-pitched, tactile "yes!" right at tap time —
-      // the chord reward replay just below stays the acoustic centrepiece;
-      // this is only the quick pop/buzz under the tapped button itself. The
-      // vibrate call is wrapped because plenty of browsers/devices simply
-      // don't have navigator.vibrate, and a couple that do still throw if
-      // it's blocked by permissions policy — either way it should never
-      // interrupt the success feedback.
-      PianoAudio.playPop();
+      // A little tactile "yes!" right at tap time. The vibrate call is
+      // wrapped because plenty of browsers/devices simply don't have
+      // navigator.vibrate, and a couple that do still throw if it's blocked
+      // by permissions policy — either way it should never interrupt the
+      // success feedback.
       try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) { /* no-op — see comment above */ }
-      // Replay the target chord itself, softer, rather than a cheerful
-      // little arpeggio: hearing the SAME chord again right at the moment
-      // of success is the reinforcement the Eguchi method relies on. A
-      // different pitched "ta-da" in the same piano timbre would just be
-      // new pitch content landing on top of the association we're building.
-      PianoAudio.playReward(session.current.notes).catch(() => {});
+      // A correct tap usually lands while the chord that was just played is
+      // still ringing — so the flag lights up against the chord itself, the
+      // chord+colour pairing the Eguchi method relies on, with no need to
+      // strike it a second time. Only when it's already faded (a slow
+      // answer, or real-piano mode where the app never played the chord —
+      // the grown-up did) is it replayed softly, and then the round waits
+      // the longer 1100ms so that replay is actually heard. Otherwise
+      // 800ms is enough for the glow/confetti/happy mascot to land with the
+      // chord before the next round's fade.
+      const replay = !PianoAudio.isChordRinging();
+      if (replay) PianoAudio.playReward(session.current.notes).catch(() => {});
       session.index += 1;
-      scheduleRound(nextRound, 1100);
+      scheduleRound(nextRound, replay ? 1100 : 800);
     } else {
       // Any miss breaks the happy streak, and gets a brief, gentle
       // "curious" face — never a lingering state; a new round always starts
