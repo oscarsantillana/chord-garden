@@ -342,9 +342,9 @@
       current: null,
       repeat: 0,        // consecutive count of the current colour
       attempted: false, // whether this round already counted toward stats
-      misses: 0,        // wrong taps so far this round
       locked: false,
-      cueing: false,    // true while the "Listen…" cue is showing, pre-chord
+      revealing: false, // true from a wrong tap until the glowing flag is confirmed
+      cueing: false,    // true pre-chord: mic mode's card, digital mode's listening mascot
       roundId: 0,
       timers: new Set(),
       streak: 0,        // consecutive FIRST-ATTEMPT-correct rounds; any miss resets it
@@ -353,8 +353,7 @@
       micArmed: false,   // flips true after FreshChordGate has a calm baseline
     };
     vineProgress = 0;
-    renderPractice();
-    nextRound();
+    nextRound(); // renders the first round's screen (and its fade-in)
   }
 
   // The mascot's resting (non-transient) mood: happy once a child is on a
@@ -393,9 +392,24 @@
     session.locked = false;
     session.cueing = false;
     const answersEl = app.querySelector('.answers');
-    if (answersEl) answersEl.classList.remove('waiting');
+    if (answersEl) answersEl.classList.remove('waiting', 'dim');
     const cueEl = app.querySelector('.round-cue');
-    if (cueEl) cueEl.classList.add('hidden'); // the cue's job is done once answers unlock
+    if (cueEl) cueEl.classList.add('hidden'); // the cue's job is done once answers unlock (mic mode only — digital has no card)
+  }
+
+  // Digital mode's only round-start cue is the chord itself, so the flags
+  // flutter in place the instant it sounds — "the chord is here, your turn"
+  // — without hinting at the answer (every flag moves identically). Restart-
+  // safe (Listen again can retrigger it mid-round) by removing the class and
+  // forcing a reflow before re-adding it, since re-adding an already-present
+  // class doesn't restart a CSS animation.
+  function flutterFlags(roundId) {
+    if (!session || session.roundId !== roundId || session.revealing) return;
+    const answersEl = app.querySelector('.answers');
+    if (!answersEl) return;
+    answersEl.classList.remove('flutter');
+    void answersEl.offsetWidth; // restart the animation if it's already run
+    answersEl.classList.add('flutter');
   }
 
   // Delayed practice work belongs to one round of one session.
@@ -423,32 +437,43 @@
     if (session.mode === 'mic') { nextMicRound(); return; }
     if (session.index >= session.total) return finishPractice(false);
     // Stop any still-ringing sound from the PREVIOUS round (a reward replay,
-    // in the rare case it played, or a two-miss reveal chord) right away, so
-    // its short damper fade finishes well before the new chord below.
+    // in the rare case it played, or a reveal chord) right away, so its
+    // short damper fade finishes well before the new chord below.
     clearRoundWork();
     session.current = pickTarget();
     session.attempted = false;
-    session.misses = 0;
+    session.revealing = false;
     // Locked from render until the chord has actually sounded — a fast tap
     // that lands before any sound plays is a guess, not a listen, and would
     // pollute stats. `roundId` guards against a stray unlock from a stale
     // playChord promise if the round moves on before it resolves.
     session.locked = true;
-    session.cueing = true; // shows the "Listen…" overlay until the chord below sounds
+    session.cueing = true; // shows the "Listen…" overlay (mic mode) / the mascot's listening pose (digital), until the chord below sounds
     const roundId = session.roundId = ++roundSequence;
     renderPractice();
     const notes = session.current.notes;
     // Timings: 500ms gives clearRoundWork()'s stopAll() above its 0.3s
     // damper fade plus a short silence, so the previous chord never bleeds
-    // into this one. The visual "Listen…" overlay (session.cueing, above) is
-    // the new-round cue now — no audible tick is needed, since a correct
-    // answer no longer re-strikes the chord for the child to mistake it for.
+    // into this one. In digital mode the chord itself is the new-round cue —
+    // no card, no tick — so the flags flutter the instant it sounds
+    // (flutterFlags) to say "the chord is here, your turn".
     scheduleRound(() => {
       if (!session) return;
       // If the chord genuinely fails to play (e.g. the sampler load timed
       // out), unlock the answer grid anyway — a silent, chordless round is
-      // better than a frozen screen the child can't get past.
-      PianoAudio.playChord(notes).then(() => unlockAnswers(roundId), () => unlockAnswers(roundId));
+      // better than a frozen screen the child can't get past. A failed
+      // playback has nothing to flutter for.
+      PianoAudio.playChord(notes).then(() => {
+        unlockAnswers(roundId);
+        flutterFlags(roundId);
+        // The mascot's "listening" pose (see renderPractice) is a cueing-
+        // phase thing; 1200ms gives it a beat to register after the chord
+        // starts before it settles back to its baseline face.
+        scheduleRound(() => {
+          const m = document.getElementById('mascot');
+          if (m) m.classList.remove('listening');
+        }, 1200);
+      }, () => unlockAnswers(roundId));
     }, 500);
   }
 
@@ -461,8 +486,9 @@
   // when session.mode === 'mic' — see nextRound()'s branch above. Renders a
   // brief "Get ready…" baseline state, then changes to "Play any colour…"
   // only when FreshChordGate is genuinely armed. Every other bit of round
-  // bookkeeping (attempted/misses/locked/roundId) mirrors the digital flow
-  // exactly, so onAnswer()/renderPractice() needs no mode check of its own.
+  // bookkeeping (attempted/revealing/locked/roundId) mirrors the digital
+  // flow exactly, so onAnswer()/renderPractice() needs no mode check of its
+  // own.
   function nextMicRound() {
     if (!session) return; // a calm stop may have ended the set already
     if (session.index >= session.total) return finishPractice(false);
@@ -475,7 +501,7 @@
     session.micRetryReason = null;
     session.micInput = null;
     session.attempted = false;
-    session.misses = 0;
+    session.revealing = false;
     session.locked = true;
     session.cueing = true;
     const roundId = session.roundId = ++roundSequence;
@@ -537,8 +563,9 @@
   }
 
   // State D's "Skip this one": same "a revealed round still uses up a
-  // journey step" precedent as the existing two-miss reveal path — advances
-  // past this round without ever scoring it, then moves on to the next one.
+  // journey step" precedent as the wrong-tap reveal fallback in onAnswer —
+  // advances past this round without ever scoring it, then moves on to the
+  // next one.
   function skipMicRound() {
     if (!session) return;
     session.showMicRetry = false;
@@ -547,6 +574,11 @@
   }
 
   function renderPractice() {
+    // Only a set's first build plays the .screen fade-in. Every later round
+    // (and each real-piano state change) rebuilds this same screen, and
+    // replaying the fade there blinks the whole garden out and back in right
+    // under the correct-answer confetti.
+    const continuing = !!app.querySelector('.practice');
     clearScreen();
     // How far along the set the child is, as a fraction of the vine.
     const target = session.total > 0 ? Math.min(1, session.index / session.total) : 0;
@@ -555,9 +587,13 @@
     // the end of the set and sprouts a leaf per round played, with the
     // child's mascot riding its tip. It's drawn after render (drawVine) since
     // the wave is laid out in real pixels. The mascot keeps its #mascot id so
-    // setMascotMood() and cheer()'s .happy hop work on it directly.
+    // setMascotMood() and cheer()'s .happy hop work on it directly. In
+    // digital mode it also tilts and grows sound-wave arcs (`.listening`,
+    // see styles.css) for the pre-chord cueing beat — the only "get ready"
+    // cue digital mode has, since it shows no card (see roundCue below).
     const mascotEl = el('div', {
-      class: 'journey-mascot', id: 'mascot',
+      class: 'journey-mascot' + (session.mode !== 'mic' && session.cueing ? ' listening' : ''),
+      id: 'mascot',
       html: Sprites.mascot(Store.activeProfile().avatar, baselineMood()),
     });
     const journey = el('div', {
@@ -569,18 +605,29 @@
     // heard (State A has no session.current yet) — the button only appears
     // once it does, relabelled "Hear it again" (the app replaying its own
     // best guess) rather than "Listen again" (which implies a pre-announced
-    // target, true only in digital mode). Wiring is identical either way.
+    // target, true only in digital mode). Digital's replay also flutters the
+    // flags once it sounds, same as the round's own chord (flutterFlags) —
+    // mic mode doesn't, since the grown-up (not the app) is the one playing.
     const listenBtn = (session.mode === 'mic' && !session.current) ? null : el('button', {
       class: 'listen-btn',
-      onclick: () => PianoAudio.playChord(session.current.notes).catch(() => {}),
+      onclick: () => {
+        if (session.mode === 'mic') {
+          PianoAudio.playChord(session.current.notes).catch(() => {});
+        } else {
+          const roundId = session.roundId;
+          PianoAudio.playChord(session.current.notes).then(() => flutterFlags(roundId), () => {});
+        }
+      },
     }, el('span', { class: 'listen-icon', html: Sprites.icon('speaker') }),
        el('span', {}, session.mode === 'mic' ? 'Hear it again' : 'Listen again'));
 
     // One planted flag per active colour, in a wrapping, centred row — a
     // partial last row centres itself. Flag size and column count are fitted
-    // to the space after render (fitAnswers). Dimmed + non-interactive while
-    // locked waiting for the chord to sound, so an eager tap can't land
-    // before there's anything to listen to.
+    // to the space after render (fitAnswers). Non-interactive while locked
+    // waiting for the chord to sound, so an eager tap can't land before
+    // there's anything to listen to — but only mic mode dims the flags for
+    // it (`.dim`, see styles.css); digital mode leaves them at full colour
+    // and relies on the mascot + the chord itself as the cue instead.
     const makeAnswerBtn = (c) => el('button', {
       class: 'color-btn',
       'data-color': c.name,
@@ -589,36 +636,33 @@
       onclick: () => onAnswer(c),
     });
 
-    const answers = el('div', { class: 'answers' + (session.locked ? ' waiting' : '') },
-      session.colors.map(makeAnswerBtn));
+    const answers = el('div', {
+      class: 'answers' + (session.locked ? ' waiting' : '') + (session.locked && session.mode === 'mic' ? ' dim' : ''),
+    }, session.colors.map(makeAnswerBtn));
 
-    // A prominent "get ready" overlay, centered directly over the answers
-    // grid, visible only while session.cueing is true (see nextRound(),
-    // which flips it off — and adds `.hidden` here — once the chord has
-    // actually sounded). It's `pointer-events: none` so it never blocks a
-    // tap once it's fading out mid-transition. This replaces the old tiny
-    // journey-path pill, which was too subtle for a child to actually notice
-    // a new round was starting.
+    // Real-piano mode shows a card over the flags while session.cueing is
+    // true — baseline ("Get ready…"), armed ("Play any colour…"), and heard
+    // ("Got it!") — since these are instructions for the grown-up reading
+    // over the child's shoulder, not the child. It's `pointer-events: none`
+    // so it never blocks a tap once it's fading out mid-transition.
     //
-    // Real-piano mode reuses this exact overlay for three states: baseline
-    // ("Get ready…"), armed ("Play any colour…"), and heard ("Got it!").
-    let roundCue;
-    if (session.mode === 'mic') {
-      roundCue = session.current
-        ? el('div', { class: 'round-cue mic-heard' + (session.cueing ? '' : ' hidden') },
-            el('span', { class: 'round-cue-icon', html: Sprites.icon('check') }),
-            el('span', { class: 'round-cue-label' }, 'Got it!'))
-        : el('div', { class: 'round-cue mic-wait' + (session.cueing ? '' : ' hidden') },
-            el('span', { class: 'round-cue-icon', html: Sprites.icon('mic') }),
-            el('span', { class: 'round-cue-label' },
-              session.micArmed ? 'Play any colour on the piano!' : 'Get ready…'),
-            el('span', { class: 'round-cue-sub' },
-              session.micArmed ? 'Chord Garden is listening.' : 'Waiting for a quiet moment.'));
-    } else {
-      roundCue = el('div', { class: 'round-cue' + (session.cueing ? '' : ' hidden') },
-        el('span', { class: 'round-cue-icon', html: Sprites.icon('speaker') }),
-        el('span', { class: 'round-cue-label' }, 'Listen…'));
-    }
+    // Digital mode shows no card at all: a young child can't read it, and
+    // flashing "Listen…" every round just trains "wait for the card" rather
+    // than "listen". The chord itself is the cue there — the mascot tilts to
+    // listen and the flags flutter once it sounds (see mascotEl and
+    // flutterFlags above/below).
+    const roundCue = session.mode === 'mic'
+      ? (session.current
+          ? el('div', { class: 'round-cue mic-heard' + (session.cueing ? '' : ' hidden') },
+              el('span', { class: 'round-cue-icon', html: Sprites.icon('check') }),
+              el('span', { class: 'round-cue-label' }, 'Got it!'))
+          : el('div', { class: 'round-cue mic-wait' + (session.cueing ? '' : ' hidden') },
+              el('span', { class: 'round-cue-icon', html: Sprites.icon('mic') }),
+              el('span', { class: 'round-cue-label' },
+                session.micArmed ? 'Play any colour on the piano!' : 'Get ready…'),
+              el('span', { class: 'round-cue-sub' },
+                session.micArmed ? 'Chord Garden is listening.' : 'Waiting for a quiet moment.')))
+      : null;
 
     // State D — the safety valve: low confidence or nothing ever stabilised.
     // Nothing here is ever scored/recorded (see nextMicRound()'s
@@ -646,7 +690,7 @@
 
     const stopBtn = el('button', { class: 'calm-stop', onclick: calmStop }, 'All done');
 
-    app.appendChild(el('section', { class: 'screen practice' },
+    app.appendChild(el('section', { class: 'screen practice' + (continuing ? ' continuing' : '') },
       el('div', { class: 'practice-top' }, journey, stopBtn),
       el('div', { class: 'listen-wrap' }, micPill, listenBtn),
       el('div', { class: 'answers-wrap' }, answers, roundCue, micRetry)));
@@ -742,7 +786,20 @@
   }
 
   function onAnswer(color) {
+    // A wrong tap leaves the round in `revealing` (see below) until the
+    // child taps the glowing correct flag — every other tap is ignored, and
+    // only that one confirms and moves on. This has to come before the
+    // locked check below: `revealing` rounds are locked too (nothing else
+    // is tappable), but the glowing flag itself still needs to respond.
+    if (session.revealing) {
+      if (color.name === session.current.name) confirmReveal();
+      return;
+    }
     if (session.locked) return;
+    // A quick tap can land inside the listening pose's 1200ms; drop it now
+    // so the tilt never mixes with the happy hop or the curious face.
+    const mascotEl = document.getElementById('mascot');
+    if (mascotEl) mascotEl.classList.remove('listening');
     const correct = color.name === session.current.name;
     const firstAttempt = !session.attempted; // streak only moves on a first-attempt result
 
@@ -751,7 +808,7 @@
     // Store function (see js/storage.js), so real-piano reads stay visible
     // to the guardian but out of the core readiness/accuracy signal (see
     // js/logic.js's `src !== 'mic'` filters) — everything else here is
-    // identical either way, since it only reads session.current/misses/streak.
+    // identical either way, since it only reads session.current/streak.
     if (!session.attempted) {
       session.attempted = true;
       const record = session.mode === 'mic'
@@ -774,63 +831,72 @@
       // by permissions policy — either way it should never interrupt the
       // success feedback.
       try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) { /* no-op — see comment above */ }
-      // A correct tap usually lands while the chord that was just played is
-      // still ringing — so the flag lights up against the chord itself, the
-      // chord+colour pairing the Eguchi method relies on, with no need to
-      // strike it a second time. Only when it's already faded (a slow
-      // answer, or real-piano mode where the app never played the chord —
-      // the grown-up did) is it replayed softly, and then the round waits
-      // the longer 1100ms so that replay is actually heard. Otherwise
-      // 800ms is enough for the glow/confetti/happy mascot to land with the
-      // chord before the next round's fade.
-      const replay = !PianoAudio.isChordRinging();
-      if (replay) PianoAudio.playReward(session.current.notes).catch(() => {});
-      session.index += 1;
-      scheduleRound(nextRound, replay ? 1100 : 800);
+      moveOnWithChord();
     } else {
-      // Any miss breaks the happy streak, and gets a brief, gentle
-      // "curious" face — never a lingering state; a new round always starts
-      // fresh-faced (see baselineMood/renderPractice).
+      // Any wrong tap breaks the happy streak, gets a brief, gentle
+      // "curious" face, and reveals the right flag right away — with only
+      // two colours active, a retry after a miss is always right by
+      // elimination, which trains the wrong skill and would otherwise earn
+      // the same cheer/confetti as a real answer. The round was already
+      // recorded as incorrect on the first attempt, above.
       session.streak = 0;
       setMascotMood('curious');
-      session.misses += 1;
-      if (session.misses >= 2) {
-        // Two misses: guessing your way there by elimination trains the
-        // wrong skill. Stop the round, show the answer, and replay the
-        // chord while it's highlighted — chord and colour together is the
-        // reinforcement moment the method actually relies on. The round was
-        // already recorded as incorrect on the first attempt, above. The
-        // curious face just set above naturally lasts until nextRound()
-        // re-renders.
-        session.locked = true;
-        const answersEl = app.querySelector('.answers');
-        if (answersEl) answersEl.classList.add('reveal');
-        const correctBtn = app.querySelector(`.color-btn[data-color="${session.current.name}"]`);
-        if (correctBtn) correctBtn.classList.add('reveal');
-        const notes = session.current.notes;
-        scheduleRound(() => { if (session) PianoAudio.playChord(notes).catch(() => {}); }, 300);
-        // A revealed round still uses up a journey step — otherwise a tough
-        // set keeps growing and the recorded session accuracy over-counts.
+      btn.classList.add('nudge');
+      scheduleRound(() => btn.classList.remove('nudge'), 500);
+      session.locked = true;
+      session.revealing = true;
+      const answersEl = app.querySelector('.answers');
+      if (answersEl) answersEl.classList.add('reveal');
+      const correctBtn = app.querySelector(`.color-btn[data-color="${session.current.name}"]`);
+      if (correctBtn) correctBtn.classList.add('reveal');
+      const notes = session.current.notes;
+      scheduleRound(() => { if (session) PianoAudio.playChord(notes).catch(() => {}); }, 300);
+      // Safety valve so a child who never taps the glowing flag doesn't
+      // stall the set: the replayed chord above rings for ~3.3s, then a
+      // moment of quiet, then move on anyway. confirmReveal() (above) clears
+      // session.revealing synchronously, so on the normal path this is
+      // already a no-op by the time it fires.
+      scheduleRound(() => {
+        if (!session || !session.revealing) return;
+        session.revealing = false;
         session.index += 1;
-        scheduleRound(nextRound, 1600);
-      } else {
-        // Gentle feedback on the first miss: a soft wobble and replay the
-        // sound. No "wrong" text. The round doesn't advance here, so the
-        // curious face is put back to baseline on a timer instead of on
-        // nextRound —
-        // guarded by roundId in case the round moves on anyway (e.g. the
-        // child gets it right on retry) before the timer fires.
-        btn.classList.add('nudge');
-        scheduleRound(() => btn.classList.remove('nudge'), 500);
-        const notes = session.current.notes;
-        scheduleRound(() => { if (session) PianoAudio.playChord(notes).catch(() => {}); }, 260);
-        const roundId = session.roundId;
-        scheduleRound(() => {
-          if (!session || session.roundId !== roundId) return; // a new round already took over the mascot
-          setMascotMood(baselineMood());
-        }, 1500);
-      }
+        nextRound();
+      }, 5000);
     }
+  }
+
+  // A wrong tap's glowing correct flag stays tappable (see onAnswer's
+  // `revealing` branch and the CSS pointer-events override on
+  // `.color-btn.reveal`); tapping it confirms the answer was seen. One lift
+  // + wave (`.confirmed`, see styles.css) replaces the endless reveal bob,
+  // but nothing about this counts as a fresh correct answer: no cheer(), no
+  // confetti, no vibrate, and the streak/stats stay exactly as the miss
+  // already left them.
+  function confirmReveal() {
+    session.revealing = false;
+    const correctBtn = app.querySelector(`.color-btn[data-color="${session.current.name}"]`);
+    if (correctBtn) correctBtn.classList.add('confirmed');
+    setMascotMood(baselineMood());
+    moveOnWithChord();
+  }
+
+  // Shared tail for "this round is settled, move to the next one" — a
+  // correct first tap, or a confirmed reveal after a miss. A correct tap
+  // (or reveal confirm) usually lands while the chord that was just played
+  // is still ringing — so the flag lights up against the chord itself, the
+  // chord+colour pairing the Eguchi method relies on, with no need to
+  // strike it a second time. Only when it's already faded (a slow answer,
+  // real-piano mode where the app never played the chord — the grown-up
+  // did, or a reveal confirm arriving after its replayed chord has rung
+  // out) is it replayed softly, and then the round waits the longer 1100ms
+  // so that replay is actually heard. Otherwise 800ms is enough for the
+  // glow/confetti/happy mascot to land with the chord before the next
+  // round's fade.
+  function moveOnWithChord() {
+    const replay = !PianoAudio.isChordRinging();
+    if (replay) PianoAudio.playReward(session.current.notes).catch(() => {});
+    session.index += 1;
+    scheduleRound(nextRound, replay ? 1100 : 800);
   }
 
   function cheer() {

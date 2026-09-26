@@ -278,6 +278,13 @@ body.adult #app { max-width: 680px; }
   0%, 100% { transform: none; }
   50% { transform: skewY(-7deg) scaleX(.93); }
 }
+/* A gentler cousin of flag-wave for the round-start flutter (see
+   .answers.flutter below) — every flag plays it identically, so it never
+   hints at the answer the way a bigger, per-flag wave would. */
+@keyframes flag-flutter {
+  0%, 100% { transform: none; }
+  50% { transform: skewY(-4deg) scaleX(.96); }
+}
 
 /* ----------------------------------------------------------- Overlays --- */
 .overlay-backdrop {
@@ -296,6 +303,8 @@ body.adult #app { max-width: 680px; }
 
 /* ----------------------------------------------------------- Practice --- */
 .practice { gap: 14px; min-height: 0; }
+/* A round-to-round rebuild of the practice screen — see renderPractice. */
+.practice.continuing { animation: none; }
 .practice-top { display: flex; align-items: center; gap: 12px; }
 
 /* The vine: grows along a wavy track toward the end of the set, sprouting a
@@ -324,9 +333,25 @@ body.adult #app { max-width: 680px; }
   transition: left .6s cubic-bezier(.34, 1.56, .64, 1), top .6s ease;
   filter: drop-shadow(0 3px 0 var(--lip));
 }
-.journey-mascot svg { width: 36px; height: 36px; display: block; }
+.journey-mascot svg { width: 36px; height: 36px; display: block; transition: transform .25s ease; }
 .journey-mascot.happy { animation: jump .9s ease; }
 @keyframes jump { 0%, 100% { transform: translate(-50%, 0) scale(1); } 30% { transform: translate(-50%, -20px) scale(1.12); } 60% { transform: translate(-50%, 0) scale(1.04); } }
+/* Digital mode's only pre-chord cue (see roundCue in app.js — mic mode gets
+   a card, digital doesn't): the mascot itself tilts as if listening, with
+   two little sound-wave arcs pulsing off to its right. Only the inner svg
+   tilts, not the outer element, so it doesn't fight the left/top position
+   transition above. */
+.journey-mascot.listening svg { transform: rotate(-12deg); }
+/* The two arcs share a centre (right offsets differ by their radius
+   difference), so they read as two waves rather than one thick one. */
+.journey-mascot.listening::before, .journey-mascot.listening::after {
+  content: ''; position: absolute; top: 50%; border-radius: 50%;
+  border: 2px solid transparent; border-right-color: var(--ink);
+  animation: mascot-waves .8s ease-in-out infinite alternate;
+}
+.journey-mascot.listening::before { width: 10px; height: 10px; margin-top: -5px; right: -3px; }
+.journey-mascot.listening::after { width: 20px; height: 20px; margin-top: -10px; right: -8px; animation-delay: .15s; }
+@keyframes mascot-waves { from { opacity: .35; } to { opacity: 1; } }
 
 .calm-stop {
   font-weight: 800; font-size: 1rem; color: var(--ink-soft);
@@ -378,23 +403,43 @@ body.adult #app { max-width: 680px; }
 .color-btn.correct { animation: flag-lift .9s ease; }
 .color-btn.correct .flag-cloth { animation: flag-wave .45s ease-in-out 2; }
 @keyframes flag-lift { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-16px); } }
-/* First miss: a gentle wobble on its pole, never a "wrong" mark. */
+/* Every wrong tap: a gentle wobble on its pole, never a "wrong" mark. */
 .color-btn.nudge { animation: flag-wobble .5s ease; }
 @keyframes flag-wobble { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-5deg); } 50% { transform: rotate(4deg); } 75% { transform: rotate(-2deg); } }
 
-/* Locked until the chord has actually sounded: clearly dimmed and
-   untappable, so it reads as "wait, listening". */
-.answers.waiting { opacity: .4; pointer-events: none; }
+/* Locked until the chord has actually sounded, so an eager tap can't land
+   before there's anything to listen to. Only mic mode also dims the flags
+   (`.dim`) — that's a grown-up's wait, since the mic hasn't heard anything
+   yet; digital mode's wait is a beat, so the flags stay at full colour and
+   the mascot (`.journey-mascot.listening`, above) carries the cue instead. */
+.answers.waiting { pointer-events: none; }
+.answers.waiting.dim { opacity: .4; }
 
-/* Reveal after 2 misses: dim everything except the correct flag, which
-   lifts, waves and glows while the chord replays alongside it. */
+/* Once the chord sounds in digital mode, every flag flutters identically —
+   never staggered, so it never hints at the answer — as a wordless "the
+   chord is here, your turn" (see flutterFlags in app.js). It skips flags
+   already mid reward/reveal animation so it never fights those. */
+.answers.flutter .color-btn:not(.correct):not(.reveal) .flag-cloth { animation: flag-flutter .5s ease-in-out 2; }
+
+/* Reveal on a wrong tap: dim everything except the correct flag, which
+   lifts, waves and glows while the chord replays alongside it. The glowing
+   flag itself stays tappable (unlike every other flag here) — tapping it is
+   how the child confirms and moves on (see onAnswer's `revealing` branch). */
 .answers.reveal .color-btn { opacity: .3; pointer-events: none; transition: opacity .3s ease; }
-.answers.reveal .color-btn.reveal { opacity: 1; animation: reveal-lift 1s ease-in-out infinite; filter: drop-shadow(0 0 14px rgba(255, 255, 255, .9)); }
+.answers.reveal .color-btn.reveal { opacity: 1; pointer-events: auto; cursor: pointer; animation: reveal-lift 1s ease-in-out infinite; filter: drop-shadow(0 0 14px rgba(255, 255, 255, .9)); }
 .answers.reveal .color-btn.reveal .flag-cloth { animation: flag-wave 1s ease-in-out infinite; }
 @keyframes reveal-lift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+/* Confirmed: the endless reveal bob/wave stop and the flag gets one lift +
+   wave instead, same as a correct answer — the glow (filter, above) stays
+   so it still reads as "yes, this one". */
+.answers.reveal .color-btn.reveal.confirmed { animation: flag-lift .9s ease; }
+.answers.reveal .color-btn.reveal.confirmed .flag-cloth { animation: flag-wave .45s ease-in-out 2; }
 
-/* The round-start "get ready" card, centred over the flags while
-   session.cueing is true. Never takes taps, even while fading out. */
+/* Real-piano mode's round-start card, centred over the flags while
+   session.cueing is true — instructions for the grown-up, since the child
+   can't read yet. Digital mode renders no .round-cue at all (see roundCue
+   in app.js): the chord itself is the cue there. Never takes taps, even
+   while fading out. */
 .round-cue {
   position: absolute; top: 50%; left: 50%; z-index: 5;
   display: flex; flex-direction: column; align-items: center; gap: 6px;

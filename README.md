@@ -85,7 +85,7 @@ still works, just without offline caching.
 ### Child (default)
 1. Tap **Play** (this also wakes up the audio — browsers require a tap first).
 2. Listen to the chord, then tap the matching colour.
-3. A wrong tap is gentle: the chord replays and nothing is marked "wrong."
+3. A wrong tap is gentle: the right flag glows while the chord plays again, and tapping it moves on. Nothing is marked "wrong."
 4. Tap **All done** any time — stopping early is fine, never a failure.
 5. Finish the set for a little celebration. 🎉
 
