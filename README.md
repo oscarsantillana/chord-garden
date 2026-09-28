@@ -158,6 +158,7 @@ rainbow-pitch/
 │  ├─ storage.js       # profiles, stats & sessions in localStorage
 │  ├─ logic.js         # pure decision logic: readiness, weighted picking, confusions
 │  ├─ layout.js        # pure flag layout maths: flag sizes, terraces under wrapped rows
+│  ├─ songs.js         # pure composer of the little chord songs flowers sing when tapped
 │  ├─ updates.js       # service-worker registration + app-update lifecycle
 │  └─ app.js           # all screens & the practice loop
 ├─ sw.js               # service worker — offline cache for the app shell + piano samples

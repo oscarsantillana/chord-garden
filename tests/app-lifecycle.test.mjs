@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
 import { fakeDom, fakeClock } from './helpers/fake-dom.mjs';
+const Songs = createRequire(import.meta.url)('../js/songs.js');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function setup({ micMode = false, deferredMic = false, deferredChord = false, ringing = true, colors = ['red'], navigator = {}, seed = {} } = {}) {
   // Only the update-check tests below pass a `navigator.serviceWorker` — by
@@ -43,7 +45,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   // i18n.js loads right after data.js (same order as index.html) — the
   // sandbox's navigator defaults to {} (English), so existing label-based
   // clicks below keep working unless a test explicitly asks for another one.
-  for (const file of ['data', 'i18n', 'logic', 'layout', 'storage', 'updates']) vm.runInContext(fs.readFileSync(new URL(`../js/${file}.js`, import.meta.url), 'utf8'), sandbox);
+  for (const file of ['data', 'i18n', 'logic', 'layout', 'songs', 'storage', 'updates']) vm.runInContext(fs.readFileSync(new URL(`../js/${file}.js`, import.meta.url), 'utf8'), sandbox);
   vm.runInContext('this.store=Store; Store.updateProfile(Store.activeProfile().id, { realPianoMode: ' + micMode + ', activeColors: ' + JSON.stringify(colors) + ', roundsPerSet: 2 });', sandbox);
   vm.runInContext(fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8'), sandbox);
   const chordByName = vm.runInContext('CHORD_BY_NAME', sandbox); // for tests that need to know the (randomly picked) target
@@ -621,3 +623,59 @@ console.log('ok - Settings: the badge switch saves the device-wide setting');
   assert.equal(ui.store.getIconBadge(), false);
 }
 console.log('ok - Store: a version-8 save loads with readySeen null, lockDot on and iconBadge off');
+
+{
+  // Flower songs: tapping today's plant plays its own song, whole chords one
+  // per 480 ms beat; a new tap restarts cleanly; a sprout is silent; and
+  // leaving Home stops the rest of the song.
+  const withSets = async (sets, colors) => {
+    const ui = setup({ colors });
+    for (let i = 0; i < sets; i++) ui.store.recordSession({ ts: Date.now(), rounds: 2, correct: 2, colors });
+    await ui.click('Play'); await ui.click('All done'); await ui.click('Home');
+    const entry = ui.store.activeProfile().garden[0];
+    const song = Songs.compose(entry.colors.map(name => ({ name, top: Math.max(...ui.chordByName[name].notes.map(Songs.midi)) })), entry.day);
+    const chords = song.map(step => [...ui.chordByName[step.name].notes]); // out of the vm realm, so deepEqual works
+    const tap = async () => { const pending = ui.app.querySelector('.today-plant').click(); await flush(); return pending; };
+    return { ui, song, chords, tap };
+  };
+  {
+    const { ui, song, chords, tap } = await withSets(5, ['red', 'yellow']);
+    ui.played.length = 0;
+    await tap();
+    assert.deepEqual(ui.played, [chords[0]], 'the first chord sounds right away');
+    for (let i = 1; i < chords.length; i++) {
+      await ui.clock.tick(480);
+      assert.deepEqual(ui.played, chords.slice(0, i + 1), `chord ${i + 1} follows one beat later`);
+    }
+    await ui.clock.tick(5000);
+    assert.equal(ui.played.length, song.length, 'the song ends after its last chord');
+  }
+  {
+    const { ui, chords, tap } = await withSets(5, ['red', 'yellow']);
+    ui.played.length = 0;
+    await tap(); await ui.clock.tick(480 * 2);
+    assert.equal(ui.played.length, 3);
+    ui.played.length = 0;
+    await tap();
+    assert.deepEqual(ui.played, [chords[0]], 'a new tap restarts from the first chord');
+    await ui.clock.tick(480 * 10);
+    assert.deepEqual(ui.played, chords, 'no chords are left over from the first song');
+  }
+  {
+    const { ui, tap } = await withSets(2, ['red', 'yellow']);
+    ui.played.length = 0;
+    await tap(); await ui.clock.tick(5000);
+    assert.equal(ui.played.length, 0, 'a sprout has no colours yet, so it is silent');
+  }
+  {
+    const { ui, chords, tap } = await withSets(5, ['red', 'yellow']);
+    ui.played.length = 0;
+    await tap(); await ui.clock.tick(480);
+    assert.equal(ui.played.length, 2);
+    await ui.click('Play'); await ui.clock.tick(480 * 10);
+    // Only the first practice round's own chord may have sounded since.
+    assert.ok(ui.played.length <= 3, 'leaving Home stops the rest of the song');
+    assert.ok(chords.length > 3);
+  }
+}
+console.log('ok - Home: flowers sing their own chord songs');

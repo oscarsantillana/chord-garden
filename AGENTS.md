@@ -25,10 +25,12 @@ this file covers what you need to change it safely.
 Scripts are plain `<script defer>` files that share globals, loaded in
 index.html's order: `data.js` (chords, colours, voicings), `i18n.js`,
 `sprites.js`, `audio.js`, `logic.js`, `layout.js` (flag sizes and the
-terraces under wrapped rows), `chord-detect.js`, `fresh-chord-gate.js`,
+terraces under wrapped rows), `songs.js` (the chord songs flowers sing when
+tapped on Home), `chord-detect.js`, `fresh-chord-gate.js`,
 `mic-capture.js`, `storage.js`, `updates.js`, then `app.js` (every screen and
 the practice loop). `sw.js` is the offline cache. `logic.js`, `layout.js`,
-`chord-detect.js` and `fresh-chord-gate.js` are pure and tested directly. Modules are IIFEs (`const Store = (() => { ... })()`), and app.js
+`songs.js`, `chord-detect.js` and `fresh-chord-gate.js` are pure and tested
+directly. Modules are IIFEs (`const Store = (() => { ... })()`), and app.js
 builds the DOM with its `el()` helper.
 
 ## Rules that break things if forgotten
