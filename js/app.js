@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.2.1';
+  const APP_VERSION = '0.3.0';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -112,6 +112,7 @@
       pendingMicStart = false;
       MicCapture.stop();
     }
+    stopFlowerSong(); // a flower's song ends when Home does
     clear(app);
     clearGarden(); // every screen but Home shows the bare hills — see renderHome for where it's filled back in
     clearTerraces();
@@ -215,6 +216,8 @@
   function clearGarden() {
     const layer = document.getElementById('garden');
     if (layer) clear(layer);
+    const taps = document.getElementById('garden-taps');
+    if (taps) clear(taps);
   }
 
   const terracesLayer = () => (document.querySelector ? document.querySelector('.scene-terraces') : null);
@@ -280,6 +283,7 @@
     clearGarden();
     const layer = document.getElementById('garden');
     if (!layer) return;
+    const tapLayer = document.getElementById('garden-taps');
     const { past } = Logic.gardenDays(p.garden);
     if (!past.length) return;
     const width = window.innerWidth || 390;
@@ -296,12 +300,122 @@
     past.slice(0, slots.length).forEach((day, i) => {
       const xFrac = slots[i];
       const y = backHillY(xFrac);
-      layer.appendChild(el('div', {
-        class: 'garden-flower',
-        style: `left:${(xFrac * 100).toFixed(2)}%;bottom:calc(${((340 - y) / 340 * 100).toFixed(2)}% - 4px)`,
-        html: Sprites.plant(Logic.plantStage(day.sets), swatchesOf(day.colors)),
-      }));
+      const stage = Logic.plantStage(day.sets);
+      const spot = `left:${(xFrac * 100).toFixed(2)}%;bottom:calc(${((340 - y) / 340 * 100).toFixed(2)}% - 4px)`;
+      const flower = el('div', {
+        class: 'garden-flower', style: spot,
+        html: Sprites.plant(stage, swatchesOf(day.colors)),
+      });
+      layer.appendChild(flower);
+      // #garden sits behind the page and can't be tapped, so a button of the
+      // same size on top of it (in #garden-taps) makes the flower sing. It's
+      // as decorative as the scenery: out of the tab order and unlabelled
+      // (the flags already give tap-to-hear).
+      if (tapLayer) {
+        tapLayer.appendChild(el('button', {
+          class: 'flower-tap', tabindex: '-1', style: spot,
+          onclick: () => playFlowerSong(flower, Songs.visibleColors(stage, day.colors), day.day),
+        }));
+      }
     });
+  }
+
+  // A flower's tap button must never steal a tap meant for a control, so once
+  // Home's layout has settled, hide any that overlap one of Home's buttons
+  // (Play, flags, avatar chip, lock, today's plant). Needs real layout.
+  function hideBlockedFlowerTaps() {
+    const layer = document.getElementById('garden-taps');
+    if (!layer || typeof layer.querySelectorAll !== 'function' || !app.querySelector('.home')) return;
+    const taps = layer.querySelectorAll('.flower-tap');
+    taps.forEach((t) => { t.hidden = false; });
+    const first = taps[0];
+    if (!first || typeof first.getBoundingClientRect !== 'function') return;
+    const controls = Array.from(app.querySelectorAll('button'), (b) => b.getBoundingClientRect());
+    taps.forEach((t) => {
+      const r = t.getBoundingClientRect();
+      if (controls.some((c) => r.left < c.right && r.right > c.left && r.top < c.bottom && r.bottom > c.top)) t.hidden = true;
+    });
+  }
+
+  // --- Flower songs --------------------------------------------------------
+  // Tapping a flower on Home plays its own song: whole chords in their fixed
+  // voicings (Songs.compose), one per beat. While each chord sounds, that
+  // colour's petals stay bright and the flower's others fade back, so every
+  // chord stays tied to its colour. Nothing else on screen reacts.
+  const BEAT_MS = 480;
+  let songTimers = [];
+  let songFlower = null;
+  let songPlaying = false;
+  let songSerial = 0;
+
+  const petalsOf = (flower) => (flower && flower.querySelectorAll ? Array.from(flower.querySelectorAll('.petal, .bud-tip')) : []);
+
+  // Bright petals of `swatch`'s colour, dim the rest (no swatch: restore all).
+  function glowPetals(flower, swatch) {
+    petalsOf(flower).forEach((petal) => {
+      const same = !swatch || (petal.getAttribute('fill') || '').toLowerCase() === swatch;
+      petal.setAttribute('fill-opacity', same ? '1' : '.3');
+    });
+  }
+
+  function stopFlowerSong() {
+    songSerial += 1;
+    songTimers.forEach((t) => clearTimeout(t));
+    songTimers = [];
+    if (songFlower) {
+      glowPetals(songFlower, null);
+      songFlower.classList.remove('singing');
+      songFlower.classList.remove('wiggle');
+      songFlower = null;
+    }
+    if (songPlaying) {
+      songPlaying = false;
+      PianoAudio.stopAll();
+    }
+  }
+
+  async function playFlowerSong(flower, colorNames, seed) {
+    stopFlowerSong();
+    const serial = songSerial;
+    const generation = screenGeneration;
+    const names = (colorNames || []).filter((n) => CHORD_BY_NAME[n]);
+    if (!names.length) {
+      // A seed, sprout or leafy plant has no colours yet: a silent wiggle.
+      songFlower = flower;
+      flower.classList.add('wiggle');
+      songTimers.push(setTimeout(() => {
+        if (serial === songSerial) stopFlowerSong();
+      }, 500));
+      return;
+    }
+    // Best-effort like the Home flag taps: a piano that hasn't loaded stays silent.
+    try { await PianoAudio.unlock(); } catch (e) { /* no-op */ }
+    if (serial !== songSerial || generation !== screenGeneration) return;
+    const song = Songs.compose(names.map((n) => ({
+      name: n, top: Math.max(...CHORD_BY_NAME[n].notes.map(Songs.midi)),
+    })), seed);
+    songFlower = flower;
+    songPlaying = true;
+    flower.classList.add('singing');
+    let at = 0;
+    song.forEach((step, i) => {
+      const chord = CHORD_BY_NAME[step.name];
+      const last = i === song.length - 1;
+      const seconds = step.beats * BEAT_MS / 1000 + (last ? 0.8 : 0.1);
+      const sound = () => {
+        if (serial !== songSerial || generation !== screenGeneration) return;
+        glowPetals(flower, chord.swatch);
+        PianoAudio.playChord(chord.notes, seconds).catch(() => {});
+      };
+      if (at === 0) sound();
+      else songTimers.push(setTimeout(sound, at));
+      at += step.beats * BEAT_MS;
+    });
+    songTimers.push(setTimeout(() => {
+      if (serial !== songSerial || generation !== screenGeneration) return;
+      songPlaying = false; // the last chord rings out on its own
+      stopFlowerSong();
+    }, at + 300));
   }
 
   // The big round Play button (home and celebration). The label sits inside
@@ -372,6 +486,7 @@
           // Presentation-mode taps are best-effort — if the piano hasn't
           // loaded yet, the Play button above is where a real retry with a
           // friendly message happens, so a failure here just stays silent.
+          stopFlowerSong();
           try {
             await PianoAudio.unlock();
             PianoAudio.playChord(c.notes).catch(() => {});
@@ -386,9 +501,13 @@
     // back hill forever once today is over (see renderGarden).
     const { today } = Logic.gardenDays(p.garden);
     const stage = Logic.plantStage(today ? today.sets : 0);
-    const todayPlant = el('div', {
-      class: 'today-plant', role: 'img', 'aria-label': todaysFlowerLabel(stage),
-      html: Sprites.plant(stage, swatchesOf(today ? today.colors : [])),
+    const todayColors = today ? today.colors : [];
+    const todayPlant = el('button', {
+      class: 'today-plant', 'aria-label': todaysFlowerLabel(stage),
+      html: Sprites.plant(stage, swatchesOf(todayColors)),
+      // Tap for today's flower to sing its song; the day key seeds it, so
+      // today's plant sings the same tune all day.
+      onclick: () => playFlowerSong(todayPlant, Songs.visibleColors(stage, todayColors), Logic.dayKey(Date.now())),
     });
 
     const startError = el('p', { class: 'start-error', hidden: true },
@@ -423,6 +542,7 @@
         flags)));
     renderGarden(p);
     fitHomeFlags();
+    hideBlockedFlowerTaps();
     drawTerraces();
     // An update that arrived mid-set, mid-celebration, or during a guardian
     // visit couldn't apply then (see onChildHome above) — Home showing again
@@ -1027,6 +1147,7 @@
   function settleLayout(e) {
     if (e && e.target !== e.currentTarget) return;
     if (app.querySelector('.home')) fitHomeFlags();
+    hideBlockedFlowerTaps();
     drawTerraces();
   }
 
@@ -1038,7 +1159,10 @@
     // The garden's flower slots are laid out from window width (renderGarden
     // above), so a rotation/resize on Home needs a redraw to keep them
     // spaced right, same as the vine/flags above.
-    if (!session && app.querySelector('.home')) renderGarden(Store.activeProfile());
+    if (!session && app.querySelector('.home')) {
+      renderGarden(Store.activeProfile());
+      hideBlockedFlowerTaps();
+    }
   });
   // Web fonts change the label's height, which moves the flags.
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => settleLayout());

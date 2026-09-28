@@ -42,6 +42,10 @@
          (js/app.js). #scene is already aria-hidden above. -->
     <div id="garden"></div>
   </div>
+  <!-- Invisible tap targets over the past flowers so they can sing when
+       tapped (#scene sits behind the page and can't take taps itself).
+       Filled by renderGarden (js/app.js). -->
+  <div id="garden-taps" aria-hidden="true"></div>
   <div id="confetti" aria-hidden="true"></div>
   <main id="app"><!-- screens render here --></main>
 
@@ -51,6 +55,7 @@
   <script src="js/audio.js" defer></script>
   <script src="js/logic.js" defer></script>
   <script src="js/layout.js" defer></script>
+  <script src="js/songs.js" defer></script>
   <script src="js/chord-detect.js" defer></script>
   <script src="js/fresh-chord-gate.js" defer></script>
   <script src="js/mic-capture.js" defer></script>
