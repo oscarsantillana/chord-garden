@@ -439,6 +439,9 @@ function fakeServiceWorker(registrationOverrides = {}) {
   };
   return { controller: null, register: async () => registration, addEventListener() {} };
 }
+// Read from js/app.js rather than written out here, so a release (which
+// bumps it) doesn't also have to edit these tests.
+const APP_VERSION = fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8').match(/APP_VERSION\s*=\s*'([^']+)'/)[1];
 const openSettings = async (ui) => {
   ui.app.querySelector('.gear').click();
   for (const digit of ['2', '4', '6', '8']) await ui.click(digit);
@@ -451,8 +454,8 @@ const openSettings = async (ui) => {
   // file:// or an old browser), a manual check can only ever report that.
   const ui = setup();
   await openSettings(ui);
-  const versionRow = ui.app.querySelectorAll('.g-row-title').find((n) => n.textContent === 'Version 0.1.0');
-  assert.ok(versionRow, 'About shows "Version 0.1.0"');
+  const versionRow = ui.app.querySelectorAll('.g-row-title').find((n) => n.textContent === `Version ${APP_VERSION}`);
+  assert.ok(versionRow, `About shows "Version ${APP_VERSION}"`);
   await ui.click('Check for updates');
   assert.equal(ui.app.querySelector('.about-status').textContent, 'This browser always loads the newest version.');
 }
@@ -484,7 +487,7 @@ console.log('ok - Store: seenVersion normalises non-strings to null and keeps ve
 
 {
   // A device that last ran an older version (not a first install, which
-  // stores seenVersion: null) sees "Updated to version 0.1.0." in About as soon
+  // stores seenVersion: null) sees "Updated to version N." in About as soon
   // as as Settings is opened, for the rest of this session.
   const seedProfile = {
     id: 'p1', name: 'Kid', avatar: 'fox',
@@ -497,7 +500,7 @@ console.log('ok - Store: seenVersion normalises non-strings to null and keeps ve
   };
   const ui = setup({ seed: { 'rainbow-pitch:v1': JSON.stringify(seedData) } });
   await openSettings(ui);
-  assert.equal(ui.app.querySelector('.about-status').textContent, 'Updated to version 0.1.0.');
-  assert.equal(ui.store.getSeenVersion(), '0.1.0', 'the newly-running version is persisted right away');
+  assert.equal(ui.app.querySelector('.about-status').textContent, `Updated to version ${APP_VERSION}.`);
+  assert.equal(ui.store.getSeenVersion(), APP_VERSION, 'the newly-running version is persisted right away');
 }
-console.log('ok - Settings → About: a different stored seenVersion shows "Updated to version 0.1.0." for this session');
+console.log('ok - Settings → About: a different stored seenVersion shows "Updated to version N." for this session');

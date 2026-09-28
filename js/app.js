@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.1.0';
+  const APP_VERSION = '0.1.1';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -1683,11 +1683,14 @@
         onclick: () => { Store.setNoteNames(opt.value); I18n.setNoteNames(opt.value); renderGuardian('settings'); },
       }, opt.label)));
 
+    // Each footnote sits inside its own row, under its control: as a loose
+    // child of the card it had none of the row's padding and ran into the
+    // card's edge.
     return section(I18n.t('settings.language.sectionTitle'), el('div', { class: 'g-card g-list' },
-      el('div', { class: 'g-row stack' }, el('span', { class: 'g-row-title' }, I18n.t('settings.language.section')), langSeg),
-      el('p', { class: 'g-row-sub' }, I18n.t('settings.language.footnoteAuto', { language: detected.name })),
-      el('div', { class: 'g-row stack' }, el('span', { class: 'g-row-title' }, I18n.t('settings.noteNames.section')), noteSeg),
-      el('p', { class: 'g-row-sub' }, I18n.t('settings.noteNames.footnote'))));
+      el('div', { class: 'g-row stack' }, el('span', { class: 'g-row-title' }, I18n.t('settings.language.section')), langSeg,
+        el('span', { class: 'g-row-sub' }, I18n.t('settings.language.footnoteAuto', { language: detected.name }))),
+      el('div', { class: 'g-row stack' }, el('span', { class: 'g-row-title' }, I18n.t('settings.noteNames.section')), noteSeg,
+        el('span', { class: 'g-row-sub' }, I18n.t('settings.noteNames.footnote')))));
   }
 
   // The version row + manual "Check for updates" — see js/updates.js for the
