@@ -35,6 +35,9 @@
       <path class="hill-back" d="M0 90 C90 30 200 40 390 74 L390 340 L0 340 Z" />
       <path class="hill-front" d="M0 150 C120 104 270 112 390 142 L390 340 L0 340 Z" />
     </svg>
+    <!-- A low ridge under each row of flags when they wrap into 2+ rows;
+         drawn by drawTerraces (js/app.js), empty otherwise. -->
+    <svg class="scene-terraces" preserveAspectRatio="none"></svg>
     <!-- Past days' flowers along the back hill, filled by renderHome
          (js/app.js). #scene is already aria-hidden above. -->
     <div id="garden"></div>
@@ -47,6 +50,7 @@
   <script src="js/sprites.js" defer></script>
   <script src="js/audio.js" defer></script>
   <script src="js/logic.js" defer></script>
+  <script src="js/layout.js" defer></script>
   <script src="js/chord-detect.js" defer></script>
   <script src="js/fresh-chord-gate.js" defer></script>
   <script src="js/mic-capture.js" defer></script>

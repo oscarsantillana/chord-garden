@@ -16,7 +16,7 @@
 // It carries APP_VERSION from js/app.js (a test in tests/version.test.mjs
 // enforces this) — browsers decide a new sw.js exists by diffing this file's
 // bytes, so the version has to live here literally, not in an imported script.
-const CACHE_NAME = 'rainbow-pitch-v0.2.0';
+const CACHE_NAME = 'rainbow-pitch-v0.2.1';
 
 // The local app shell: everything needed to boot the app with no network.
 const APP_SHELL = [
@@ -28,6 +28,7 @@ const APP_SHELL = [
   'js/sprites.js',
   'js/audio.js',
   'js/logic.js',
+  'js/layout.js',
   'js/chord-detect.js',
   'js/fresh-chord-gate.js',
   'js/mic-capture.js',
