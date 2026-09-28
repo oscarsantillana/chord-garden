@@ -113,6 +113,9 @@ Tap the lock button on the home screen and enter the demo PIN **`2468`**.
   **language** (English or Spanish; follows the browser by default, can be
   changed here) and **note names** (C D E or Do Re Mi) are set here too —
   device-wide preferences, like the PIN, not per child.
+  When a child is ready for a new colour, a small dot appears on the lock on
+  Home (and optionally a badge on the installed app's icon) until you open the
+  grown-up area; both can be switched off here.
 
 > The PIN is a light gate for demos, **not real security**. All data is stored
 > **only on this device** (browser `localStorage`); nothing is uploaded.

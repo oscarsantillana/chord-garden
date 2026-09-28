@@ -77,6 +77,7 @@ const I18n = (() => {
       'home.tapFlagHint': 'Tap a flag to hear its song',
       'home.whoIsPlaying': 'Who is playing?',
       'home.grownUpsTitle': 'Grown-ups',
+      'home.grownUpsNewColour': 'Grown-up area. A new colour is ready.',
 
       // ---- Practice (Practice Set) ---------------------------------------
       'practice.roundsPlayed': 'Rounds played',
@@ -140,6 +141,7 @@ const I18n = (() => {
       'guardian.tabProgress': 'Progress',
       'guardian.tabChildren': 'Children',
       'guardian.tabSettings': 'Settings',
+      'guardian.tabColoursReady': 'Colours, a new colour is ready',
       'guardian.sectionsAria': 'Grown-up sections',
       'guardian.done': 'Done',
       'guardian.area': 'Grown-up area',
@@ -210,6 +212,7 @@ const I18n = (() => {
       'progress.mixups': 'Mix-ups',
       'progress.mixupsHint': 'The colour that was played, and the colour tapped instead.',
       'progress.exportButton': 'Export progress (JSON)',
+      'progress.seeColours': 'See colours',
 
       // ---- Guardian: Children (profiles) -------------------------------------
       'children.colourCount.one': '{count} colour',
@@ -231,6 +234,14 @@ const I18n = (() => {
       // ---- Guardian: Settings -------------------------------------------------
       'settings.roundsPerSet': 'Rounds per set',
       'settings.practiceSection': 'Practice',
+      'settings.newColour.section': 'When a new colour is ready',
+      'settings.newColour.dot': 'Dot on the lock',
+      'settings.newColour.dotSub': 'A small dot on the lock on the home screen.',
+      'settings.newColour.badge': 'Badge on the app icon',
+      'settings.newColour.badgeSub': 'For the installed app. Your device may ask to allow notifications; Chord Garden never sends any.',
+      'settings.newColour.badgeUnsupported': "This device doesn't show badges on web app icons.",
+      'settings.newColour.badgeBlocked': "Notifications are off for Chord Garden, so the badge may not show. You can turn them on in your device's settings.",
+      'settings.newColour.hint': 'Children see no words, numbers or colours. The dot and the badge go away when you open the grown-up area, and come back when a new colour is ready.',
       'settings.practiceHint': 'A standard set is 20 rounds, about 2–3 minutes. Short, frequent sets work best.',
       'settings.picturesAria': 'Pictures on the flags',
       'settings.flagsSection': 'Flags',
@@ -329,6 +340,7 @@ const I18n = (() => {
       'home.tapFlagHint': 'Toca una bandera para oír su canción',
       'home.whoIsPlaying': '¿Quién está jugando?',
       'home.grownUpsTitle': 'Adultos',
+      'home.grownUpsNewColour': 'Área de adultos. Hay un color nuevo listo.',
 
       'practice.roundsPlayed': 'Rondas jugadas',
       'practice.listenAgain': 'Escuchar otra vez',
@@ -386,6 +398,7 @@ const I18n = (() => {
       'guardian.tabProgress': 'Progreso',
       'guardian.tabChildren': 'Niños',
       'guardian.tabSettings': 'Ajustes',
+      'guardian.tabColoursReady': 'Colores, hay un color nuevo listo',
       'guardian.sectionsAria': 'Secciones de adultos',
       'guardian.done': 'Hecho',
       'guardian.area': 'Área de adultos',
@@ -454,6 +467,7 @@ const I18n = (() => {
       'progress.mixups': 'Confusiones',
       'progress.mixupsHint': 'El color que sonó, y el color que se tocó en su lugar.',
       'progress.exportButton': 'Exportar progreso (JSON)',
+      'progress.seeColours': 'Ver colores',
 
       'children.colourCount.one': '{count} color',
       'children.colourCount.other': '{count} colores',
@@ -473,6 +487,14 @@ const I18n = (() => {
 
       'settings.roundsPerSet': 'Rondas por sesión',
       'settings.practiceSection': 'Práctica',
+      'settings.newColour.section': 'Cuando haya un color nuevo listo',
+      'settings.newColour.dot': 'Punto en el candado',
+      'settings.newColour.dotSub': 'Un puntito en el candado de la pantalla de inicio.',
+      'settings.newColour.badge': 'Globo en el icono de la app',
+      'settings.newColour.badgeSub': 'Para la app instalada. Puede que tu dispositivo te pida permitir notificaciones; Chord Garden nunca envía ninguna.',
+      'settings.newColour.badgeUnsupported': 'Este dispositivo no muestra globos en los iconos de las apps web.',
+      'settings.newColour.badgeBlocked': 'Las notificaciones de Chord Garden están desactivadas, así que puede que el globo no aparezca. Puedes activarlas en los ajustes del dispositivo.',
+      'settings.newColour.hint': 'Los niños no ven palabras, números ni colores. El punto y el globo desaparecen al abrir el área de adultos y vuelven cuando haya un color nuevo listo.',
       'settings.practiceHint': 'Una sesión estándar tiene 20 rondas, unos 2–3 minutos. Funciona mejor con sesiones cortas y frecuentes.',
       'settings.picturesAria': 'Dibujos en las banderas',
       'settings.flagsSection': 'Banderas',

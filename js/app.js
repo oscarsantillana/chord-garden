@@ -16,12 +16,16 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.1.1';
+  const APP_VERSION = '0.2.0';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
   // "Updated to version N." for the rest of this session only.
   let updatedTo = null;
+
+  // Colours in the order they're introduced (data.js's CHORDS order), for
+  // Logic's "what's next" helpers.
+  const COLOR_ORDER = CHORDS.map((c) => c.name);
 
   const AVATARS = Sprites.animals; // custom SVG mascots (see sprites.js)
 
@@ -265,6 +269,35 @@
     return !session && !!app.querySelector('.home');
   }
 
+  // --- "A new colour is ready" signals ------------------------------------
+  // Profiles ready for a next colour that no grown-up has been shown yet.
+  // Drives Home's lock dot and the app-icon badge.
+  function pendingAlerts() {
+    return Logic.unseenReadiness(Store.all().profiles, COLOR_ORDER);
+  }
+
+  // Opening the grown-up area counts as being shown: remember each ready
+  // colour so the dot and badge only return for a NEW next colour.
+  function markReadySeen() {
+    pendingAlerts().forEach((a) => Store.updateProfile(a.id, { readySeen: a.next }));
+    syncIconBadge();
+  }
+
+  // Mirror the alert count on the installed app's icon (Badging API), only
+  // when a grown-up opted in. Unsupported browsers and failures are ignored:
+  // the badge is a nicety and must never break the app.
+  function syncIconBadge() {
+    if (typeof navigator === 'undefined' || typeof navigator.setAppBadge !== 'function') return;
+    const n = Store.getIconBadge() ? pendingAlerts().length : 0;
+    try {
+      let result;
+      if (n > 0) result = navigator.setAppBadge(n);
+      else if (typeof navigator.clearAppBadge === 'function') result = navigator.clearAppBadge();
+      else result = navigator.setAppBadge(0);
+      if (result && typeof result.catch === 'function') result.catch(() => {});
+    } catch (e) { /* ignore */ }
+  }
+
   function renderHome() {
     clearScreen();
     clearConfetti();
@@ -308,11 +341,19 @@
       I18n.t('errors.startError'));
     const startBtn = playButton(I18n.t('home.play'), startError);
 
+    // No number, no text and no chord colour: a child sees only a small ink
+    // dot on the lock they already know is for grown-ups.
+    const showDot = Store.getLockDot() && pendingAlerts().length > 0;
+    syncIconBadge();
     const profileStrip = el('header', { class: 'home-top' },
       el('button', { class: 'avatar-chip', title: I18n.t('home.whoIsPlaying'), onclick: openProfilePicker },
         el('span', { class: 'avatar-emoji', html: Sprites.mascot(p.avatar) }),
         el('span', { class: 'avatar-name' }, p.name)),
-      el('button', { class: 'gear', title: I18n.t('home.grownUpsTitle'), 'aria-label': I18n.t('guardian.area'), onclick: () => renderGuardianGate(), html: Sprites.icon('lock') }));
+      el('button', {
+        class: 'gear', title: I18n.t('home.grownUpsTitle'),
+        'aria-label': I18n.t(showDot ? 'home.grownUpsNewColour' : 'guardian.area'),
+        onclick: () => renderGuardianGate(), html: Sprites.icon('lock'),
+      }, showDot ? el('span', { class: 'gear-dot', 'aria-hidden': 'true' }) : null));
 
     app.appendChild(el('section', { class: 'screen home' },
       profileStrip,
@@ -1092,6 +1133,7 @@
         early,
         ...(session.mode === 'mic' ? { src: 'mic' } : {}),
       });
+      syncIconBadge(); // this set may have made the child ready for a new colour
       const today = Logic.gardenDays(Store.activeProfile().garden).today;
       watering = { before, after: Logic.plantStage(today.sets), colors: today.colors };
     }
@@ -1260,13 +1302,18 @@
   function renderGuardian(tab) {
     clearScreen();
     setMode('adult');
+    // Rendering the area is what "shows" a grown-up the ready colour, even if
+    // they toggle colours while inside, so do it on every render.
+    markReadySeen();
     const p = Store.activeProfile();
+    const activeReady = !!Logic.readyForNext(p, COLOR_ORDER);
     const tabs = el('nav', { class: 'segmented g-tabs', 'aria-label': I18n.t('guardian.sectionsAria') },
       GUARDIAN_TABS().map(([id, lbl]) => el('button', {
         class: 'seg g-tab' + (tab === id ? ' sel' : ''),
         'aria-current': tab === id ? 'page' : null,
+        'aria-label': id === 'colors' && activeReady && tab !== 'colors' ? I18n.t('guardian.tabColoursReady') : null,
         onclick: () => renderGuardian(id),
-      }, lbl)));
+      }, lbl, id === 'colors' && activeReady && tab !== 'colors' ? el('span', { class: 'g-tab-dot', 'aria-hidden': 'true' }) : null)));
 
     const body = el('div', { class: 'g-body' });
     if (tab === 'colors') guardianColors(body);
@@ -1325,11 +1372,11 @@
   // Ready to add the next colour when every active colour is well known over
   // its recent attempts (see js/logic.js for why "recent" beats "lifetime").
   function nextColorToAdd(p) {
-    const have = new Set(p.activeColors);
-    return CHORDS.find((c) => !have.has(c.name));
+    const name = Logic.nextColor(p.activeColors, COLOR_ORDER);
+    return name ? CHORD_BY_NAME[name] : undefined;
   }
 
-  function readinessCard(p, next) {
+  function readinessCard(p, next, opts = {}) {
     if (!next) {
       return el('div', { class: 'readiness ready' },
         el('span', { class: 'r-icon', html: Sprites.icon('trophy') }),
@@ -1362,7 +1409,10 @@
       pips,
       ready ? el('div', { class: 'r-actions' },
         el('button', { class: 'primary-btn', onclick: () => { Store.addColor(next.name); renderGuardian('colors'); } },
-          el('span', { class: 'btn-swatch', style: `background:${next.swatch}` }), I18n.t('colors.addButton', { color: I18n.color(next.name) }))) : null);
+          el('span', { class: 'btn-swatch', style: `background:${next.swatch}` }), I18n.t('colors.addButton', { color: I18n.color(next.name) })),
+        // Progress shows this card too; from there the grown-up may want
+        // the whole Colours tab instead of just adding the next colour.
+        opts.seeColours ? el('button', { class: 'secondary-btn', onclick: () => renderGuardian('colors') }, I18n.t('progress.seeColours')) : null) : null);
   }
 
   function guardianColors(body) {
@@ -1505,6 +1555,11 @@
     const seen = days.reduce((n, d) => n + d.seen, 0);
     const right = days.reduce((n, d) => n + d.correct, 0);
 
+    // The same card as the Colours tab, but only when there's something to
+    // act on, so Progress stays about progress the rest of the time.
+    const readyNext = Logic.readyForNext(p, COLOR_ORDER);
+    if (readyNext) body.appendChild(readinessCard(p, CHORD_BY_NAME[readyNext], { seeColours: true }));
+
     body.appendChild(el('div', { class: 'stat-tiles' },
       statTile(I18n.t('progress.setsToday'), String(setsToday(p)), I18n.t('progress.aimFiveSets')),
       statTile(I18n.t('progress.last14Days'), seen ? Math.round((right / seen) * 100) + '%' : '—',
@@ -1613,6 +1668,7 @@
     const list = el('div', { class: 'g-card g-list' });
     data.profiles.forEach((pr) => {
       const active = pr.id === data.activeProfileId;
+      const readyNext = Logic.readyForNext(pr, COLOR_ORDER);
       list.appendChild(el('div', { class: 'profile-item' },
         el('button', {
           class: 'g-row', 'aria-current': active ? 'true' : null,
@@ -1624,7 +1680,10 @@
             el('span', { class: 'g-row-sub' }, I18n.t('children.summary', {
               colours: I18n.plural('children.colourCount', pr.activeColors.length),
               sets: I18n.plural('children.setCount', pr.sessions.length),
-            }))),
+            })),
+            readyNext ? el('span', { class: 'g-row-ready' },
+              el('span', { class: 'btn-ico', html: Sprites.icon('check') }),
+              I18n.t('colors.readyForNext', { color: I18n.color(readyNext) })) : null),
           active ? el('span', { class: 'g-row-end' }, el('span', { class: 'badge' }, I18n.t('common.playing'))) : null),
         data.profiles.length > 1 ? el('button', {
           class: 'row-remove', 'aria-label': I18n.t('children.removeAria', { name: pr.name }),
@@ -1748,6 +1807,46 @@
     body.appendChild(section(I18n.t('settings.practiceSection'), el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row stack' }, el('span', { class: 'g-row-title' }, I18n.t('settings.roundsPerSet')), lengths)),
       I18n.t('settings.practiceHint')));
+
+    // Signals for "a new colour is ready": both whole-device settings. The
+    // badge needs the Badging API, and iPhone/iPad only allow it once
+    // notifications are permitted (Chord Garden never sends any).
+    const badgeSupported = typeof navigator !== 'undefined' && typeof navigator.setAppBadge === 'function';
+    const badgeOn = badgeSupported && Store.getIconBadge();
+    const notifBlocked = typeof Notification !== 'undefined' && Notification.permission === 'denied';
+    const dotSwitch = el('button', {
+      class: 'switch', role: 'switch', 'aria-checked': Store.getLockDot() ? 'true' : 'false', 'aria-label': I18n.t('settings.newColour.dot'),
+      onclick: () => { Store.setLockDot(!Store.getLockDot()); renderGuardian('settings'); },
+    });
+    const badgeSwitch = el('button', {
+      class: 'switch', role: 'switch', 'aria-checked': badgeOn ? 'true' : 'false', 'aria-label': I18n.t('settings.newColour.badge'),
+      disabled: badgeSupported ? null : 'true',
+      onclick: async () => {
+        if (!Store.getIconBadge()) {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+            try { await Notification.requestPermission(); } catch (e) { /* ignore */ }
+          }
+          Store.setIconBadge(true);
+        } else {
+          Store.setIconBadge(false);
+        }
+        syncIconBadge();
+        renderGuardian('settings');
+      },
+    });
+    body.appendChild(section(I18n.t('settings.newColour.section'), el('div', { class: 'g-card g-list' },
+      el('div', { class: 'g-row' },
+        el('span', { class: 'g-row-main' },
+          el('span', { class: 'g-row-title' }, I18n.t('settings.newColour.dot')),
+          el('span', { class: 'g-row-sub' }, I18n.t('settings.newColour.dotSub'))),
+        dotSwitch),
+      el('div', { class: 'g-row' },
+        el('span', { class: 'g-row-main' },
+          el('span', { class: 'g-row-title' }, I18n.t('settings.newColour.badge')),
+          el('span', { class: 'g-row-sub' }, I18n.t(!badgeSupported ? 'settings.newColour.badgeUnsupported'
+            : badgeOn && notifBlocked ? 'settings.newColour.badgeBlocked' : 'settings.newColour.badgeSub'))),
+        badgeSwitch)),
+      I18n.t('settings.newColour.hint')));
 
     const pictureSwitch = el('button', {
       class: 'switch', role: 'switch', 'aria-checked': p.flagPictures ? 'true' : 'false', 'aria-label': I18n.t('settings.picturesAria'),

@@ -224,4 +224,26 @@ function ev(c, a, ok) {
   console.log('ok - dailySets: counts sets per local day, ignoring older ones');
 }
 
+// --- nextColor / readyForNext / unseenReadiness ---------------------------------
+
+{
+  const order = ['red', 'yellow', 'blue'];
+  assert.equal(Logic.nextColor(['red'], order), 'yellow');
+  assert.equal(Logic.nextColor(['yellow', 'red'], order), 'blue');
+  assert.equal(Logic.nextColor(['red', 'yellow', 'blue'], order), null);
+
+  const good = (c) => Array.from({ length: 10 }, () => ({ c, a: c, ok: true }));
+  const ready = { id: 'a', activeColors: ['red', 'yellow'], events: [...good('red'), ...good('yellow')] };
+  assert.equal(Logic.readyForNext(ready, order), 'blue');
+  assert.equal(Logic.readyForNext({ id: 'b', activeColors: ['red'], events: [] }, order), null, 'not ready');
+  assert.equal(Logic.readyForNext({ ...ready, activeColors: ['red', 'yellow', 'blue'], events: [...ready.events, ...good('blue')] }, order), null, 'all colours added');
+
+  const seen = { ...ready, id: 'c', readySeen: 'blue' };
+  const stale = { ...ready, id: 'd', readySeen: 'yellow' };
+  const fresh = { ...ready, id: 'e', readySeen: null };
+  const alerts = Logic.unseenReadiness([seen, stale, fresh, { id: 'f', activeColors: ['red'], events: [] }], order);
+  assert.deepEqual(alerts.map((a) => [a.id, a.next]), [['d', 'blue'], ['e', 'blue']]);
+  console.log('ok - nextColor, readyForNext and unseenReadiness');
+}
+
 console.log('\nAll logic.test.mjs assertions passed.');
