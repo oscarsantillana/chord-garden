@@ -504,3 +504,120 @@ console.log('ok - Store: seenVersion normalises non-strings to null and keeps ve
   assert.equal(ui.store.getSeenVersion(), APP_VERSION, 'the newly-running version is persisted right away');
 }
 console.log('ok - Settings → About: a different stored seenVersion shows "Updated to version N." for this session');
+
+// --- "A new colour is ready" signals ---------------------------------------
+// Seeds a saved game with two children: Kid (active, red only) and Sib
+// (yellow too). Ready means clean recent answers for every active colour.
+const readyEvents = (colors) => colors.flatMap((c) => Array.from({ length: 10 }, (_, i) => ({ c, a: c, ok: true, ts: 1000 + i })));
+const seedTwo = ({ kidReady = true, sibReady = false, kidSeen = null, extra = {} } = {}) => {
+  const profile = (id, name, colors, ready, readySeen) => ({
+    id, name, avatar: 'fox', activeColors: colors, roundsPerSet: 20, realPianoMode: false, flagPictures: true,
+    stats: {}, sessions: [], events: ready ? readyEvents(colors) : [], garden: [], readySeen,
+  });
+  const data = {
+    version: 9, activeProfileId: 'kid',
+    profiles: [profile('kid', 'Kid', ['red'], kidReady, kidSeen), profile('sib', 'Sib', ['red', 'yellow'], sibReady, null)],
+    pin: '2468', language: 'auto', noteNames: 'auto', seenVersion: APP_VERSION, lockDot: true, iconBadge: false, ...extra,
+  };
+  return { 'rainbow-pitch:v1': JSON.stringify(data) };
+};
+const openGrownUps = async (ui) => {
+  ui.app.querySelector('.gear').click();
+  for (const digit of ['2', '4', '6', '8']) await ui.click(digit);
+};
+const ariaOf = (node) => node.attrs['aria-label'];
+
+{
+  const ui = setup({ seed: seedTwo() });
+  assert.ok(ui.app.querySelector('.gear-dot'), 'a ready, unseen child puts a dot on the lock');
+  assert.equal(ariaOf(ui.app.querySelector('.gear')), 'Grown-up area. A new colour is ready.');
+  assert.equal(ui.app.querySelector('.gear').textContent, '', 'the child sees no text on the lock');
+  await openGrownUps(ui);
+  assert.equal(ui.store.activeProfile().readySeen, 'yellow', 'opening the grown-up area records the colour shown');
+  await ui.click('Done');
+  assert.ok(!ui.app.querySelector('.gear-dot'), 'the dot is gone after the grown-up looked');
+  assert.equal(ariaOf(ui.app.querySelector('.gear')), 'Grown-up area');
+}
+console.log('ok - Home: a ready, unseen child shows the lock dot until the grown-up area is opened');
+
+{
+  const ui = setup({ seed: seedTwo({ kidReady: false, sibReady: true }) });
+  assert.ok(ui.app.querySelector('.gear-dot'), 'a ready child who is not the active one still lights the dot');
+  const none = setup({ seed: seedTwo({ kidReady: false }) });
+  assert.ok(!none.app.querySelector('.gear-dot'), 'no dot when nobody is ready');
+  const seen = setup({ seed: seedTwo({ kidSeen: 'yellow' }) });
+  assert.ok(!seen.app.querySelector('.gear-dot'), 'no dot for a colour already shown');
+  const off = setup({ seed: seedTwo({ extra: { lockDot: false } }) });
+  assert.ok(!off.app.querySelector('.gear-dot'), 'the setting hides the dot');
+}
+console.log('ok - Home: dot covers other children, and stays hidden when seen, unready or switched off');
+
+{
+  const calls = [];
+  const badgeUi = setup({ seed: seedTwo({ extra: { iconBadge: true } }),
+    navigator: { setAppBadge: (n) => { calls.push(['set', n]); return Promise.resolve(); }, clearAppBadge: () => { calls.push(['clear']); return Promise.reject(new Error('x')); } } });
+  assert.deepEqual(calls, [['set', 1]], 'enabled + unseen sets the badge to the number of alerts');
+  await openGrownUps(badgeUi);
+  assert.deepEqual(calls[calls.length - 1], ['clear'], 'opening the grown-up area clears it (a rejected promise is swallowed)');
+  const offCalls = [];
+  setup({ seed: seedTwo(), navigator: { setAppBadge: (n) => { offCalls.push(['set', n]); }, clearAppBadge: () => { offCalls.push(['clear']); } } });
+  assert.ok(offCalls.length && offCalls.every((c) => c[0] === 'clear'), 'badge setting off never sets a badge');
+  const fallback = [];
+  setup({ seed: seedTwo({ kidReady: false, extra: { iconBadge: true } }), navigator: { setAppBadge: (n) => { fallback.push(n); } } });
+  assert.deepEqual(fallback, [0], 'without clearAppBadge, a zero badge clears it');
+}
+console.log('ok - App icon badge: counts unseen alerts, clears when seen, and stays off unless enabled');
+
+{
+  const ui = setup({ seed: seedTwo() });
+  await openGrownUps(ui);
+  const coloursTab = () => ui.app.querySelectorAll('.g-tab').find((b) => b.textContent === 'Colours');
+  assert.ok(!coloursTab().querySelector('.g-tab-dot'), 'no tab dot while on the Colours tab');
+  await ui.click('Progress');
+  assert.ok(coloursTab().querySelector('.g-tab-dot'), 'Colours tab shows a dot when the active child is ready');
+  assert.equal(ariaOf(coloursTab()), 'Colours, a new colour is ready');
+  assert.ok(ui.app.querySelector('.readiness'), 'Progress leads with the readiness card');
+  await ui.click('See colours');
+  assert.ok(ui.app.querySelector('.readiness'), 'See colours goes to the Colours tab');
+  assert.equal(ui.app.textContent.includes('See colours'), false, 'the Colours tab card has no See colours button');
+  await ui.click('Children');
+  const ready = ui.app.querySelectorAll('.g-row-ready');
+  assert.equal(ready.length, 1, 'only the ready child gets the line');
+  assert.equal(ready[0].textContent, 'Ready for Yellow');
+  await ui.click('Settings');
+  assert.ok(ui.app.textContent.includes("This device doesn't show badges on web app icons."), 'no Badging API: unsupported text');
+  assert.ok(ui.app.textContent.includes('When a new colour is ready'));
+}
+console.log('ok - Grown-up area: tab dot, Progress card with See colours, Children ready line, Settings unsupported text');
+
+{
+  const ui = setup({ seed: seedTwo({ kidReady: false }) });
+  await openGrownUps(ui);
+  await ui.click('Progress');
+  assert.ok(!ui.app.querySelector('.readiness'), 'nothing extra on Progress when not ready');
+  assert.ok(!ui.app.querySelector('.g-tab-dot'));
+  assert.equal(ui.app.textContent.includes('See colours'), false);
+}
+console.log('ok - Grown-up area: Progress and the tab bar stay plain when the active child is not ready');
+
+{
+  const ui = setup({ seed: seedTwo({ kidReady: false }), navigator: { setAppBadge: () => {}, clearAppBadge: () => {} } });
+  await openSettings(ui);
+  const badgeSwitch = () => ui.app.querySelectorAll('.switch').find((s) => ariaOf(s) === 'Badge on the app icon');
+  badgeSwitch().click(); await flush();
+  assert.equal(ui.store.all().iconBadge, true, 'turning the badge on saves the setting');
+  assert.equal(badgeSwitch().attrs['aria-checked'], 'true');
+  badgeSwitch().click(); await flush();
+  assert.equal(ui.store.all().iconBadge, false, 'turning it off saves too');
+}
+console.log('ok - Settings: the badge switch saves the device-wide setting');
+
+{
+  const oldProfile = { id: 'o', name: 'Old', avatar: 'fox', activeColors: ['red'], roundsPerSet: 20, stats: {}, sessions: [], events: [], garden: [] };
+  const ui = setup({ seed: { 'rainbow-pitch:v1': JSON.stringify({ version: 8, activeProfileId: 'o', profiles: [oldProfile], pin: '2468' }) } });
+  assert.equal(ui.store.all().version, 9);
+  assert.equal(ui.store.activeProfile().readySeen, null);
+  assert.equal(ui.store.getLockDot(), true);
+  assert.equal(ui.store.getIconBadge(), false);
+}
+console.log('ok - Store: a version-8 save loads with readySeen null, lockDot on and iconBadge off');

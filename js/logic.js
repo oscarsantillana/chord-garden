@@ -47,6 +47,34 @@ const Logic = {
     return Logic.readyColors(events, activeColors, opts).length === activeColors.length;
   },
 
+  // The next colour to introduce: the first one in introduction order that
+  // isn't active yet, or null once the child has them all. Kept here (not in
+  // app.js) so the Home dot, the badge and the grown-up tabs all agree.
+  nextColor(activeColors, order) {
+    return order.find((name) => !activeColors.includes(name)) || null;
+  },
+
+  // The colour a profile is ready to be given next, or null when it isn't
+  // ready (or has nothing left to add). Same bar as the Colours tab's card.
+  readyForNext(profile, order) {
+    const active = profile.activeColors || [];
+    const next = Logic.nextColor(active, order);
+    if (!next || !Logic.readiness(profile.events || [], active)) return null;
+    return next;
+  },
+
+  // Profiles whose grown-up hasn't yet been shown that a given next colour is
+  // ready. `readySeen` remembers the colour they were shown, so the alert
+  // returns only when a NEW next colour becomes ready, never for the same one.
+  unseenReadiness(profiles, order) {
+    const alerts = [];
+    profiles.forEach((p) => {
+      const next = Logic.readyForNext(p, order);
+      if (next && next !== p.readySeen) alerts.push({ id: p.id, next });
+    });
+    return alerts;
+  },
+
   // The active colours that individually clear the readiness bar, in their
   // original order — lets the guardian see "4 of 6 ready" instead of only a
   // yes/no, with the same thresholds readiness() itself uses.

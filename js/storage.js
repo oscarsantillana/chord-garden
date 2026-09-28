@@ -9,7 +9,7 @@
 const Store = (() => {
   const KEY = 'rainbow-pitch:v1';
   const BACKUP_KEY = 'rainbow-pitch:backup';
-  const VERSION = 8; // bumped: added top-level `seenVersion` device preference (see js/updates.js)
+  const VERSION = 9; // bumped: added per-profile `readySeen` and device preferences `lockDot`/`iconBadge` (new-colour signals)
 
   const DEFAULT_ACTIVE = ['red', 'yellow']; // start with two so there is a real choice
   const DEFAULT_ROUNDS = 20;                // a standard Practice Set
@@ -33,6 +33,10 @@ const Store = (() => {
       // day first: { day: 'YYYY-MM-DD', sets, colors: [...] }. That day's
       // plant never wilts once it's in here — see js/logic.js's gardenDays.
       garden: [],
+      // The "ready for next colour" name a grown-up has already been shown
+      // (e.g. 'blue'), so the Home dot and app badge stay quiet until a NEW
+      // next colour is ready. null = nothing shown yet.
+      readySeen: null,
     };
   }
 
@@ -43,6 +47,8 @@ const Store = (() => {
       language: 'auto',   // whole-device preference, like the PIN — not per child
       noteNames: 'auto',  // ditto; see js/i18n.js for what 'auto' resolves to
       seenVersion: null,  // ditto; null means "first install" — see js/app.js's boot sequence
+      lockDot: true,      // ditto; small dot on Home's lock when a new colour is ready
+      iconBadge: false,   // ditto; opt-in app-icon badge, off until a grown-up asks for it
     };
   }
 
@@ -85,6 +91,7 @@ const Store = (() => {
       if (typeof p.flagPictures !== 'boolean') p.flagPictures = true;
       // storage.js loads after logic.js (see index.html's script order), so
       // Logic.* is safe to call here and in recordSession below.
+      if (typeof p.readySeen !== 'string') p.readySeen = null;
       if (!Array.isArray(p.garden)) p.garden = gardenFromSessions(p.sessions);
     });
     // The guardian PIN used to be a hard-coded const in app.js; anything
@@ -100,6 +107,10 @@ const Store = (() => {
     // (never recorded / corrupted) — anything else falls back to null,
     // same reasoning as language/noteNames above.
     if (typeof data.seenVersion !== 'string') data.seenVersion = null;
+    // Booleans, like the device preferences above: anything else (missing in
+    // an older save, or corrupted) falls back to the default.
+    if (typeof data.lockDot !== 'boolean') data.lockDot = true;
+    if (typeof data.iconBadge !== 'boolean') data.iconBadge = false;
     data.version = VERSION;
     return data;
   }
@@ -266,6 +277,19 @@ const Store = (() => {
     return true;
   }
 
+  // Whole-device switches for the "a new colour is ready" signals (Home's
+  // lock dot and the installed app's icon badge) — see js/app.js.
+  function getLockDot() { return data.lockDot !== false; }
+  function setLockDot(on) {
+    data.lockDot = !!on;
+    save();
+  }
+  function getIconBadge() { return data.iconBadge === true; }
+  function setIconBadge(on) {
+    data.iconBadge = !!on;
+    save();
+  }
+
   // The app version (js/app.js's APP_VERSION) this device last booted into —
   // used only to show a one-session "Updated to version N" line in Settings
   // (see js/app.js's boot sequence), never to gate anything.
@@ -283,6 +307,7 @@ const Store = (() => {
     recordRound, recordSession, recordRealPianoRound,
     getPin, setPin,
     getLanguage, setLanguage, getNoteNames, setNoteNames,
+    getLockDot, setLockDot, getIconBadge, setIconBadge,
     getSeenVersion, setSeenVersion,
     DEFAULT_PIN,
   };

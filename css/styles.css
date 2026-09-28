@@ -250,10 +250,18 @@ body.adult #app { max-width: 680px; }
 }
 .avatar-emoji, .avatar-emoji svg { width: 38px; height: 38px; display: block; }
 .gear {
+  position: relative;
   width: 48px; height: 48px; border-radius: 50%;
   display: grid; place-items: center; color: var(--ink-soft);
 }
 .gear svg { width: 22px; height: 22px; }
+/* "A new colour is ready" for the grown-up: garden ink, never a chord colour
+   (colours mean chords), and deliberately no number or text so the child has
+   nothing to read. The ring in --card separates it from the lock. */
+.gear-dot {
+  position: absolute; top: -1px; right: -1px; width: 17px; height: 17px;
+  border-radius: 50%; background: var(--ink); border: 3.5px solid var(--card);
+}
 
 .home-main {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -784,7 +792,17 @@ button.g-row:active { background: var(--fill); }
 }
 .r-pip.ok { opacity: 1; }
 .r-pip svg { width: 12px; height: 12px; }
-.r-actions { grid-column: 2; margin-top: 14px; }
+.r-actions { grid-column: 2; margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+.readiness .secondary-btn { background: var(--surface); }
+.g-tab-dot {
+  display: inline-block; width: 7px; height: 7px; margin-left: 5px;
+  border-radius: 50%; background: var(--accent); vertical-align: middle;
+}
+.g-row-ready {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .8125rem; font-weight: 700; color: var(--good);
+}
+.g-row-ready svg { width: 14px; height: 14px; }
 
 /* Progress tab */
 .stat-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -888,6 +906,8 @@ button.g-row:active { background: var(--fill); }
 }
 .switch[aria-checked="true"] { background: var(--good); }
 .switch[aria-checked="true"]::after { transform: translateX(20px); }
+/* The app-icon badge switch is disabled where the Badging API doesn't exist. */
+.switch:disabled { opacity: .45; }
 
 .danger-row { color: var(--danger); font-weight: 600; justify-content: center; }
 .about { margin: 0 4px; font-size: .8125rem; line-height: 1.55; color: var(--ink-muted); }
