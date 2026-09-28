@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.2.0';
+  const APP_VERSION = '0.2.1';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -114,6 +114,7 @@
     }
     clear(app);
     clearGarden(); // every screen but Home shows the bare hills — see renderHome for where it's filled back in
+    clearTerraces();
   }
 
   async function beginPractice(button, error) {
@@ -214,6 +215,59 @@
   function clearGarden() {
     const layer = document.getElementById('garden');
     if (layer) clear(layer);
+  }
+
+  const terracesLayer = () => (document.querySelector ? document.querySelector('.scene-terraces') : null);
+
+  // Empties the terraces under wrapped rows of flags. Same tolerance as
+  // clearGarden for a missing layer.
+  function clearTerraces() {
+    const layer = terracesLayer();
+    if (layer) layer.innerHTML = '';
+  }
+
+  // The landscape-phone Home puts its flags in a right-hand column that
+  // already stands on the hill (see styles.css), so it gets no terraces.
+  const LANDSCAPE_HOME = '(orientation: landscape) and (max-height: 520px)';
+  function isLandscapeHome() {
+    return typeof window.matchMedia === 'function' && window.matchMedia(LANDSCAPE_HOME).matches;
+  }
+
+  // The hills are fixed but flags wrap into rows, and only the bottom row
+  // can stand on the front hill. When there are two or more rows, paint one
+  // low terrace under each (back row in the far hill's colour, front row in
+  // the near hill's, rows between blended) so no row hangs in the sky. With
+  // a single row the hills already do the job, so the layer stays empty.
+  // Measured from the flags' real positions, so call it after layout settles.
+  function drawTerraces() {
+    const layer = terracesLayer();
+    if (!layer) return;
+    layer.innerHTML = '';
+    if (typeof app.querySelectorAll !== 'function') return;
+    let flags = [];
+    if (app.querySelector('.home')) {
+      if (isLandscapeHome()) return;
+      flags = app.querySelectorAll('.today-swatch');
+    } else if (app.querySelector('.practice')) {
+      flags = app.querySelectorAll('.color-btn');
+    }
+    const first = flags[0];
+    if (!first || typeof first.getBoundingClientRect !== 'function') return;
+    const rows = Layout.flagRows(Array.from(flags, (f) => f.getBoundingClientRect().bottom));
+    if (rows.length < 2) return;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    if (!W || !H) return;
+    layer.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    // Two layers per row instead of color-mix(): an unsupported fill would
+    // paint black, while stacking the near hill's colour at partial opacity
+    // over the far hill's degrades to a plain far-hill terrace.
+    layer.innerHTML = rows.map((base, i) => {
+      const d = Layout.terracePath(base, W, H);
+      const shade = Layout.terraceShade(i, rows.length);
+      return `<path d="${d}" style="fill:var(--hill-back)" />` +
+        (shade > 0 ? `<path d="${d}" style="fill:var(--hill-front)" fill-opacity="${shade.toFixed(2)}" />` : '');
+    }).join('');
   }
 
   // Draws every PAST day's plant along the back hill (today's plant lives in
@@ -355,7 +409,7 @@
         onclick: () => renderGuardianGate(), html: Sprites.icon('lock'),
       }, showDot ? el('span', { class: 'gear-dot', 'aria-hidden': 'true' }) : null));
 
-    app.appendChild(el('section', { class: 'screen home' },
+    app.appendChild(el('section', { class: 'screen home', onanimationend: settleLayout },
       profileStrip,
       el('div', { class: 'home-main' },
         el('div', { class: 'brand' },
@@ -368,6 +422,8 @@
         el('p', { class: 'today-label' }, I18n.t('home.tapFlagHint')),
         flags)));
     renderGarden(p);
+    fitHomeFlags();
+    drawTerraces();
     // An update that arrived mid-set, mid-celebration, or during a guardian
     // visit couldn't apply then (see onChildHome above) — Home showing again
     // is the next safe moment, so catch up on it now.
@@ -864,11 +920,12 @@
 
     const stopBtn = el('button', { class: 'calm-stop', onclick: calmStop }, I18n.t('practice.allDone'));
 
-    app.appendChild(el('section', { class: 'screen practice' + (continuing ? ' continuing' : '') },
+    app.appendChild(el('section', { class: 'screen practice' + (continuing ? ' continuing' : ''), onanimationend: settleLayout },
       el('div', { class: 'practice-top' }, journey, can, stopBtn),
       el('div', { class: 'listen-wrap' }, micPill, listenBtn),
       el('div', { class: 'answers-wrap' }, answers, roundCue, micRetry)));
     fitAnswers();
+    drawTerraces();
     // Draw the vine where the previous round left it, then grow it to this
     // round a frame later so the tip (and the mascot riding it) visibly
     // moves forward instead of popping into place after the re-render.
@@ -914,46 +971,77 @@
     mascotEl.style.top = (vineY(x) - 33).toFixed(1) + 'px';
   }
 
-  // Largest flag that fits every active colour into the space left for
-  // answers, trying each column count at the flag's own proportions. Ties
-  // go to more columns (wider, shorter layouts). Capped so two colours on a
-  // tablet don't become billboards, and floored so a crowded small screen
-  // scrolls rather than shrinking flags below a comfortable tap size.
+  // Practice flags fill the space left for answers (Layout.fitFlags). Capped
+  // so two colours on a tablet don't become billboards, and floored so a
+  // crowded screen doesn't shrink flags below a tappable size. The floor is
+  // 72px, not more, so 14 colours still fit a 320x568 phone without rows
+  // spilling up over the Listen button.
   const FLAG_ASPECT = 110 / 168; // the flag sprite's viewBox
   const GAP_X = 10;
-  const GAP_Y = 18;
-  const FLAG_MAX_H = 230;
-  const FLAG_MIN_H = 96;
-  function fitFlags(n, width, height) {
-    let best = { cols: 1, h: 0 };
-    for (let cols = 1; cols <= n; cols++) {
-      const rows = Math.ceil(n / cols);
-      const h = Math.min(FLAG_MAX_H,
-        (height - GAP_Y * (rows - 1)) / rows,
-        (width - GAP_X * (cols - 1)) / cols / FLAG_ASPECT);
-      if (h >= best.h) best = { cols, h };
-    }
-    const h = Math.max(FLAG_MIN_H, Math.floor(best.h));
-    return { cols: best.cols, h, w: Math.floor(h * FLAG_ASPECT) };
-  }
+  const PRACTICE_FLAGS = { maxH: 230, minH: 72, gapX: GAP_X, gapY: 18, aspect: FLAG_ASPECT };
 
   function fitAnswers() {
     const wrap = app.querySelector('.answers-wrap');
     const answers = app.querySelector('.answers');
     if (!session || !wrap || !answers || !wrap.clientWidth || !wrap.clientHeight) return;
-    const { cols, h, w } = fitFlags(session.colors.length, wrap.clientWidth, wrap.clientHeight);
+    const { cols, h, w } = Layout.fitFlags(session.colors.length, wrap.clientWidth, wrap.clientHeight, PRACTICE_FLAGS);
     answers.style.setProperty('--tile-w', w + 'px');
     answers.style.setProperty('--tile-h', h + 'px');
     answers.style.width = (cols * w + (cols - 1) * GAP_X) + 'px';
   }
+  // Home's flags share the ground below the back hill's ridge with the
+  // "tap a flag" label, so they're sized to what's left rather than left to
+  // wrap and scroll (which would carry flags into the sky while the fixed
+  // hills stay put). maxH 82 is today's size, so few colours look unchanged.
+  const HOME_GAP_X = 14;
+  const HOME_FLAGS = { maxH: 82, minH: 40, gapX: HOME_GAP_X, gapY: 10, aspect: FLAG_ASPECT };
+  function fitHomeFlags() {
+    const box = app.querySelector('.home-flags');
+    const colors = app.querySelector('.today-colors');
+    const label = app.querySelector('.today-label');
+    const n = colors ? colors.children.length : 0;
+    // No layout (the test DOM) means nothing to measure.
+    if (!box || !colors || !label || !n || !box.clientWidth) return;
+    const hillsEl = document.querySelector('.scene-hills');
+    if (!hillsEl) return;
+    const hills = hillsEl.getBoundingClientRect();
+    const boxRect = box.getBoundingClientRect();
+    const W = window.innerWidth || 390;
+    // The lowest point of the back ridge under the flags' width: flags stand
+    // below it, never among the past days' flowers on the ridge.
+    let maxY = 0;
+    for (let i = 0; i <= 8; i++) {
+      maxY = Math.max(maxY, backHillY((boxRect.left + boxRect.width * i / 8) / W));
+    }
+    const ridgeY = hills.top + (maxY / 340) * hills.height;
+    // 30 = #app's 24px bottom padding + .home-flags' 6px; 10 = breathing room.
+    const ground = window.innerHeight - 30 - ridgeY - 10;
+    const budget = ground - label.offsetHeight - 12;
+    const { cols, h, w } = Layout.fitFlags(n, box.clientWidth, budget, HOME_FLAGS);
+    colors.style.cssText = `--hf-w:${w}px;--hf-h:${h}px;max-width:${cols * w + (cols - 1) * HOME_GAP_X}px`;
+  }
+
+  // .screen fades in with a 6px slide, so measurements taken during that
+  // animation are 6px low; measure again once it ends. Only the screen's own
+  // animation counts (the flags' pop-in bubbles up here too).
+  function settleLayout(e) {
+    if (e && e.target !== e.currentTarget) return;
+    if (app.querySelector('.home')) fitHomeFlags();
+    drawTerraces();
+  }
+
   window.addEventListener('resize', () => {
     fitAnswers();
+    if (!session && app.querySelector('.home')) fitHomeFlags();
+    drawTerraces();
     if (session) drawVine(vineProgress, vineProgress);
     // The garden's flower slots are laid out from window width (renderGarden
     // above), so a rotation/resize on Home needs a redraw to keep them
     // spaced right, same as the vine/flags above.
     if (!session && app.querySelector('.home')) renderGarden(Store.activeProfile());
   });
+  // Web fonts change the label's height, which moves the flags.
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => settleLayout());
 
   // Swaps the live #mascot element's face in place (no full re-render) —
   // used for the brief "curious" flash on a miss, since that's a transient

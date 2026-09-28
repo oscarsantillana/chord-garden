@@ -43,7 +43,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   // i18n.js loads right after data.js (same order as index.html) — the
   // sandbox's navigator defaults to {} (English), so existing label-based
   // clicks below keep working unless a test explicitly asks for another one.
-  for (const file of ['data', 'i18n', 'logic', 'storage', 'updates']) vm.runInContext(fs.readFileSync(new URL(`../js/${file}.js`, import.meta.url), 'utf8'), sandbox);
+  for (const file of ['data', 'i18n', 'logic', 'layout', 'storage', 'updates']) vm.runInContext(fs.readFileSync(new URL(`../js/${file}.js`, import.meta.url), 'utf8'), sandbox);
   vm.runInContext('this.store=Store; Store.updateProfile(Store.activeProfile().id, { realPianoMode: ' + micMode + ', activeColors: ' + JSON.stringify(colors) + ', roundsPerSet: 2 });', sandbox);
   vm.runInContext(fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8'), sandbox);
   const chordByName = vm.runInContext('CHORD_BY_NAME', sandbox); // for tests that need to know the (randomly picked) target

@@ -161,6 +161,9 @@ body.adult #scene { display: none; }
 .scene-hills { position: absolute; left: 0; bottom: 0; width: 100%; height: 42vh; min-height: 260px; }
 .hill-back { fill: var(--hill-back); }
 .hill-front { fill: var(--hill-front); }
+/* One low terrace per row of flags when they wrap into 2+ rows (drawTerraces
+   in app.js); above the hills, below the past days' flowers. Empty otherwise. */
+.scene-terraces { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .grass { stroke: var(--grass); }
 
 /* Past days' flowers (renderGarden in app.js). Must stay in sync with
@@ -241,7 +244,15 @@ body.adult #app { max-width: 680px; }
 }
 
 /* --------------------------------------------------------------- Home --- */
-.home { gap: 12px; }
+/* Home never scrolls: scrolling would carry the flags into the sky while the
+   fixed hills stay put. #app itself has no fixed height, so the grown-up
+   area keeps scrolling. The 6px padding (cancelled by the negative margin)
+   leaves room for the 3px + 3px focus rings that overflow: hidden would
+   otherwise cut off, so 28px = #app's 40px vertical padding minus 2 × 6px. */
+.home {
+  gap: 12px; padding: 6px; margin: -6px; overflow: hidden;
+  max-height: calc(100vh - 28px); max-height: calc(100dvh - 28px);
+}
 .home-top { display: flex; justify-content: space-between; align-items: center; }
 .avatar-chip {
   display: inline-flex; align-items: center; gap: 8px;
@@ -265,7 +276,7 @@ body.adult #app { max-width: 680px; }
 
 .home-main {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 26px; text-align: center; padding: 4px 0 8px;
+  gap: 26px; text-align: center; padding: 4px 0 8px; min-height: 0;
 }
 .brand-title {
   margin: 0; font-family: var(--display); font-weight: 800;
@@ -293,14 +304,48 @@ body.adult #app { max-width: 680px; }
 @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
 
 /* Today's flags, planted along the front hill; tapping one plays its chord. */
-.home-flags { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-bottom: 6px; }
+.home-flags { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-bottom: 6px; flex: 0 0 auto; }
 .today-label { margin: 0; font-weight: 800; font-size: .95rem; color: var(--ink); }
 .today-colors { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 10px 14px; }
-.today-swatch { width: 54px; height: 82px; transition: transform .12s ease; animation: pop .4s ease backwards; transform-origin: 16% 100%; }
+.today-swatch { width: var(--hf-w, 54px); height: var(--hf-h, 82px); transition: transform .12s ease; animation: pop .4s ease backwards; transform-origin: 16% 100%; }
 .today-swatch svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .today-swatch:active { transform: rotate(-6deg); }
 .today-swatch:nth-child(2) { animation-delay: .05s; } .today-swatch:nth-child(3) { animation-delay: .1s; }
 .today-swatch:nth-child(4) { animation-delay: .15s; } .today-swatch:nth-child(5) { animation-delay: .2s; }
+
+/* Shorter screens give Play and the title less room, so Home still fits
+   without scrolling (fitHomeFlags in app.js sizes the flags to what's left). */
+@media (max-height: 740px) {
+  .home .play-disc { width: 108px; height: 108px; }
+  .home .play-disc svg { width: 44px; height: 44px; }
+}
+@media (max-height: 620px) {
+  .home .brand-title { font-size: 2.1rem; }
+  .home .brand-sub { font-size: 1rem; margin-top: 4px; }
+  .home .play-disc { width: 88px; height: 88px; border-width: 4px; box-shadow: 0 6px 0 var(--ink); }
+  .home .play-disc svg { width: 36px; height: 36px; }
+  .home .play-label { font-size: 1.25rem; }
+  .home-main { gap: clamp(8px, 2.6vh, 26px); }
+}
+
+/* Landscape phones: title, plant and Play on the left, the flags on the
+   right standing on the hill. Child screens use the full width; the
+   grown-up area keeps its 680px. */
+@media (orientation: landscape) and (max-height: 520px) {
+  body:not(.adult) #app { max-width: none; }
+  .screen.home {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    grid-template-rows: auto minmax(0, 1fr); column-gap: 24px; row-gap: 0;
+  }
+  .home-top { grid-column: 1 / -1; }
+  .home-main { grid-column: 1; grid-row: 2; justify-content: center; }
+  .home-flags { grid-column: 2; grid-row: 2; align-self: end; }
+  .home .brand-title { font-size: 2rem; }
+  .home .brand-sub { font-size: 1rem; margin-top: 4px; }
+  .home .play-disc { width: 88px; height: 88px; border-width: 4px; box-shadow: 0 6px 0 var(--ink); }
+  .home .play-disc svg { width: 36px; height: 36px; }
+  .home .play-label { font-size: 1.25rem; }
+}
 
 /* ------------------------------------------------------------- Flags --- */
 .flag-pole { fill: var(--pole); }
