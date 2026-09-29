@@ -308,13 +308,28 @@ const Store = (() => {
     save();
   }
 
+  // Asks the browser to keep this site's storage instead of evicting it under
+  // pressure. Best effort: unsupported browsers, denials and errors are all
+  // ignored. Only call it from the grown-up area (Firefox may show a prompt).
+  let persistenceAsked = false;
+  function requestPersistence() {
+    if (persistenceAsked) return Promise.resolve();
+    persistenceAsked = true;
+    try {
+      const storage = typeof navigator === 'object' && navigator ? navigator.storage : null;
+      if (!storage || typeof storage.persist !== 'function') return Promise.resolve();
+      const already = typeof storage.persisted === 'function' ? Promise.resolve(storage.persisted()) : Promise.resolve(false);
+      return already.then((yes) => (yes ? undefined : storage.persist())).then(() => {}, () => {});
+    } catch (e) { return Promise.resolve(); }
+  }
+
   return {
     all,
     activeProfile, setActiveProfile,
     addProfile, removeProfile, updateProfile, resetProgress,
     addColor, removeColor,
     recordRound, recordSession, recordRealPianoRound,
-    getPin, setPin,
+    getPin, setPin, requestPersistence,
     getLanguage, setLanguage, getNoteNames, setNoteNames,
     getLockDot, setLockDot, getIconBadge, setIconBadge,
     getSeenVersion, setSeenVersion,

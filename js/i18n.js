@@ -265,6 +265,8 @@ const I18n = (() => {
       'settings.resetConfirm': 'Reset progress',
       'settings.aboutP1': 'Chord Garden uses the Eguchi Chord Identification Method: children aged about 2–6 learn absolute pitch by matching piano chords to fixed colours. Practise about 5 short times a day.',
       'settings.aboutP2': 'All data stays on this device.',
+      'settings.homeScreen.title': 'Add Chord Garden to your Home Screen',
+      'settings.homeScreen.body': 'Safari can clear a website’s saved data if it isn’t opened for about a week, and progress would go with it. Opened from the Home Screen, Chord Garden keeps it. In Safari, open the Share menu and choose Add to Home Screen.',
 
       // ---- Settings: About (version + manual update check) ------------------
       'settings.about.section': 'About',
@@ -518,6 +520,8 @@ const I18n = (() => {
       'settings.resetConfirm': 'Reiniciar progreso',
       'settings.aboutP1': 'Chord Garden usa el método de identificación de acordes de Eguchi: los niños de unos 2 a 6 años desarrollan el oído absoluto asociando acordes de piano a colores fijos. Practica unas 5 veces al día, en sesiones cortas.',
       'settings.aboutP2': 'Todos los datos se quedan en este dispositivo.',
+      'settings.homeScreen.title': 'Añade Chord Garden a tu pantalla de inicio',
+      'settings.homeScreen.body': 'Safari puede borrar los datos guardados de un sitio web si no lo abres en una semana, y el progreso se perdería con ellos. Si abres Chord Garden desde la pantalla de inicio, se conserva. En Safari, abre el menú Compartir y elige la opción para añadir Chord Garden a la pantalla de inicio.',
 
       'settings.about.section': 'Acerca de',
       'settings.about.version': 'Versión {version}',
