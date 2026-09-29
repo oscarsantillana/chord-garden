@@ -195,6 +195,80 @@ const Logic = {
     return `${y}-${m}-${day}`;
   },
 
+  // The first local day on which a colour would have cleared the readiness
+  // bar, replaying stored events oldest-first (real-piano rounds ignored, as
+  // in readyColors). For each attempt we ask readyColors itself, over just
+  // the newest `windowSize` events up to that point, so "ready" has one
+  // definition and this can't drift from the Colours tab. Returns null if it
+  // never got there. `events` is newest-first; events with no numeric `ts`
+  // can't be placed on a day, so they are skipped.
+  firstReadyDay(events, colorName, opts = {}) {
+    const windowSize = opts.windowSize || 20;
+    const chrono = (events || [])
+      .filter((e) => e && e.c === colorName && e.src !== 'mic' && typeof e.ts === 'number')
+      .reverse();
+    for (let k = 1; k <= chrono.length; k++) {
+      const window = chrono.slice(Math.max(0, k - windowSize), k).reverse(); // newest-first, like p.events
+      if (Logic.readyColors(window, [colorName], opts).length) return Logic.dayKey(chrono[k - 1].ts);
+    }
+    return null;
+  },
+
+  // Rebuild the per-day practice history from what older saves still hold:
+  // sets per day from the garden, and first-attempt tallies from the recent
+  // events (each stored event is one first attempt). Real-piano events go
+  // into `m`, kept apart from `t` as everywhere else. Newest day first.
+  // Shape: { day, sets, t: { colour: [tries, right] }, m?: { ... } }.
+  historyFromSaved(garden, events) {
+    const byDay = new Map();
+    const entryFor = (day) => {
+      if (!byDay.has(day)) byDay.set(day, { day, sets: 0, t: {} });
+      return byDay.get(day);
+    };
+    (Array.isArray(garden) ? garden : []).forEach((g) => {
+      if (g && typeof g.day === 'string') entryFor(g.day).sets += Number(g.sets) || 0;
+    });
+    (Array.isArray(events) ? events : []).forEach((e) => {
+      if (!e || typeof e.c !== 'string' || typeof e.ts !== 'number') return;
+      const entry = entryFor(Logic.dayKey(e.ts));
+      let bucket = entry.t;
+      if (e.src === 'mic') bucket = entry.m = entry.m || {};
+      const tally = bucket[e.c] || (bucket[e.c] = [0, 0]);
+      tally[0] += 1;
+      if (e.ok) tally[1] += 1;
+    });
+    return Array.from(byDay.values()).sort((a, b) => (a.day < b.day ? 1 : -1));
+  },
+
+  // When each colour was added and first became ready, reconstructed from
+  // the garden and recent events. Covers the active colours plus any colour
+  // seen in either. These are estimates (only ~15 days of events survive),
+  // so each entry lists its estimated fields in `approx`: `added` always (the
+  // first day seen, up to a year back), `ready` too when replaying the
+  // events found one (for a colour known before them, that's only "ready by
+  // then"). A `ready` set later, live, is exact. A colour never seen gets
+  // `today`.
+  colorDatesFromSaved(garden, events, activeColors, today) {
+    const first = new Map(); // colour -> earliest day seen
+    const see = (c, day) => {
+      if (typeof c !== 'string' || !day) return;
+      if (!first.has(c) || day < first.get(c)) first.set(c, day);
+    };
+    (Array.isArray(garden) ? garden : []).forEach((g) => {
+      if (g) (g.colors || []).forEach((c) => see(c, g.day));
+    });
+    (Array.isArray(events) ? events : []).forEach((e) => {
+      if (e && typeof e.ts === 'number') see(e.c, Logic.dayKey(e.ts));
+    });
+    const names = new Set([...(activeColors || []), ...first.keys()]);
+    const out = {};
+    names.forEach((c) => {
+      const ready = Logic.firstReadyDay(events, c);
+      out[c] = { added: first.get(c) || today, ready, approx: ready ? ['added', 'ready'] : ['added'] };
+    });
+    return out;
+  },
+
   // Sets played in a day -> how grown that day's plant is. Clamped so a
   // marathon day still reads as a full bloom (5) instead of overflowing the
   // sprite stages Sprites.plant knows how to draw.
