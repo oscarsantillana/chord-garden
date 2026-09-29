@@ -8,12 +8,6 @@ reading, no scores, no chord names — just listening and playing. Grown-ups get
 quiet, PIN-protected area to choose colours, follow progress, and add the next
 colour when the child is ready.
 
-> This is a fresh, self-contained rebuild synthesising three earlier prototypes
-> in this workspace — `eguchi`, `cim`/`cim-1` (Chord Identification Method
-> Trainer), and `eguchi-codex` (*Lend Me Your Ears*). It keeps the authoritative
-> Eguchi colour↔chord mapping and the child-first UX principles from those, with
-> zero build tooling.
-
 ---
 
 ## The method in one minute
