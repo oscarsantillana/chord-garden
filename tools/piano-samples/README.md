@@ -31,11 +31,20 @@ more than 1.5 dB, and no clipping. It writes the measurements to
 layer 7, is the everyday sound; the app's earlier files were Salamander
 layers 6–8, so it keeps the sound children already know.
 
+`soft` (Salamander layer 4, 3 dB quieter and darker) and `firm` (layer 11,
+2 dB louder and brighter) are for natural piano variety, the per-child setting
+that plays each chord a little differently every time, the way a person at a
+real piano does, so a child learns the chord and not one recording of it. Each
+has the same 18 files as `main`, and their levels are baked into the files.
+`js/audio.js` picks one layer per chord (main half the time, soft and firm a
+quarter each) and never depends on which chord it is; the notes themselves are
+the same in every layer. The app loads soft and firm only when variety is on.
+
 **Changing the files:** build into a new folder (`v2`, and so on), never over
 `v1`. Installed apps keep piano files in a long-lived cache keyed by URL (see
 `AUDIO_CACHE` in `sw.js`), so new content under an old URL would never reach
-them. Then point the app at the new folder: change `SAMPLE_BASE_PATH` in
+them. Then point the app at the new folder: change `SAMPLE_BASE_ROOT` in
 `js/audio.js` (it is resolved against audio.js's own location, and the file
-names come from the chords in `js/data.js`) and `SAMPLE_BASE` and
-`SAMPLE_FILES` in `sw.js`. `tests/sw-audio-cache.test.mjs` checks that the
+names come from the chords in `js/data.js`) and the `assets/piano/v1/` path in
+`SAMPLE_URLS` (and `SAMPLE_FILES`) in `sw.js`. `tests/sw-audio-cache.test.mjs` checks that the
 chords, `sw.js`, `js/audio.js` and the files on disk agree.

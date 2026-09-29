@@ -99,12 +99,15 @@ const fileFor = (note) => {
   return name + octave + '.mp3';
 };
 
+const LAYERS = ['main', 'soft', 'firm'];
+
 // Load audio.js in a vm and make it build its sampler; returns the options
-// it passed to Tone.Sampler.
-async function samplerOptions(extra) {
-  let options;
+// it passed to Tone.Sampler. With `variety`, it also turns natural variety on
+// and returns the options of every sampler it built, keyed by layer folder.
+async function samplerOptions(extra, { variety = false } = {}) {
+  const built = [];
   class StubSampler {
-    constructor(o) { options = o; this.volume = {}; setImmediate(o.onload); }
+    constructor(o) { built.push(o); this.volume = {}; setImmediate(o.onload); }
     toDestination() { return this; }
   }
   const sandbox = {
@@ -116,37 +119,50 @@ async function samplerOptions(extra) {
   vm.runInContext(audioSource + '\nthis.PianoAudio = PianoAudio;', sandbox);
   sandbox.PianoAudio.unlock().catch(() => {});
   await new Promise(r => setImmediate(r));
-  assert.ok(options, 'audio.js built a sampler');
-  return options;
+  assert.ok(built.length, 'audio.js built a sampler');
+  if (!variety) {
+    assert.equal(built.length, 1, 'variety off builds only the main sampler');
+    return built[0];
+  }
+  sandbox.PianoAudio.setVariety(true);
+  await new Promise(r => setImmediate(r));
+  const byLayer = {};
+  for (const o of built) byLayer[/([^/]+)\/$/.exec(o.baseUrl)[1]] = o;
+  return byLayer;
 }
 
-test('the notes in data.js, sw.js, assets/piano/v1/main and js/audio.js all agree', async () => {
+test('the notes in data.js, sw.js, every assets/piano/v1 layer and js/audio.js all agree', async () => {
   const dataSandbox = {};
   vm.createContext(dataSandbox);
   vm.runInContext(fs.readFileSync(new URL('../js/data.js', import.meta.url), 'utf8') + '\nthis.CHORDS = CHORDS;', dataSandbox);
   const fromData = [...new Set(dataSandbox.CHORDS.flatMap(c => c.notes.map(fileFor)))].sort();
   assert.equal(fromData.length, 18);
 
-  const swBase = root + 'assets/piano/v1/main/';
-  const fromSw = loadWorker(makeDevice()).sampleUrls().map(u => {
-    assert.ok(u.startsWith(swBase), u);
-    return u.slice(swBase.length);
-  }).sort();
-  assert.deepEqual(fromSw, fromData);
-
-  const onDisk = fs.readdirSync(new URL('../assets/piano/v1/main/', import.meta.url)).filter(f => f.endsWith('.mp3')).sort();
-  assert.deepEqual(onDisk, fromData);
-
-  // audio.js as a classic script at <root>/js/audio.js, with data.js's globals.
+  const swUrls = loadWorker(makeDevice()).sampleUrls();
+  assert.equal(swUrls.length, 54, 'three layers of 18 notes');
+  const urlsByLayer = {};
   const options = await samplerOptions({
     document: { currentScript: { src: root + 'js/audio.js' } },
     CHORDS: dataSandbox.CHORDS,
-  });
-  assert.equal(options.baseUrl, swBase, 'audio.js resolves against its own location');
-  const urls = { ...options.urls };
-  assert.deepEqual(Object.values(urls).sort(), fromData);
-  assert.equal(urls['A#3'], 'As3.mp3');
-  assert.ok(!Object.keys(urls).some(k => k.includes('b')), 'keys use Tone sharp spelling');
+  }, { variety: true });
+  assert.deepEqual(Object.keys(options).sort(), [...LAYERS].sort());
+
+  for (const layer of LAYERS) {
+    const layerBase = root + 'assets/piano/v1/' + layer + '/';
+    const fromSw = swUrls.filter(u => u.startsWith(layerBase)).map(u => u.slice(layerBase.length)).sort();
+    assert.deepEqual(fromSw, fromData, layer + ': sw.js lists the data.js notes');
+
+    const onDisk = fs.readdirSync(new URL('../assets/piano/v1/' + layer + '/', import.meta.url)).filter(f => f.endsWith('.mp3')).sort();
+    assert.deepEqual(onDisk, fromData, layer + ': files on disk');
+
+    // audio.js as a classic script at <root>/js/audio.js, with data.js's globals.
+    assert.equal(options[layer].baseUrl, layerBase, layer + ': audio.js resolves against its own location');
+    const urls = { ...options[layer].urls };
+    assert.deepEqual(Object.values(urls).sort(), fromData, layer + ': audio.js loads the same files');
+    assert.equal(urls['A#3'], 'As3.mp3');
+    assert.ok(!Object.keys(urls).some(k => k.includes('b')), 'keys use Tone sharp spelling');
+  }
+  assert.equal(swUrls.filter(u => LAYERS.every(l => !u.startsWith(root + 'assets/piano/v1/' + l + '/'))).length, 0, 'no stray files');
 });
 
 test('audio.js without data.js or a script tag (test sandboxes) still builds a sampler', async () => {

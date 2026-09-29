@@ -16,7 +16,7 @@
 // It carries APP_VERSION from js/app.js (a test in tests/version.test.mjs
 // enforces this) — browsers decide a new sw.js exists by diffing this file's
 // bytes, so the version has to live here literally, not in an imported script.
-const CACHE_NAME = 'rainbow-pitch-v0.6.0';
+const CACHE_NAME = 'rainbow-pitch-v0.7.0';
 
 // The local app shell: everything needed to boot the app with no network.
 const APP_SHELL = [
@@ -63,15 +63,18 @@ const AUDIO_CACHE = 'rainbow-pitch-audio-v1';
 
 const APP_ROOT = new URL('./', self.location.href);
 
-// Must match the notes in js/data.js's chords and the files in
-// assets/piano/v1/main/ (tests/sw-audio-cache.test.mjs enforces both, and
-// what js/audio.js loads).
-const SAMPLE_BASE = new URL('assets/piano/v1/main/', APP_ROOT).href;
+// Must match the notes in js/data.js's chords and the files in each layer
+// folder of assets/piano/v1/ (tests/sw-audio-cache.test.mjs enforces both, and
+// what js/audio.js loads). The soft and firm layers are only played when a
+// child has natural piano variety on, but they are cached like main so
+// turning it on works offline straight away.
+const SAMPLE_LAYERS = ['main', 'soft', 'firm'];
 const SAMPLE_FILES = [
   'A3', 'As3', 'B3', 'C4', 'Cs4', 'D4', 'Ds4', 'E4', 'F4', 'Fs4', 'G4', 'Gs4',
   'A4', 'As4', 'B4', 'C5', 'D5', 'E5',
 ].map(name => name + '.mp3');
-const SAMPLE_URLS = SAMPLE_FILES.map(file => SAMPLE_BASE + file);
+const SAMPLE_URLS = SAMPLE_LAYERS.flatMap(layer =>
+  SAMPLE_FILES.map(file => new URL('assets/piano/v1/' + layer + '/' + file, APP_ROOT).href));
 const AUDIO_URLS = [TONE_JS_URL, ...SAMPLE_URLS];
 const AUDIO_URL_SET = new Set(AUDIO_URLS);
 

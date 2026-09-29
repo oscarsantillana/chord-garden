@@ -9,7 +9,7 @@
 const Store = (() => {
   const KEY = 'rainbow-pitch:v1';
   const BACKUP_KEY = 'rainbow-pitch:backup';
-  const VERSION = 10; // bumped: added per-profile `history` (daily tallies) and `colorDates` (when each colour was added / became ready)
+  const VERSION = 11; // bumped: added per-profile `pianoVariety` (natural piano variety) and the `vr` day tally; before that `history` and `colorDates`
 
   const DEFAULT_ACTIVE = ['red', 'yellow']; // start with two so there is a real choice
   const DEFAULT_ROUNDS = 20;                // a standard Practice Set
@@ -37,6 +37,10 @@ const Store = (() => {
       roundsPerSet: DEFAULT_ROUNDS,
       realPianoMode: false, // guardian-only toggle; Home/Practice is unchanged when false
       flagPictures: true, // guardian-only toggle; plain colour flags when false
+      // Natural piano variety (js/audio.js): each chord is played a little
+      // differently every time. On for a new child, who never knew the steady
+      // sound; older profiles are decided in normalise().
+      pianoVariety: true,
       // Per-colour running tallies, used only for guardian progress + readiness.
       stats: {},          // { colorName: { correct, seen } }
       sessions: [],       // [{ ts, rounds, correct, colors:[...] }]
@@ -47,9 +51,11 @@ const Store = (() => {
       garden: [],
       // Long-term record for the grown-up's progress view, newest day first,
       // one entry per local day with any practice:
-      //   { day, sets, t: { colour: [tries, right] }, m?: { ... } }
+      //   { day, sets, t: { colour: [tries, right] }, m?: { ... }, vr?: n }
       // t = first attempts on the digital piano, m = real-piano rounds (kept
-      // apart, like everywhere else). Separate from `garden` because rounds
+      // apart, like everywhere else), vr = how many of the digital rounds were
+      // played with natural piano variety on (absent = 0), so the progress
+      // view can compare before and after. Separate from `garden` because rounds
       // are recorded mid-set, before a set (and so a plant) exists, and the
       // garden is exactly what Home draws. Capped at HISTORY_MAX days.
       history: [],
@@ -105,6 +111,11 @@ const Store = (() => {
   }
   function isValidNoteNames(v) { return v === 'auto' || v === 'letters' || v === 'solfege'; }
 
+  function hasPractice(p) {
+    return [p.events, p.sessions, p.garden, p.history].some((list) => Array.isArray(list) && list.length > 0)
+      || (!!p.stats && typeof p.stats === 'object' && Object.keys(p.stats).length > 0);
+  }
+
   // Bring older saved shapes up to date in place: add anything a newer
   // version of the app would have written, without touching what's already
   // there. Runs silently on every load so old localStorage never gets lost.
@@ -113,6 +124,9 @@ const Store = (() => {
       if (!Array.isArray(p.events)) p.events = [];
       if (typeof p.realPianoMode !== 'boolean') p.realPianoMode = false;
       if (typeof p.flagPictures !== 'boolean') p.flagPictures = true;
+      // A child who already has practice knows the steady sound, so variety
+      // stays off until a grown-up chooses it; a child with none starts on.
+      if (typeof p.pianoVariety !== 'boolean') p.pianoVariety = !hasPractice(p);
       // storage.js loads after logic.js (see index.html's script order), so
       // Logic.* is safe to call here and in recordSession below.
       if (typeof p.readySeen !== 'string') p.readySeen = null;
@@ -281,6 +295,10 @@ const Store = (() => {
     p.events.unshift({ c: colorName, a: answeredColorName, ok: correct, ts: Date.now() });
     p.events = trimEvents(p.events);
     tallyRound(p, 't', colorName, correct);
+    if (p.pianoVariety) {
+      const entry = historyEntry(p, todayKey());
+      entry.vr = (entry.vr || 0) + 1;
+    }
     // First time this colour clears the readiness bar (the Colours tab's own
     // check). With a single flag every answer is right, so it proves nothing.
     const dates = p.colorDates[colorName] || (p.colorDates[colorName] = { added: todayKey(), ready: null });
