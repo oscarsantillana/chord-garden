@@ -9,12 +9,24 @@
 const Store = (() => {
   const KEY = 'rainbow-pitch:v1';
   const BACKUP_KEY = 'rainbow-pitch:backup';
-  const VERSION = 9; // bumped: added per-profile `readySeen` and device preferences `lockDot`/`iconBadge` (new-colour signals)
+  const VERSION = 10; // bumped: added per-profile `history` (daily tallies) and `colorDates` (when each colour was added / became ready)
 
   const DEFAULT_ACTIVE = ['red', 'yellow']; // start with two so there is a real choice
   const DEFAULT_ROUNDS = 20;                // a standard Practice Set
   const DEFAULT_PIN = '2468';               // demo gate only — not real security
   const DEFAULT_NAME = () => (typeof I18n !== 'undefined' ? I18n.t('child.defaultName') : 'Little One');
+
+  const HISTORY_MAX = 1500; // days
+
+  const todayKey = () => Logic.dayKey(Date.now());
+
+  // { colour: { added: today, ready: null } } for a list of colours.
+  function seedColorDates(colors) {
+    const today = todayKey();
+    const out = {};
+    colors.forEach((c) => { out[c] = { added: today, ready: null }; });
+    return out;
+  }
 
   function freshProfile(name, avatar) {
     return {
@@ -33,6 +45,18 @@ const Store = (() => {
       // day first: { day: 'YYYY-MM-DD', sets, colors: [...] }. That day's
       // plant never wilts once it's in here — see js/logic.js's gardenDays.
       garden: [],
+      // Long-term record for the grown-up's progress view, newest day first,
+      // one entry per local day with any practice:
+      //   { day, sets, t: { colour: [tries, right] }, m?: { ... } }
+      // t = first attempts on the digital piano, m = real-piano rounds (kept
+      // apart, like everywhere else). Separate from `garden` because rounds
+      // are recorded mid-set, before a set (and so a plant) exists, and the
+      // garden is exactly what Home draws. Capped at HISTORY_MAX days.
+      history: [],
+      // { colour: { added: 'YYYY-MM-DD', ready: 'YYYY-MM-DD' | null } }; dates
+      // reconstructed by a migration also list which are estimates, e.g.
+      // `approx: ['added']` (see Logic.colorDatesFromSaved).
+      colorDates: seedColorDates(DEFAULT_ACTIVE),
       // The "ready for next colour" name a grown-up has already been shown
       // (e.g. 'blue'), so the Home dot and app badge stay quiet until a NEW
       // next colour is ready. null = nothing shown yet.
@@ -93,6 +117,13 @@ const Store = (() => {
       // Logic.* is safe to call here and in recordSession below.
       if (typeof p.readySeen !== 'string') p.readySeen = null;
       if (!Array.isArray(p.garden)) p.garden = gardenFromSessions(p.sessions);
+      // Saved before `history`/`colorDates` existed: rebuild what the garden
+      // and the ~15 days of events still tell us. Anything older is gone, so
+      // these dates are estimates, listed in each colour's `approx`.
+      if (!Array.isArray(p.history)) p.history = Logic.historyFromSaved(p.garden, p.events).slice(0, HISTORY_MAX);
+      if (!p.colorDates || typeof p.colorDates !== 'object' || Array.isArray(p.colorDates)) {
+        p.colorDates = Logic.colorDatesFromSaved(p.garden, p.events, p.activeColors || [], todayKey());
+      }
     });
     // The guardian PIN used to be a hard-coded const in app.js; anything
     // saved before it moved into the store needs one filled in here.
@@ -182,7 +213,13 @@ const Store = (() => {
   }
 
   function resetProgress(id) {
-    updateProfile(id, { stats: {}, sessions: [], events: [], garden: [] }); // the garden is progress too
+    // The garden, history and colour dates are progress too; colour dates
+    // start again from today for the colours now active.
+    const p = data.profiles.find((x) => x.id === id);
+    updateProfile(id, {
+      stats: {}, sessions: [], events: [], garden: [], history: [],
+      colorDates: seedColorDates(p ? p.activeColors : []),
+    });
   }
 
   // Colour set mutations go through the store (not direct array pokes on the
@@ -190,6 +227,8 @@ const Store = (() => {
   function addColor(name) {
     const p = activeProfile();
     if (!p.activeColors.includes(name)) p.activeColors.push(name);
+    // Turning a colour off and on again keeps its original dates.
+    if (!p.colorDates[name]) p.colorDates[name] = { added: todayKey(), ready: null };
     save();
   }
 
@@ -208,6 +247,28 @@ const Store = (() => {
     return Logic.keepRecent(events, { days: 15, min: 500, max: 3000 });
   }
 
+  // Today's (or the given day's) history entry, created on first use and kept
+  // newest-first. The oldest days fall off past HISTORY_MAX: ~160 bytes a day
+  // with 9 colours, so about 240 KB at most (~4 years of practice days).
+  function historyEntry(p, day) {
+    let entry = p.history.find((e) => e.day === day);
+    if (!entry) {
+      entry = { day, sets: 0, t: {} };
+      p.history.push(entry);
+      p.history.sort((a, b) => (a.day < b.day ? 1 : -1));
+      p.history = p.history.slice(0, HISTORY_MAX);
+    }
+    return entry;
+  }
+
+  function tallyRound(p, bucketName, colorName, correct) {
+    const entry = historyEntry(p, todayKey());
+    const bucket = entry[bucketName] || (entry[bucketName] = {});
+    const tally = bucket[colorName] || (bucket[colorName] = [0, 0]);
+    tally[0] += 1;
+    if (correct) tally[1] += 1;
+  }
+
   // Record the outcome of a single round: lifetime tallies (guardian's
   // simple fallback/all-time view) plus a per-round event (used by Logic for
   // rolling-window readiness and mix-up analysis).
@@ -219,6 +280,13 @@ const Store = (() => {
     p.stats[colorName] = s;
     p.events.unshift({ c: colorName, a: answeredColorName, ok: correct, ts: Date.now() });
     p.events = trimEvents(p.events);
+    tallyRound(p, 't', colorName, correct);
+    // First time this colour clears the readiness bar (the Colours tab's own
+    // check). With a single flag every answer is right, so it proves nothing.
+    const dates = p.colorDates[colorName] || (p.colorDates[colorName] = { added: todayKey(), ready: null });
+    if (!dates.ready && p.activeColors.length >= 2 && Logic.readyColors(p.events, [colorName]).length) {
+      dates.ready = todayKey();
+    }
     save();
   }
 
@@ -234,6 +302,7 @@ const Store = (() => {
     if (typeof confidence === 'number') event.conf = Math.round(confidence * 100) / 100;
     p.events.unshift(event);
     p.events = trimEvents(p.events);
+    tallyRound(p, 'm', colorName, correct);
     save();
   }
 
@@ -251,6 +320,7 @@ const Store = (() => {
       entry = { day, sets: 0, colors: [] };
       p.garden.unshift(entry);
     }
+    historyEntry(p, day).sets += 1;
     entry.sets += 1;
     entry.colors = Logic.orderColors([...entry.colors, ...(session.colors || [])]);
     p.garden = p.garden.slice(0, 365); // keep it small

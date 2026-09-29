@@ -271,4 +271,44 @@ function ev(c, a, ok) {
   console.log('ok - keepRecent: day cutoff, min floor, max ceiling, missing ts, empty list');
 }
 
+// --- historyFromSaved / firstReadyDay -----------------------------------------
+
+{
+  const at = (d, h = 9) => new Date(2026, 8, d, h, 0).getTime();
+  const ev = (c, ok, ts, src) => ({ c, a: ok ? c : 'x', ok, ts, ...(src ? { src } : {}) });
+
+  assert.deepEqual(Logic.historyFromSaved([], []), []);
+  assert.deepEqual(Logic.historyFromSaved(undefined, null), [], 'missing inputs are empty');
+
+  const garden = [{ day: '2026-09-25', sets: 2, colors: ['red'] }, { day: '2026-09-20', sets: 1, colors: ['red'] }];
+  const events = [
+    ev('red', true, at(26, 10)), ev('red', false, at(26, 9)), ev('yellow', true, at(25, 9)),
+    ev('red', true, at(26, 8), 'mic'),
+  ];
+  const h = JSON.parse(JSON.stringify(Logic.historyFromSaved(garden, events)));
+  assert.deepEqual(h.map((e) => e.day), ['2026-09-26', '2026-09-25', '2026-09-20'], 'newest day first');
+  assert.deepEqual(h[0], { day: '2026-09-26', sets: 0, t: { red: [2, 1] }, m: { red: [1, 1] } });
+  assert.deepEqual(h[1], { day: '2026-09-25', sets: 2, t: { yellow: [1, 1] } }, 'garden sets merge with event tallies; no m without mic');
+  assert.deepEqual(h[2], { day: '2026-09-20', sets: 1, t: {} });
+  console.log('ok - historyFromSaved: merges garden sets and event tallies, mic into m, newest first');
+
+  // firstReadyDay: 8 tries at >= 90% over the last 20.
+  const seq = (n, ok0, day) => Array.from({ length: n }, (_, i) => ev('red', ok0(i), at(day, 8 + i)));
+  const chrono = [...seq(4, () => true, 10), ...seq(4, () => true, 11)]; // 8 right, 4 on day 10 then 4 on day 11
+  const newestFirst = (list) => [...list].reverse();
+  assert.equal(Logic.firstReadyDay(newestFirst(chrono), 'red'), '2026-09-11', 'the 8th try lands on day 11');
+  assert.equal(Logic.firstReadyDay(newestFirst(chrono.slice(0, 7)), 'red'), null, '7 tries is not enough');
+  assert.equal(Logic.firstReadyDay([], 'red'), null);
+  const shaky = [...seq(8, (i) => i % 2 === 0, 10)];
+  assert.equal(Logic.firstReadyDay(newestFirst(shaky), 'red'), null, '50% never clears the bar');
+  // A miss then 9 right: 7/8 and 8/9 fall short of 90%; 9/10 clears it on the last try (day 12).
+  const nine = [ev('red', false, at(10, 8)), ...seq(9, () => true, 12)];
+  assert.equal(Logic.firstReadyDay(newestFirst(nine), 'red'), '2026-09-12');
+  assert.equal(Logic.firstReadyDay(newestFirst(nine.slice(0, 9)), 'red'), null, '8/9 = 89% is just short');
+  const mic = seq(10, () => true, 10).map((e) => ({ ...e, src: 'mic' }));
+  assert.equal(Logic.firstReadyDay(newestFirst(mic), 'red'), null, 'real-piano rounds never count');
+  assert.equal(Logic.firstReadyDay(newestFirst(chrono), 'yellow'), null, 'other colours are ignored');
+  console.log('ok - firstReadyDay: never ready, specific day, mic ignored, 90% / 8-tries bar');
+}
+
 console.log('\nAll logic.test.mjs assertions passed.');
