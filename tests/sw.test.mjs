@@ -34,6 +34,7 @@ vm.runInNewContext(fs.readFileSync(new URL('../sw.js', import.meta.url), 'utf8')
 let installed;
 handlers.install({ waitUntil(promise) { installed = promise; } });
 await installed;
+writes.length = 0; // install also fills the audio cache; this test is about documents
 assert.ok(precached.length > 0);
 assert.ok(precached.every(request => request.cache === 'reload'), 'new releases must refresh HTTP-cached shell files');
 function dispatch(path, mode = 'navigate') {

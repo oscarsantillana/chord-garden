@@ -40,6 +40,9 @@ builds the DOM with its `el()` helper.
   as MAJOR.MINOR.PATCH (patch for a fix, minor for features, 1.0.0 once the
   app is ready). The shell is served cache-first, so installed apps never see
   a change without it. `tests/version.test.mjs` fails if the two differ.
+- **Audio cache:** Tone.js and the piano samples live in the long-lived
+  `rainbow-pitch-audio-v1` cache, not the versioned one. Changing the sample
+  list in `js/audio.js` needs `sw.js`'s list changed too (a test enforces it).
 - **New script or asset in the shell:** add it to `APP_SHELL` in `sw.js` and
   to index.html in load order. Tests that load scripts into a vm sandbox
   follow the same order; add it there too.
