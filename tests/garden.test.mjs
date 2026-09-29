@@ -140,6 +140,38 @@ function plain(value) {
   console.log('ok - Store: a fresh profile starts with an empty garden');
 }
 
+// --- Store: two weeks of rounds all survive -------------------------------------
+
+{
+  // A controllable clock so recordRound (which stamps Date.now()) can be
+  // replayed across days.
+  let clock = 0;
+  const RealDate = Date;
+  class FakeDate extends RealDate {
+    static now() { return clock; }
+  }
+  const { localStorage } = makeLocalStorage();
+  const sandbox = { console, localStorage, Date: FakeDate };
+  vm.createContext(sandbox);
+  vm.runInContext(read('data') + '\nthis.CHORDS = CHORDS;', sandbox);
+  vm.runInContext(read('logic') + '\nthis.Logic = Logic;', sandbox);
+  vm.runInContext(read('storage') + '\nthis.Store = Store;', sandbox);
+  const { Store } = sandbox;
+
+  const start = new RealDate(2026, 8, 1, 9, 0).getTime();
+  for (let day = 0; day < 14; day++) {
+    for (let set = 0; set < 5; set++) {
+      clock = start + day * 24 * 3600 * 1000 + set * 3600 * 1000;
+      for (let r = 0; r < 20; r++) Store.recordRound('red', 'red', true);
+      Store.recordSession({ ts: clock, rounds: 20, correct: 20, colors: ['red'] });
+    }
+  }
+  const p = Store.activeProfile();
+  assert.equal(p.events.length, 14 * 5 * 20, 'all 1400 rounds from 14 days are kept');
+  assert.equal(p.sessions.length, 14 * 5, 'all 70 sets from 14 days are kept');
+  console.log('ok - Store: 14 days of 5 x 20-round sets all stay in events and sessions');
+}
+
 // --- Store: recordSession waters today's plant -----------------------------------
 
 {

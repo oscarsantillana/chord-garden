@@ -85,6 +85,24 @@ const Logic = {
     });
   },
 
+  // Trim a newest-first history (events or sessions, each with a numeric
+  // `ts` in ms) by age, not just count: the Progress charts look back 14
+  // days, and at ~100 rounds a day a fixed count of 500 forgot most of them.
+  // Keeps everything from the last `days` days, but never fewer than the
+  // newest `min` items (so readiness still has data after a break) and never
+  // more than `max` (a bound on localStorage size). Items without a numeric
+  // `ts` survive only inside the `min`.
+  keepRecent(list, { days, min = 0, max = Infinity, now = Date.now() } = {}) {
+    const cutoff = now - days * 24 * 60 * 60 * 1000;
+    const kept = [];
+    for (let i = 0; i < list.length && i < max; i++) {
+      const ts = list[i] && list[i].ts;
+      if (i < min || (typeof ts === 'number' && ts >= cutoff)) kept.push(list[i]);
+      else if (typeof ts === 'number') break; // newest-first: the rest are older still
+    }
+    return kept;
+  },
+
   // First-attempt accuracy per local calendar day for the last `days` days,
   // oldest first, ending with the day containing `now`. Days without practice
   // have seen 0 and pct null. Real-piano rounds are excluded, as everywhere

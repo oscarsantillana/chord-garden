@@ -199,6 +199,15 @@ const Store = (() => {
     save();
   }
 
+  // Keep the last 15 days of rounds (the Progress charts show 14, and the
+  // window starts at local midnight 13 days back, so 15 keeps it whole), but
+  // never fewer than the newest 500 (readiness after a break) or more than
+  // 3000. An event is ~60 bytes, so 3000 is ~180 KB per child. Sessions
+  // (below) follow the same idea: 15 days, at least 60, at most 300.
+  function trimEvents(events) {
+    return Logic.keepRecent(events, { days: 15, min: 500, max: 3000 });
+  }
+
   // Record the outcome of a single round: lifetime tallies (guardian's
   // simple fallback/all-time view) plus a per-round event (used by Logic for
   // rolling-window readiness and mix-up analysis).
@@ -209,7 +218,7 @@ const Store = (() => {
     if (correct) s.correct += 1;
     p.stats[colorName] = s;
     p.events.unshift({ c: colorName, a: answeredColorName, ok: correct, ts: Date.now() });
-    p.events = p.events.slice(0, 500); // keep it small, like sessions below
+    p.events = trimEvents(p.events);
     save();
   }
 
@@ -224,7 +233,7 @@ const Store = (() => {
     const event = { c: colorName, a: answeredColorName, ok: correct, ts: Date.now(), src: 'mic' };
     if (typeof confidence === 'number') event.conf = Math.round(confidence * 100) / 100;
     p.events.unshift(event);
-    p.events = p.events.slice(0, 500);
+    p.events = trimEvents(p.events);
     save();
   }
 
@@ -235,7 +244,7 @@ const Store = (() => {
   function recordSession(session) {
     const p = activeProfile();
     p.sessions.unshift(session);
-    p.sessions = p.sessions.slice(0, 60); // keep it small
+    p.sessions = Logic.keepRecent(p.sessions, { days: 15, min: 60, max: 300 });
     const day = Logic.dayKey(typeof session.ts === 'number' ? session.ts : Date.now());
     let entry = p.garden.find((e) => e.day === day);
     if (!entry) {
@@ -244,7 +253,7 @@ const Store = (() => {
     }
     entry.sets += 1;
     entry.colors = Logic.orderColors([...entry.colors, ...(session.colors || [])]);
-    p.garden = p.garden.slice(0, 365); // keep it small, like sessions above
+    p.garden = p.garden.slice(0, 365); // keep it small
     save();
   }
 
