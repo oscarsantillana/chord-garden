@@ -260,6 +260,524 @@
         }
       },
       "chordSpreadDb": 0.38
+    },
+    "soft": {
+      "velocity": 4,
+      "gainDb": -3,
+      "notes": {
+        "A3": {
+          "from": "A3v4",
+          "stepSemitones": 0,
+          "sourceCents": 0.79,
+          "cents": 0.08,
+          "rmsDb": -29.45,
+          "peakDb": -13.46,
+          "tailDb": -85.8,
+          "bytes": 55340
+        },
+        "As3": {
+          "from": "A3v4",
+          "stepSemitones": 1,
+          "sourceCents": 0.79,
+          "cents": 0.09,
+          "rmsDb": -29.63,
+          "peakDb": -13.43,
+          "tailDb": -85.3,
+          "bytes": 55340
+        },
+        "B3": {
+          "from": "C4v4",
+          "stepSemitones": -1,
+          "sourceCents": -1.05,
+          "cents": -0.02,
+          "rmsDb": -29.21,
+          "peakDb": -16.97,
+          "tailDb": -87.8,
+          "bytes": 55340
+        },
+        "C4": {
+          "from": "C4v4",
+          "stepSemitones": 0,
+          "sourceCents": -1.05,
+          "cents": 0.07,
+          "rmsDb": -29.45,
+          "peakDb": -16.97,
+          "tailDb": -88.5,
+          "bytes": 55340
+        },
+        "Cs4": {
+          "from": "C4v4",
+          "stepSemitones": 1,
+          "sourceCents": -1.05,
+          "cents": 0.39,
+          "rmsDb": -29.7,
+          "peakDb": -16.97,
+          "tailDb": -90.3,
+          "bytes": 55340
+        },
+        "D4": {
+          "from": "D#4v4",
+          "stepSemitones": -1,
+          "sourceCents": 1.63,
+          "cents": -0.19,
+          "rmsDb": -29.2,
+          "peakDb": -13.18,
+          "tailDb": -88.7,
+          "bytes": 55340
+        },
+        "Ds4": {
+          "from": "D#4v4",
+          "stepSemitones": 0,
+          "sourceCents": 1.63,
+          "cents": -0.02,
+          "rmsDb": -29.45,
+          "peakDb": -13.18,
+          "tailDb": -90.1,
+          "bytes": 55340
+        },
+        "E4": {
+          "from": "D#4v4",
+          "stepSemitones": 1,
+          "sourceCents": 1.63,
+          "cents": 0.13,
+          "rmsDb": -29.67,
+          "peakDb": -13.2,
+          "tailDb": -91.2,
+          "bytes": 55340
+        },
+        "F4": {
+          "from": "F#4v4",
+          "stepSemitones": -1,
+          "sourceCents": -3.07,
+          "cents": 0.01,
+          "rmsDb": -29.22,
+          "peakDb": -16.76,
+          "tailDb": -92.1,
+          "bytes": 55340
+        },
+        "Fs4": {
+          "from": "F#4v4",
+          "stepSemitones": 0,
+          "sourceCents": -3.07,
+          "cents": 0,
+          "rmsDb": -29.45,
+          "peakDb": -16.76,
+          "tailDb": -93.1,
+          "bytes": 55340
+        },
+        "G4": {
+          "from": "F#4v4",
+          "stepSemitones": 1,
+          "sourceCents": -3.07,
+          "cents": -0.05,
+          "rmsDb": -29.69,
+          "peakDb": -16.77,
+          "tailDb": -92.7,
+          "bytes": 55340
+        },
+        "Gs4": {
+          "from": "A4v4",
+          "stepSemitones": -1,
+          "sourceCents": 0.36,
+          "cents": 0.04,
+          "rmsDb": -29.19,
+          "peakDb": -15.72,
+          "tailDb": -88.3,
+          "bytes": 55340
+        },
+        "A4": {
+          "from": "A4v4",
+          "stepSemitones": 0,
+          "sourceCents": 0.36,
+          "cents": 0,
+          "rmsDb": -29.44,
+          "peakDb": -15.77,
+          "tailDb": -95.1,
+          "bytes": 55340
+        },
+        "As4": {
+          "from": "A4v4",
+          "stepSemitones": 1,
+          "sourceCents": 0.36,
+          "cents": -0.03,
+          "rmsDb": -29.69,
+          "peakDb": -15.83,
+          "tailDb": -100,
+          "bytes": 55340
+        },
+        "B4": {
+          "from": "C5v4",
+          "stepSemitones": -1,
+          "sourceCents": 5.69,
+          "cents": -0.52,
+          "rmsDb": -29.18,
+          "peakDb": -16.39,
+          "tailDb": -91.7,
+          "bytes": 55340
+        },
+        "C5": {
+          "from": "C5v4",
+          "stepSemitones": 0,
+          "sourceCents": 5.69,
+          "cents": -0.47,
+          "rmsDb": -29.43,
+          "peakDb": -16.34,
+          "tailDb": -93.1,
+          "bytes": 55340
+        },
+        "D5": {
+          "from": "D#5v4",
+          "stepSemitones": -1,
+          "sourceCents": 3.18,
+          "cents": 0.04,
+          "rmsDb": -29.2,
+          "peakDb": -16.95,
+          "tailDb": -85.1,
+          "bytes": 55340
+        },
+        "E5": {
+          "from": "D#5v4",
+          "stepSemitones": 1,
+          "sourceCents": 3.18,
+          "cents": -0.06,
+          "rmsDb": -29.66,
+          "peakDb": -16.98,
+          "tailDb": -88.3,
+          "bytes": 55340
+        }
+      },
+      "chords": {
+        "red": {
+          "rmsDb": -24.81,
+          "peakDb": -7.14,
+          "brightnessHz": 703
+        },
+        "yellow": {
+          "rmsDb": -24.6,
+          "peakDb": -10.83,
+          "brightnessHz": 643
+        },
+        "blue": {
+          "rmsDb": -24.64,
+          "peakDb": -9.3,
+          "brightnessHz": 655
+        },
+        "black": {
+          "rmsDb": -24.64,
+          "peakDb": -7.77,
+          "brightnessHz": 590
+        },
+        "green": {
+          "rmsDb": -24.59,
+          "peakDb": -9.81,
+          "brightnessHz": 728
+        },
+        "orange": {
+          "rmsDb": -24.85,
+          "peakDb": -9.36,
+          "brightnessHz": 775
+        },
+        "purple": {
+          "rmsDb": -24.56,
+          "peakDb": -8.08,
+          "brightnessHz": 719
+        },
+        "pink": {
+          "rmsDb": -24.61,
+          "peakDb": -11.27,
+          "brightnessHz": 742
+        },
+        "brown": {
+          "rmsDb": -24.81,
+          "peakDb": -10.26,
+          "brightnessHz": 792
+        },
+        "gray": {
+          "rmsDb": -24.89,
+          "peakDb": -8.31,
+          "brightnessHz": 652
+        },
+        "tan": {
+          "rmsDb": -24.54,
+          "peakDb": -7.6,
+          "brightnessHz": 691
+        },
+        "lightgreen": {
+          "rmsDb": -24.55,
+          "peakDb": -7.46,
+          "brightnessHz": 725
+        },
+        "lightpurple": {
+          "rmsDb": -24.68,
+          "peakDb": -7.81,
+          "brightnessHz": 623
+        },
+        "skyblue": {
+          "rmsDb": -24.79,
+          "peakDb": -7.66,
+          "brightnessHz": 735
+        }
+      },
+      "chordSpreadDb": 0.35
+    },
+    "firm": {
+      "velocity": 11,
+      "gainDb": 2,
+      "notes": {
+        "A3": {
+          "from": "A3v11",
+          "stepSemitones": 0,
+          "sourceCents": 0.69,
+          "cents": 0.06,
+          "rmsDb": -24.45,
+          "peakDb": -7.7,
+          "tailDb": -79.6,
+          "bytes": 55340
+        },
+        "As3": {
+          "from": "A3v11",
+          "stepSemitones": 1,
+          "sourceCents": 0.69,
+          "cents": 0.07,
+          "rmsDb": -24.65,
+          "peakDb": -7.68,
+          "tailDb": -80,
+          "bytes": 55340
+        },
+        "B3": {
+          "from": "C4v11",
+          "stepSemitones": -1,
+          "sourceCents": -1.48,
+          "cents": 0.01,
+          "rmsDb": -24.21,
+          "peakDb": -11.41,
+          "tailDb": -85.1,
+          "bytes": 55340
+        },
+        "C4": {
+          "from": "C4v11",
+          "stepSemitones": 0,
+          "sourceCents": -1.48,
+          "cents": 0.12,
+          "rmsDb": -24.46,
+          "peakDb": -11.39,
+          "tailDb": -84.6,
+          "bytes": 55340
+        },
+        "Cs4": {
+          "from": "C4v11",
+          "stepSemitones": 1,
+          "sourceCents": -1.48,
+          "cents": 0.36,
+          "rmsDb": -24.7,
+          "peakDb": -11.42,
+          "tailDb": -85.1,
+          "bytes": 55340
+        },
+        "D4": {
+          "from": "D#4v11",
+          "stepSemitones": -1,
+          "sourceCents": 1.47,
+          "cents": -0.11,
+          "rmsDb": -24.2,
+          "peakDb": -8.02,
+          "tailDb": -84.7,
+          "bytes": 55340
+        },
+        "Ds4": {
+          "from": "D#4v11",
+          "stepSemitones": 0,
+          "sourceCents": 1.47,
+          "cents": -0.04,
+          "rmsDb": -24.45,
+          "peakDb": -7.94,
+          "tailDb": -86.1,
+          "bytes": 55340
+        },
+        "E4": {
+          "from": "D#4v11",
+          "stepSemitones": 1,
+          "sourceCents": 1.47,
+          "cents": 0.09,
+          "rmsDb": -24.68,
+          "peakDb": -7.89,
+          "tailDb": -87.7,
+          "bytes": 55340
+        },
+        "F4": {
+          "from": "F#4v11",
+          "stepSemitones": -1,
+          "sourceCents": -3.07,
+          "cents": 0.04,
+          "rmsDb": -24.21,
+          "peakDb": -11.66,
+          "tailDb": -88.2,
+          "bytes": 55340
+        },
+        "Fs4": {
+          "from": "F#4v11",
+          "stepSemitones": 0,
+          "sourceCents": -3.07,
+          "cents": 0,
+          "rmsDb": -24.46,
+          "peakDb": -11.66,
+          "tailDb": -88.4,
+          "bytes": 55340
+        },
+        "G4": {
+          "from": "F#4v11",
+          "stepSemitones": 1,
+          "sourceCents": -3.07,
+          "cents": -0.07,
+          "rmsDb": -24.69,
+          "peakDb": -11.67,
+          "tailDb": -88.2,
+          "bytes": 55340
+        },
+        "Gs4": {
+          "from": "A4v11",
+          "stepSemitones": -1,
+          "sourceCents": 0.65,
+          "cents": 0.09,
+          "rmsDb": -24.2,
+          "peakDb": -10.71,
+          "tailDb": -97,
+          "bytes": 55340
+        },
+        "A4": {
+          "from": "A4v11",
+          "stepSemitones": 0,
+          "sourceCents": 0.65,
+          "cents": -0.03,
+          "rmsDb": -24.46,
+          "peakDb": -10.63,
+          "tailDb": -93.4,
+          "bytes": 55340
+        },
+        "As4": {
+          "from": "A4v11",
+          "stepSemitones": 1,
+          "sourceCents": 0.65,
+          "cents": -0.32,
+          "rmsDb": -24.71,
+          "peakDb": -10.76,
+          "tailDb": -95.3,
+          "bytes": 55340
+        },
+        "B4": {
+          "from": "C5v11",
+          "stepSemitones": -1,
+          "sourceCents": 5.69,
+          "cents": -0.68,
+          "rmsDb": -24.18,
+          "peakDb": -9.71,
+          "tailDb": -88.3,
+          "bytes": 55340
+        },
+        "C5": {
+          "from": "C5v11",
+          "stepSemitones": 0,
+          "sourceCents": 5.69,
+          "cents": -0.59,
+          "rmsDb": -24.43,
+          "peakDb": -9.64,
+          "tailDb": -90.7,
+          "bytes": 55340
+        },
+        "D5": {
+          "from": "D#5v11",
+          "stepSemitones": -1,
+          "sourceCents": 3.12,
+          "cents": 0.01,
+          "rmsDb": -24.22,
+          "peakDb": -11.45,
+          "tailDb": -81.7,
+          "bytes": 55340
+        },
+        "E5": {
+          "from": "D#5v11",
+          "stepSemitones": 1,
+          "sourceCents": 3.12,
+          "cents": -0.05,
+          "rmsDb": -24.67,
+          "peakDb": -11.59,
+          "tailDb": -85.1,
+          "bytes": 55340
+        }
+      },
+      "chords": {
+        "red": {
+          "rmsDb": -19.81,
+          "peakDb": -2.83,
+          "brightnessHz": 936
+        },
+        "yellow": {
+          "rmsDb": -19.63,
+          "peakDb": -3.86,
+          "brightnessHz": 884
+        },
+        "blue": {
+          "rmsDb": -19.67,
+          "peakDb": -4.76,
+          "brightnessHz": 854
+        },
+        "black": {
+          "rmsDb": -19.62,
+          "peakDb": -5.11,
+          "brightnessHz": 876
+        },
+        "green": {
+          "rmsDb": -19.59,
+          "peakDb": -3.81,
+          "brightnessHz": 906
+        },
+        "orange": {
+          "rmsDb": -19.8,
+          "peakDb": -3.67,
+          "brightnessHz": 981
+        },
+        "purple": {
+          "rmsDb": -19.68,
+          "peakDb": -4,
+          "brightnessHz": 948
+        },
+        "pink": {
+          "rmsDb": -19.57,
+          "peakDb": -4.14,
+          "brightnessHz": 934
+        },
+        "brown": {
+          "rmsDb": -19.81,
+          "peakDb": -3.63,
+          "brightnessHz": 1004
+        },
+        "gray": {
+          "rmsDb": -19.85,
+          "peakDb": -4.59,
+          "brightnessHz": 957
+        },
+        "tan": {
+          "rmsDb": -19.58,
+          "peakDb": -3.15,
+          "brightnessHz": 901
+        },
+        "lightgreen": {
+          "rmsDb": -19.62,
+          "peakDb": -3.91,
+          "brightnessHz": 961
+        },
+        "lightpurple": {
+          "rmsDb": -19.46,
+          "peakDb": -2.91,
+          "brightnessHz": 897
+        },
+        "skyblue": {
+          "rmsDb": -19.83,
+          "peakDb": -3.17,
+          "brightnessHz": 956
+        }
+      },
+      "chordSpreadDb": 0.39
     }
   }
 }

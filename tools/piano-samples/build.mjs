@@ -31,9 +31,14 @@ const SOURCE_BASE = 'https://raw.githubusercontent.com/sfzinstruments/Salamander
 
 // Salamander's 16 velocity layers, by role. `main` is the everyday sound:
 // the app's previous files were Salamander layers 6–8 (measured), so layer 7
-// keeps a child's familiar sound. `gainDb` is relative to the main layer.
+// keeps a child's familiar sound. `soft` and `firm` are for natural variety:
+// about the step a person makes playing a little softer or firmer, darker or
+// brighter in tone as a real piano is, but never so quiet that a chord is
+// hard to hear on a tablet speaker. `gainDb` is relative to the main layer.
 const LAYERS = {
   main: { velocity: 7, gainDb: 0 },
+  soft: { velocity: 4, gainDb: -3 },
+  firm: { velocity: 11, gainDb: 2 },
 };
 const TARGET_RMS_DB = -26; // per note, first second after the strike (mono); the old files averaged -26
 const SR = 48000;
