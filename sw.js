@@ -1,7 +1,7 @@
 /*
  * Chord Garden — service worker.
  *
- * WHY: the app loads Tone.js from a CDN and ~22 Salamander piano samples at
+ * WHY: the app loads Tone.js from a CDN and the piano note files (assets/piano/) at
  * runtime (see js/audio.js), and without a service worker none of that is
  * cached beyond the browser's own HTTP cache — so the app is useless offline,
  * which matters a lot for a kids' app used in cars/planes/waiting rooms. The
@@ -16,7 +16,7 @@
 // It carries APP_VERSION from js/app.js (a test in tests/version.test.mjs
 // enforces this) — browsers decide a new sw.js exists by diffing this file's
 // bytes, so the version has to live here literally, not in an imported script.
-const CACHE_NAME = 'rainbow-pitch-v0.5.1';
+const CACHE_NAME = 'rainbow-pitch-v0.6.0';
 
 // The local app shell: everything needed to boot the app with no network.
 const APP_SHELL = [
@@ -50,30 +50,31 @@ const APP_SHELL = [
 
 const TONE_JS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js';
 
-// Tone.js and the piano samples live here, not in the versioned cache above.
-// Their URLs are pinned (a versioned cdnjs URL, and samples that never
-// change), so a release has no reason to replace them — and deleting them with
-// the old shell cache left updated devices with no piano until they were back
-// online. Bump the -v1 only if the same URLs ever start serving different
-// content. Adding or removing a sample needs no bump: activate prunes entries
-// that are no longer in the list.
+// Tone.js and the piano note files live here, not in APP_SHELL or the
+// versioned cache above. Both are long-lived: Tone.js is a pinned cdnjs URL,
+// and the piano files sit under assets/piano/vN/, where new content ALWAYS
+// goes in a new vN folder, never over v1 (tools/piano-samples/README.md). So a
+// release has no reason to replace them, and deleting them with the old shell
+// cache left updated devices with no piano until they were back online. Bump
+// the -v1 only if the same URLs ever start serving different content. Adding
+// or removing a note needs no bump: activate prunes entries that are no longer
+// in the list.
 const AUDIO_CACHE = 'rainbow-pitch-audio-v1';
 
-// Must match SAMPLE_BASE and the SAMPLES file names in js/audio.js
-// (tests/sw-audio-cache.test.mjs enforces it).
-const SAMPLE_BASE = 'https://tonejs.github.io/audio/salamander/';
+const APP_ROOT = new URL('./', self.location.href);
+
+// Must match the notes in js/data.js's chords and the files in
+// assets/piano/v1/main/ (tests/sw-audio-cache.test.mjs enforces both, and
+// what js/audio.js loads).
+const SAMPLE_BASE = new URL('assets/piano/v1/main/', APP_ROOT).href;
 const SAMPLE_FILES = [
-  'A0', 'C1', 'Ds1', 'Fs1', 'A1', 'C2', 'Ds2', 'Fs2', 'A2', 'C3', 'Ds3', 'Fs3',
-  'A3', 'C4', 'Ds4', 'Fs4', 'A4', 'C5', 'Ds5', 'Fs5', 'A5', 'C6',
+  'A3', 'As3', 'B3', 'C4', 'Cs4', 'D4', 'Ds4', 'E4', 'F4', 'Fs4', 'G4', 'Gs4',
+  'A4', 'As4', 'B4', 'C5', 'D5', 'E5',
 ].map(name => name + '.mp3');
 const SAMPLE_URLS = SAMPLE_FILES.map(file => SAMPLE_BASE + file);
 const AUDIO_URLS = [TONE_JS_URL, ...SAMPLE_URLS];
 const AUDIO_URL_SET = new Set(AUDIO_URLS);
 
-// Piano samples stream from this host — cache-first applies to any request
-// whose URL starts with it, regardless of how Tone.js issues the request.
-const SAMPLE_ROOT = new URL(SAMPLE_BASE);
-const APP_ROOT = new URL('./', self.location.href);
 const INDEX_URL = new URL('index.html', APP_ROOT).href;
 const SHELL_URLS = new Set(APP_SHELL.map(path => new URL(path, APP_ROOT).href));
 
@@ -137,8 +138,7 @@ async function pruneAudioCache() {
 }
 
 function isPrecached(url) {
-  return SHELL_URLS.has(url.href) || AUDIO_URL_SET.has(url.href) ||
-    (url.origin === SAMPLE_ROOT.origin && url.pathname.startsWith(SAMPLE_ROOT.pathname));
+  return SHELL_URLS.has(url.href) || AUDIO_URL_SET.has(url.href);
 }
 
 self.addEventListener('fetch', (event) => {
@@ -170,7 +170,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // App shell, Tone.js, and piano samples: cache-first, then fall back to
+  // App shell, Tone.js, and piano files: cache-first, then fall back to
   // the network and stash a copy for next time. This is the strategy that
   // makes the app (and its sound) work fully offline after the first visit.
   if (isPrecached(url)) {
@@ -178,8 +178,8 @@ self.addEventListener('fetch', (event) => {
       caches.match(request).then((cached) => {
         if (cached) return cached;
         return fetch(request).then((res) => {
-          // Same-origin/CORS responses land here as normal 200s (cdnjs and
-          // tonejs.github.io both send CORS headers), so `res.ok` is the
+          // Same-origin/CORS responses land here as normal 200s (cdnjs sends
+          // CORS headers, and the piano files are same-origin), so `res.ok` is the
           // right guard — only cache complete, successful responses.
           if (res.ok) {
             const copy = res.clone();

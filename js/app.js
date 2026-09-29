@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.5.1';
+  const APP_VERSION = '0.6.0';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -1984,6 +1984,17 @@
         el('span', { class: 'g-row-sub' }, I18n.t('settings.noteNames.footnote')))));
   }
 
+  // The piano files are CC BY 3.0, so the credit (with a link to the licence)
+  // sits in the grown-up About text. The sentence keeps a {licence}
+  // placeholder so each language can put the link where it reads naturally.
+  function pianoCredit() {
+    const [before, after = ''] = I18n.t('settings.aboutPiano').split('{licence}');
+    return el('p', {}, before,
+      el('a', { href: 'https://creativecommons.org/licenses/by/3.0/', target: '_blank', rel: 'noopener' },
+        I18n.t('settings.aboutPianoLicence')),
+      after);
+  }
+
   // The version row + manual "Check for updates" — see js/updates.js for the
   // actual mechanics. The status line starts already showing "Updated to
   // version N." when this session just started right after an update
@@ -2157,7 +2168,8 @@
     body.appendChild(aboutSection());
     body.appendChild(el('div', { class: 'about' },
       el('p', {}, I18n.t('settings.aboutP1')),
-      el('p', {}, I18n.t('settings.aboutP2'))));
+      el('p', {}, I18n.t('settings.aboutP2')),
+      pianoCredit()));
     if (needsHomeScreenNote()) {
       body.appendChild(el('div', { class: 'g-card g-list' },
         el('div', { class: 'g-row stack' },

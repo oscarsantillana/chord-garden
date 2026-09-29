@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex, nofollow">
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'none'; script-src 'self' 'sha384-c6Uo4N9c3SOEigMVzP6IshUG1wQ5uMp3xeoQFiHWAQ86joWdgyajkvopySyKy/Z6'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; connect-src https://tonejs.github.io/audio/salamander/A0.mp3 https://tonejs.github.io/audio/salamander/C1.mp3 https://tonejs.github.io/audio/salamander/Ds1.mp3 https://tonejs.github.io/audio/salamander/Fs1.mp3 https://tonejs.github.io/audio/salamander/A1.mp3 https://tonejs.github.io/audio/salamander/C2.mp3 https://tonejs.github.io/audio/salamander/Ds2.mp3 https://tonejs.github.io/audio/salamander/Fs2.mp3 https://tonejs.github.io/audio/salamander/A2.mp3 https://tonejs.github.io/audio/salamander/C3.mp3 https://tonejs.github.io/audio/salamander/Ds3.mp3 https://tonejs.github.io/audio/salamander/Fs3.mp3 https://tonejs.github.io/audio/salamander/A3.mp3 https://tonejs.github.io/audio/salamander/C4.mp3 https://tonejs.github.io/audio/salamander/Ds4.mp3 https://tonejs.github.io/audio/salamander/Fs4.mp3 https://tonejs.github.io/audio/salamander/A4.mp3 https://tonejs.github.io/audio/salamander/C5.mp3 https://tonejs.github.io/audio/salamander/Ds5.mp3 https://tonejs.github.io/audio/salamander/Fs5.mp3 https://tonejs.github.io/audio/salamander/A5.mp3 https://tonejs.github.io/audio/salamander/C6.mp3; img-src 'none'; media-src 'none'; font-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src blob:; manifest-src 'none'; base-uri 'none'; form-action 'none'"
+    content="default-src 'none'; script-src 'self' 'sha384-c6Uo4N9c3SOEigMVzP6IshUG1wQ5uMp3xeoQFiHWAQ86joWdgyajkvopySyKy/Z6'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; connect-src 'self'; img-src 'none'; media-src 'none'; font-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src blob:; manifest-src 'none'; base-uri 'none'; form-action 'none'"
   >
   <title>Real piano acceptance — Rainbow Pitch</title>
   <link rel="stylesheet" href="acceptance.css">
@@ -56,7 +56,7 @@
 
       <div class="privacy-note">
         <strong>Local, ephemeral capture.</strong>
-        Microphone frames and results stay on this page. The pinned Tone.js runtime and 22 Salamander samples are downloaded from their production static hosts; those requests disclose ordinary network metadata such as IP address, user agent, and the harness origin. No audio, spectra, device IDs, or browser storage are saved or sent.
+        Microphone frames and results stay on this page. The pinned Tone.js runtime is downloaded from its production static host, and the piano files come from this site; those requests disclose ordinary network metadata such as IP address, user agent, and the harness origin. No audio, spectra, device IDs, or browser storage are saved or sent.
       </div>
 
       <form id="setup-form" class="setup-form" autocomplete="off">
@@ -248,7 +248,7 @@
   </main>
 
   <footer>
-    <p>Protocol only. No child-facing controls, application storage, service worker, or raw capture export is loaded. Third-party access is limited to a byte-pinned Tone.js script and the 22 exact production piano-sample paths. Tone.js may create an origin-local blob worker; it cannot connect anywhere else. Microphone content and results stay local.</p>
+    <p>Protocol only. No child-facing controls, application storage, service worker, or raw capture export is loaded. The piano files come from this site; third-party access is limited to a byte-pinned Tone.js script. Tone.js may create an origin-local blob worker; it cannot connect anywhere else. Microphone content and results stay local.</p>
   </footer>
 </body>
 </html>
