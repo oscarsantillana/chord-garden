@@ -625,9 +625,12 @@ console.log('ok - Settings: the badge switch saves the device-wide setting');
 console.log('ok - Store: a version-8 save loads with readySeen null, lockDot on and iconBadge off');
 
 {
-  // Flower songs: tapping today's plant plays its own song, whole chords one
-  // per 480 ms beat; a new tap restarts cleanly; a sprout is silent; and
-  // leaving Home stops the rest of the song.
+  // Flower songs: tapping today's plant plays its own song, whole chords of
+  // one or two 480 ms beats each; a new tap restarts cleanly; a sprout is
+  // silent; and leaving Home stops the rest of the song. The song (and so its
+  // rhythm) depends on the day, so timings come from the song's own beats.
+  const BEAT = 480;
+  const beatsOf = (steps) => steps.reduce((n, step) => n + step.beats, 0);
   const withSets = async (sets, colors) => {
     const ui = setup({ colors });
     for (let i = 0; i < sets; i++) ui.store.recordSession({ ts: Date.now(), rounds: 2, correct: 2, colors });
@@ -644,21 +647,21 @@ console.log('ok - Store: a version-8 save loads with readySeen null, lockDot on 
     await tap();
     assert.deepEqual(ui.played, [chords[0]], 'the first chord sounds right away');
     for (let i = 1; i < chords.length; i++) {
-      await ui.clock.tick(480);
-      assert.deepEqual(ui.played, chords.slice(0, i + 1), `chord ${i + 1} follows one beat later`);
+      await ui.clock.tick(song[i - 1].beats * BEAT);
+      assert.deepEqual(ui.played, chords.slice(0, i + 1), `chord ${i + 1} follows once chord ${i}'s beats are up`);
     }
     await ui.clock.tick(5000);
     assert.equal(ui.played.length, song.length, 'the song ends after its last chord');
   }
   {
-    const { ui, chords, tap } = await withSets(5, ['red', 'yellow']);
+    const { ui, song, chords, tap } = await withSets(5, ['red', 'yellow']);
     ui.played.length = 0;
-    await tap(); await ui.clock.tick(480 * 2);
+    await tap(); await ui.clock.tick(beatsOf(song.slice(0, 2)) * BEAT);
     assert.equal(ui.played.length, 3);
     ui.played.length = 0;
     await tap();
     assert.deepEqual(ui.played, [chords[0]], 'a new tap restarts from the first chord');
-    await ui.clock.tick(480 * 10);
+    await ui.clock.tick(beatsOf(song) * BEAT + 5000);
     assert.deepEqual(ui.played, chords, 'no chords are left over from the first song');
   }
   {
@@ -668,11 +671,11 @@ console.log('ok - Store: a version-8 save loads with readySeen null, lockDot on 
     assert.equal(ui.played.length, 0, 'a sprout has no colours yet, so it is silent');
   }
   {
-    const { ui, chords, tap } = await withSets(5, ['red', 'yellow']);
+    const { ui, song, chords, tap } = await withSets(5, ['red', 'yellow']);
     ui.played.length = 0;
-    await tap(); await ui.clock.tick(480);
+    await tap(); await ui.clock.tick(song[0].beats * BEAT);
     assert.equal(ui.played.length, 2);
-    await ui.click('Play'); await ui.clock.tick(480 * 10);
+    await ui.click('Play'); await ui.clock.tick(beatsOf(song) * BEAT + 5000);
     // Only the first practice round's own chord may have sounded since.
     assert.ok(ui.played.length <= 3, 'leaving Home stops the rest of the song');
     assert.ok(chords.length > 3);
