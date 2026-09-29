@@ -5,10 +5,10 @@
  * runtime (see js/audio.js), and without a service worker none of that is
  * cached beyond the browser's own HTTP cache — so the app is useless offline,
  * which matters a lot for a kids' app used in cars/planes/waiting rooms. The
- * first visit (online, by definition) precaches the whole app shell plus
- * Tone.js; every sample gets cached the first time it's actually fetched.
- * After that first visit, the app — chords, colours and all — works fully
- * offline.
+ * first visit (online, by definition) precaches the whole app shell, and
+ * installs also fill a separate long-lived audio cache with Tone.js and every
+ * piano sample. After that first visit, the app — chords, colours and all —
+ * works fully offline, and later releases keep the piano without re-downloading.
  */
 
 // Bump this on every release: the shell is served cache-first, so returning
@@ -16,7 +16,7 @@
 // It carries APP_VERSION from js/app.js (a test in tests/version.test.mjs
 // enforces this) — browsers decide a new sw.js exists by diffing this file's
 // bytes, so the version has to live here literally, not in an imported script.
-const CACHE_NAME = 'rainbow-pitch-v0.5.0';
+const CACHE_NAME = 'rainbow-pitch-v0.5.1';
 
 // The local app shell: everything needed to boot the app with no network.
 const APP_SHELL = [
@@ -50,9 +50,29 @@ const APP_SHELL = [
 
 const TONE_JS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js';
 
+// Tone.js and the piano samples live here, not in the versioned cache above.
+// Their URLs are pinned (a versioned cdnjs URL, and samples that never
+// change), so a release has no reason to replace them — and deleting them with
+// the old shell cache left updated devices with no piano until they were back
+// online. Bump the -v1 only if the same URLs ever start serving different
+// content. Adding or removing a sample needs no bump: activate prunes entries
+// that are no longer in the list.
+const AUDIO_CACHE = 'rainbow-pitch-audio-v1';
+
+// Must match SAMPLE_BASE and the SAMPLES file names in js/audio.js
+// (tests/sw-audio-cache.test.mjs enforces it).
+const SAMPLE_BASE = 'https://tonejs.github.io/audio/salamander/';
+const SAMPLE_FILES = [
+  'A0', 'C1', 'Ds1', 'Fs1', 'A1', 'C2', 'Ds2', 'Fs2', 'A2', 'C3', 'Ds3', 'Fs3',
+  'A3', 'C4', 'Ds4', 'Fs4', 'A4', 'C5', 'Ds5', 'Fs5', 'A5', 'C6',
+].map(name => name + '.mp3');
+const SAMPLE_URLS = SAMPLE_FILES.map(file => SAMPLE_BASE + file);
+const AUDIO_URLS = [TONE_JS_URL, ...SAMPLE_URLS];
+const AUDIO_URL_SET = new Set(AUDIO_URLS);
+
 // Piano samples stream from this host — cache-first applies to any request
 // whose URL starts with it, regardless of how Tone.js issues the request.
-const SAMPLE_ROOT = new URL('https://tonejs.github.io/audio/salamander/');
+const SAMPLE_ROOT = new URL(SAMPLE_BASE);
 const APP_ROOT = new URL('./', self.location.href);
 const INDEX_URL = new URL('index.html', APP_ROOT).href;
 const SHELL_URLS = new Set(APP_SHELL.map(path => new URL(path, APP_ROOT).href));
@@ -64,17 +84,30 @@ self.addEventListener('install', (event) => {
       // should fail loudly so we notice, same as any normal build error.
       // A new cache name must also bypass still-fresh HTTP cache entries.
       await cache.addAll(APP_SHELL.map(path => new Request(new URL(path, APP_ROOT), { cache: 'reload' })));
-      // Tone.js lives on a third-party CDN we don't control; if it's briefly
-      // unreachable, don't let that sink the whole install — the app can
-      // still boot (and re-fetch Tone.js) on the next online visit.
-      try {
-        await cache.add(TONE_JS_URL);
-      } catch (e) {
-        // Best-effort only — see comment above.
-      }
-    })
+    }).then(fillAudioCache)
   );
 });
+
+// Best-effort and per URL: one unreachable file must not fail the install or
+// stop the rest. Copying from any existing cache (the previous release's
+// runtime-fetched samples) is what lets an update finish with no network.
+async function fillAudioCache() {
+  const audio = await caches.open(AUDIO_CACHE);
+  await Promise.all(AUDIO_URLS.map(async (url) => {
+    try {
+      if (await audio.match(url)) return;
+      const existing = await caches.match(url);
+      if (existing) {
+        await audio.put(url, existing);
+        return;
+      }
+      const res = await fetch(url);
+      if (res.ok) await audio.put(url, res);
+    } catch (e) {
+      // Best-effort only — see comment above; the next online play fetches it.
+    }
+  }));
+}
 
 // The page asks a waiting version to take over once it's safe to reload (see
 // js/updates.js's apply()) — this is what lets skipWaiting happen only at a
@@ -88,15 +121,23 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((names) =>
       Promise.all(
         names
-          .filter((name) => name.startsWith('rainbow-pitch-') && name !== CACHE_NAME)
+          .filter((name) => name.startsWith('rainbow-pitch-') && name !== CACHE_NAME && name !== AUDIO_CACHE)
           .map((name) => caches.delete(name))
       )
-    ).then(() => self.clients.claim())
+    ).then(pruneAudioCache).then(() => self.clients.claim())
   );
 });
 
+// Drop audio entries the current list no longer names, so a future sample
+// change leaves nothing behind.
+async function pruneAudioCache() {
+  const audio = await caches.open(AUDIO_CACHE);
+  const keys = await audio.keys();
+  await Promise.all(keys.filter(req => !AUDIO_URL_SET.has(req.url)).map(req => audio.delete(req)));
+}
+
 function isPrecached(url) {
-  return SHELL_URLS.has(url.href) || url.href === TONE_JS_URL ||
+  return SHELL_URLS.has(url.href) || AUDIO_URL_SET.has(url.href) ||
     (url.origin === SAMPLE_ROOT.origin && url.pathname.startsWith(SAMPLE_ROOT.pathname));
 }
 
@@ -142,7 +183,8 @@ self.addEventListener('fetch', (event) => {
           // right guard — only cache complete, successful responses.
           if (res.ok) {
             const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+            const target = AUDIO_URL_SET.has(url.href) ? AUDIO_CACHE : CACHE_NAME;
+            caches.open(target).then((cache) => cache.put(request, copy));
           }
           return res;
         });
