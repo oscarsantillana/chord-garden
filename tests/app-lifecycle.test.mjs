@@ -464,6 +464,66 @@ const openSettings = async (ui) => {
 console.log('ok - Settings → About: shows the version, and checking without a service worker explains why');
 
 {
+  // Settings → About: iPhone/iPad Safari (not installed) gets an "Add to Home
+  // Screen" note, because Safari can clear a site's data after a quiet week.
+  const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1';
+  const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)';
+  const noteShown = (ui) => ui.app.textContent.includes('Add Chord Garden to your Home Screen');
+  const iphone = setup({ navigator: { userAgent: IPHONE } });
+  await openSettings(iphone);
+  assert.ok(noteShown(iphone), 'iPhone in Safari sees the note');
+  const ipad = setup({ navigator: { userAgent: MAC, maxTouchPoints: 5 } });
+  await openSettings(ipad);
+  assert.ok(noteShown(ipad), 'iPadOS (Mac user agent + touch) sees the note');
+  const mac = setup({ navigator: { userAgent: MAC, maxTouchPoints: 0 } });
+  await openSettings(mac);
+  assert.ok(!noteShown(mac), 'a real Mac sees no note');
+  const installed = setup({ navigator: { userAgent: IPHONE, standalone: true } });
+  await openSettings(installed);
+  assert.ok(!noteShown(installed), 'the installed Home Screen app sees no note');
+  const plain = setup();
+  await openSettings(plain);
+  assert.ok(!noteShown(plain), 'the default empty navigator shows no note and does not throw');
+}
+console.log('ok - Settings: the Add to Home Screen note shows only on uninstalled iPhone/iPad');
+
+{
+  // Persistent storage is requested once, only after a correct PIN.
+  const makeNav = (persisted) => {
+    const calls = { persist: 0, persisted: 0 };
+    return { calls, storage: { persisted: async () => { calls.persisted++; return persisted; }, persist: async () => { calls.persist++; return true; } } };
+  };
+  const enterPin = async (ui, pin) => {
+    ui.app.querySelector('.gear').click();
+    for (const digit of pin) await ui.click(digit);
+    await flush();
+  };
+  const nav = makeNav(false);
+  const ui = setup({ navigator: nav });
+  await flush();
+  assert.equal(nav.calls.persist, 0, 'not asked at boot');
+  await enterPin(ui, '1111');
+  assert.equal(nav.calls.persist, 0, 'not asked after a wrong PIN');
+  for (const digit of '2468') await ui.click(digit);
+  await flush();
+  assert.equal(nav.calls.persist, 1, 'asked after the correct PIN');
+  await ui.click('Done');
+  await enterPin(ui, '2468');
+  assert.equal(nav.calls.persist, 1, 'not asked again in the same launch');
+
+  const already = makeNav(true);
+  const ui2 = setup({ navigator: already });
+  await enterPin(ui2, '2468');
+  assert.equal(already.calls.persisted, 1);
+  assert.equal(already.calls.persist, 0, 'already persisted: persist() is skipped');
+
+  const failing = setup({ navigator: { storage: { persisted: async () => { throw new Error('no'); }, persist: async () => { throw new Error('no'); } } } });
+  await enterPin(failing, '2468');
+  assert.ok(failing.app.textContent.includes('Settings'), 'errors are swallowed and the grown-up area opens');
+}
+console.log('ok - Store.requestPersistence: asked once after the correct PIN, never at boot, errors swallowed');
+
+{
   // With a (fake) service worker registered but nothing new to offer,
   // "Check for updates" reports up to date. Updates.init() only registers on
   // 'load' here (document.readyState is unset in this sandbox — see

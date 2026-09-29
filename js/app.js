@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.3.2';
+  const APP_VERSION = '0.4.0';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -234,6 +234,21 @@
   const LANDSCAPE_HOME = '(orientation: landscape) and (max-height: 520px)';
   function isLandscapeHome() {
     return typeof window.matchMedia === 'function' && window.matchMedia(LANDSCAPE_HOME).matches;
+  }
+
+  // Safari can delete a website's saved data after about a week without a
+  // visit, unless the site runs as a Home Screen app. So on an iPhone/iPad
+  // that hasn't been installed yet, grown-ups get a note. iPadOS reports a
+  // Mac user agent, hence the touch-points check. Everything is guarded: the
+  // test fake DOM has `navigator = {}` and no matchMedia.
+  function needsHomeScreenNote() {
+    const nav = typeof navigator === 'object' && navigator ? navigator : {};
+    const ua = String(nav.userAgent || '');
+    const isIos = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && nav.maxTouchPoints > 1);
+    if (!isIos) return false;
+    const standalone = nav.standalone === true
+      || (typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches);
+    return !standalone;
   }
 
   // The hills are fixed but flags wrap into rows, and only the bottom row
@@ -1468,7 +1483,12 @@
       if (entered.length >= 4) return;
       entered += d; refresh();
       if (entered.length === 4) {
-        if (entered === Store.getPin()) renderGuardian('colors');
+        if (entered === Store.getPin()) {
+          // Asked here, not at boot: Firefox shows a permission prompt for
+          // persist(), and that must never pop up in front of a child.
+          Store.requestPersistence();
+          renderGuardian('colors');
+        }
         else {
           msg.textContent = I18n.t('pin.noMatch');
           dots.classList.add('shake');
@@ -2138,6 +2158,12 @@
     body.appendChild(el('div', { class: 'about' },
       el('p', {}, I18n.t('settings.aboutP1')),
       el('p', {}, I18n.t('settings.aboutP2'))));
+    if (needsHomeScreenNote()) {
+      body.appendChild(el('div', { class: 'g-card g-list' },
+        el('div', { class: 'g-row stack' },
+          el('span', { class: 'g-row-title' }, I18n.t('settings.homeScreen.title')),
+          el('span', { class: 'g-row-sub' }, I18n.t('settings.homeScreen.body')))));
+    }
   }
 
   // =======================================================================
