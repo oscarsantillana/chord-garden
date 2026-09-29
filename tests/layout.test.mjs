@@ -41,6 +41,23 @@ const PRACTICE = { maxH: 230, minH: 72, gapX: 10, gapY: 18, aspect: 110 / 168 };
   assert.equal(fourteen.h, 116);
 }
 
+{
+  // A height with no room for one row (iPad Safari mid-rotation can make the
+  // measured space negative) keeps the flags in as few rows as the width
+  // allows at the minimum size, never a column of the smallest flags.
+  const HOME = { maxH: 82, minH: 40, gapX: 14, gapY: 10, aspect: 110 / 168 };
+  for (const height of [-120, 0, 39]) {
+    const row = Layout.fitFlags(4, 524, height, HOME);
+    assert.equal(row.cols, 4, `height ${height}: one row`);
+    assert.equal(row.h, 40);
+    assert.equal(row.w, Math.floor(40 * HOME.aspect));
+  }
+  // Narrow and crowded: as many per row as fit, rows evened out (5 + 4).
+  assert.equal(Layout.fitFlags(9, 200, -50, HOME).cols, 5);
+  // A real, if small, height still goes through the normal search.
+  assert.equal(Layout.fitFlags(4, 524, 40, HOME).cols, 4);
+}
+
 // --- flagRows -------------------------------------------------------------
 
 {

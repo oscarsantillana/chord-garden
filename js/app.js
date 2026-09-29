@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.7.0';
+  const APP_VERSION = '0.7.1';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -1175,7 +1175,7 @@
     drawTerraces();
   }
 
-  window.addEventListener('resize', () => {
+  function relayout() {
     fitAnswers();
     if (!session && app.querySelector('.home')) fitHomeFlags();
     drawTerraces();
@@ -1187,7 +1187,21 @@
       renderGarden(Store.activeProfile());
       hideBlockedFlowerTaps();
     }
-  });
+  }
+  // iPad Safari fires resize mid-rotation, with the window already at its new
+  // size but the page not yet laid out for it, and may not fire again once it
+  // is. Measuring then stuck the Home flags in a column until the app was
+  // reopened. So lay out at once (no lag on ordinary resizes) and again once
+  // things have been still for a moment.
+  const SETTLE_MS = 300;
+  let settleTimer = null;
+  function onViewportChange() {
+    relayout();
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(relayout, SETTLE_MS);
+  }
+  window.addEventListener('resize', onViewportChange);
+  window.addEventListener('orientationchange', onViewportChange);
   // Web fonts change the label's height, which moves the flags.
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => settleLayout());
 

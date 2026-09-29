@@ -19,6 +19,17 @@ const Layout = {
   // tablet don't become billboards, and floored at minH so a crowded screen
   // never shrinks flags below a tappable size.
   fitFlags(n, width, height, { maxH, minH, gapX, gapY, aspect }) {
+    // No room for even one row at the minimum size means the measurement is
+    // off (iPad Safari can report a half-rotated screen). The search below
+    // would then favour MORE rows, since every candidate is negative and
+    // dividing by more rows makes it less so: a row of flags came out as a
+    // column of the smallest ones. Use the fewest rows the width allows.
+    if (height < minH) {
+      const perRow = Math.floor((width + gapX) / (minH * aspect + gapX));
+      const fitCols = Math.max(1, Math.min(n, perRow));
+      const cols = Math.ceil(n / Math.ceil(n / fitCols));
+      return { cols, h: minH, w: Math.floor(minH * aspect) };
+    }
     const fit = (cols) => {
       const rows = Math.ceil(n / cols);
       return Math.min(maxH,
