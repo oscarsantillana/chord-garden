@@ -15,7 +15,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   // after the hills svg) — not part of fakeDom() itself since only this
   // suite's Home/garden tests need it.
   const garden = document.createElement('div'); garden.id = 'garden'; document.body.appendChild(garden);
-  const saved = new Map(), windowEvents = {}, played = [], listens = [], pendingStarts = [], pendingChords = [], rewards = [];
+  const saved = new Map(), windowEvents = {}, played = [], listens = [], pendingStarts = [], pendingChords = [], rewards = [], varietyCalls = [];
   // Seeded BEFORE storage.js runs below, so its very first `load()` (at
   // module eval time) reads it back — same as a returning device.
   Object.entries(seed).forEach(([k, v]) => saved.set(k, v));
@@ -30,7 +30,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
       flag: (c, o = {}) => (o.picture === false ? 'plain-flag' : 'picture-flag'),
       plant: (stage) => `plant-${stage}` },
     PianoAudio: {
-      async unlock() {}, stopAll() {}, async whenOutputSilent() {}, playSparkle() {},
+      async unlock() {}, stopAll() {}, setVariety(on) { varietyCalls.push(on); }, async whenOutputSilent() {}, playSparkle() {},
       isChordRinging: () => ringing,
       async playReward(notes) { rewards.push([...notes]); },
       playChord(notes) { played.push([...notes]); return deferredChord ? new Promise(resolve => pendingChords.push(resolve)) : Promise.resolve(); },
@@ -56,7 +56,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
     const pending = button.click(); await flush(); return { pending };
   };
   const colorBtn = name => app.querySelector(`.color-btn[data-color="${name}"]`);
-  return { app, document, garden, clock, click, played, listens, pendingStarts, pendingChords, windowEvents, rewards,
+  return { app, document, garden, clock, click, played, listens, pendingStarts, pendingChords, windowEvents, rewards, varietyCalls,
     store: sandbox.store, i18n: sandbox.I18n, saved, chordByName, colorBtn, get micStarts() { return micStarts; }, get micStops() { return micStops; } };
 }
 // With two+ active colours the round's target is picked at random; the only
@@ -677,7 +677,7 @@ console.log('ok - Settings: the badge switch saves the device-wide setting');
 {
   const oldProfile = { id: 'o', name: 'Old', avatar: 'fox', activeColors: ['red'], roundsPerSet: 20, stats: {}, sessions: [], events: [], garden: [] };
   const ui = setup({ seed: { 'rainbow-pitch:v1': JSON.stringify({ version: 8, activeProfileId: 'o', profiles: [oldProfile], pin: '2468' }) } });
-  assert.equal(ui.store.all().version, 10);
+  assert.equal(ui.store.all().version, 11);
   assert.equal(ui.store.activeProfile().readySeen, null);
   assert.equal(ui.store.getLockDot(), true);
   assert.equal(ui.store.getIconBadge(), false);
@@ -742,3 +742,26 @@ console.log('ok - Store: a version-8 save loads with readySeen null, lockDot on 
   }
 }
 console.log('ok - Home: flowers sing their own chord songs');
+
+{
+  // Natural piano variety: the Settings switch flips the child's setting and
+  // PianoAudio follows it (at boot, and again on every change).
+  const ui = setup();
+  const p = ui.store.activeProfile();
+  assert.equal(p.pianoVariety, true, 'a new child starts with variety on');
+  assert.deepEqual(ui.varietyCalls, [true, true], 'boot and Home both sync the piano');
+  ui.app.querySelector('.gear').click();
+  for (const digit of ['2', '4', '6', '8']) await ui.click(digit);
+  await ui.click('Settings');
+  const varietySwitch = () => ui.document.body.querySelectorAll('button').find(b => b.attrs && b.attrs['aria-label'] === 'Natural piano variety');
+  assert.ok(varietySwitch(), 'the switch is in Settings');
+  assert.equal(varietySwitch().attrs['aria-checked'], 'true');
+  varietySwitch().click(); await flush();
+  assert.equal(p.pianoVariety, false);
+  assert.equal(ui.varietyCalls[ui.varietyCalls.length - 1], false, 'PianoAudio was told variety is off');
+  assert.equal(varietySwitch().attrs['aria-checked'], 'false');
+  varietySwitch().click(); await flush();
+  assert.equal(p.pianoVariety, true);
+  assert.equal(ui.varietyCalls[ui.varietyCalls.length - 1], true);
+}
+console.log('ok - Settings: the natural piano variety switch flips the setting and PianoAudio follows');

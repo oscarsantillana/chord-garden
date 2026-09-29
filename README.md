@@ -110,7 +110,10 @@ Tap the lock button on the home screen and enter the demo PIN **`2468`**.
 - **Children** — add/switch/remove child profiles (siblings each keep their own
   progress).
 - **Settings** — set length, rename a child, reset progress, turn the pictures
-  on the flags on or off; also **Real piano mode** (below). The whole app's
+  on the flags on or off, and **natural piano variety** (each chord played a
+  little softer or firmer, with the notes a few milliseconds apart, never
+  changing the notes; on for new children, off for existing ones until you
+  choose); also **Real piano mode** (below). The whole app's
   **language** (English or Spanish; follows the browser by default, can be
   changed here) and **note names** (C D E or Do Re Mi) are set here too —
   device-wide preferences, like the PIN, not per child.

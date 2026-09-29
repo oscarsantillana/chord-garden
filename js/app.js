@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.6.0';
+  const APP_VERSION = '0.7.0';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -140,6 +140,13 @@
         : I18n.t('errors.pianoOrMicFailed');
       error.hidden = false;
     }
+  }
+
+  // Keep the piano in step with the active child's natural-variety setting.
+  // Called wherever the active child or the setting can change before a chord
+  // plays (boot, Home, practice start, profile changes, the Settings switch).
+  function syncPianoVariety() {
+    PianoAudio.setVariety(Store.activeProfile().pianoVariety);
   }
 
   function activeColorObjects() {
@@ -485,6 +492,7 @@
     clearScreen();
     clearConfetti();
     setMode('child');
+    syncPianoVariety();
     const p = Store.activeProfile();
     const colors = activeColorObjects();
 
@@ -583,7 +591,7 @@
       list.appendChild(el('button', {
         class: 'g-row',
         'aria-current': active ? 'true' : null,
-        onclick: () => { Store.setActiveProfile(pr.id); close(); renderHome(); },
+        onclick: () => { Store.setActiveProfile(pr.id); syncPianoVariety(); close(); renderHome(); },
       }, el('span', { class: 'avatar-row', html: Sprites.mascot(pr.avatar) }),
          el('span', { class: 'g-row-main' }, el('span', { class: 'g-row-title' }, pr.name)),
          active ? el('span', { class: 'g-row-end' }, el('span', { class: 'badge' }, I18n.t('common.playing'))) : null));
@@ -680,6 +688,7 @@
 
   function startPractice(mode = 'digital') {
     setMode('child'); // real-piano mode arrives here from the grown-up priming card
+    syncPianoVariety();
     const p = Store.activeProfile();
     const colors = activeColorObjects();
     session = {
@@ -1904,7 +1913,7 @@
       list.appendChild(el('div', { class: 'profile-item' },
         el('button', {
           class: 'g-row', 'aria-current': active ? 'true' : null,
-          onclick: () => { Store.setActiveProfile(pr.id); renderGuardian('profiles'); },
+          onclick: () => { Store.setActiveProfile(pr.id); syncPianoVariety(); renderGuardian('profiles'); },
         },
           el('span', { class: 'avatar-row', html: Sprites.mascot(pr.avatar) }),
           el('span', { class: 'g-row-main' },
@@ -1923,7 +1932,7 @@
             title: I18n.t('children.removeTitle', { name: pr.name }),
             body: I18n.t('children.removeBody', { name: pr.name }),
             confirmLabel: I18n.t('children.removeConfirm'), danger: true,
-            onConfirm: () => { Store.removeProfile(pr.id); renderGuardian('profiles'); },
+            onConfirm: () => { Store.removeProfile(pr.id); syncPianoVariety(); renderGuardian('profiles'); },
           }),
         }, I18n.t('children.removeConfirm')) : null));
     });
@@ -1940,6 +1949,7 @@
       avatarPicker(avatar, (a) => { avatar = a; }),
       el('div', {}, el('button', { class: 'primary-btn', onclick: () => {
         Store.addProfile(name.trim() || I18n.t('child.defaultName'), avatar);
+        syncPianoVariety();
         renderGuardian('profiles');
       } }, I18n.t('children.addChildButton'))))));
   }
@@ -2102,6 +2112,17 @@
         pictureSwitch)),
       I18n.t('settings.flagsHint')));
 
+    const varietySwitch = el('button', {
+      class: 'switch', role: 'switch', 'aria-checked': p.pianoVariety ? 'true' : 'false', 'aria-label': I18n.t('settings.varietyAria'),
+      onclick: () => { Store.updateProfile(p.id, { pianoVariety: !p.pianoVariety }); syncPianoVariety(); renderGuardian('settings'); },
+    });
+    body.appendChild(section(I18n.t('settings.pianoSection'), el('div', { class: 'g-card g-list' },
+      el('div', { class: 'g-row' },
+        el('span', { class: 'g-row-main' },
+          el('span', { class: 'g-row-title' }, I18n.t('settings.varietyTitle'))),
+        varietySwitch)),
+      I18n.t('settings.varietyHint')));
+
     const micSwitch = el('button', {
       class: 'switch', role: 'switch', 'aria-checked': p.realPianoMode ? 'true' : 'false', 'aria-label': I18n.t('mic.realPianoMode'),
       onclick: () => { Store.updateProfile(p.id, { realPianoMode: !p.realPianoMode }); renderGuardian('settings'); },
@@ -2230,6 +2251,7 @@
   const seenVersion = Store.getSeenVersion();
   if (seenVersion !== null && seenVersion !== APP_VERSION) updatedTo = APP_VERSION;
   Store.setSeenVersion(APP_VERSION);
+  syncPianoVariety();
 
   // Register the service worker and watch for a waiting update. Applying it
   // is only ever safe while the child Home screen is showing (never mid-set,

@@ -40,7 +40,7 @@ function load(seed, startClock = at(8, 26)) {
   Store.recordRound('yellow', 'yellow', true);
   Store.recordSession({ ts: at(8, 26), rounds: 3, correct: 2, colors: ['red', 'yellow'] });
   assert.deepEqual(plain(Store.activeProfile().history), [
-    { day: '2026-09-26', sets: 1, t: { red: [2, 1], yellow: [1, 1] } },
+    { day: '2026-09-26', sets: 1, t: { red: [2, 1], yellow: [1, 1] }, vr: 3 },
   ]);
   console.log('ok - history: rounds and sets land in today\'s entry');
 }
@@ -155,7 +155,7 @@ function v9Save() {
 {
   const { Store, map } = load({ 'rainbow-pitch:v1': JSON.stringify(v9Save()) });
   const p = Store.activeProfile();
-  assert.equal(Store.all().version, 10);
+  assert.equal(Store.all().version, 11);
   assert.deepEqual(plain(p.history), [
     { day: '2026-09-26', sets: 0, t: { yellow: [1, 0], red: [4, 4] }, m: { red: [1, 1] } },
     { day: '2026-09-25', sets: 2, t: { red: [5, 5] } },
@@ -185,3 +185,65 @@ function v9Save() {
 }
 
 console.log('\nAll history.test.mjs assertions passed.');
+
+// --- natural piano variety: the pianoVariety setting and the vr tally -------
+
+{
+  const { Store } = load();
+  assert.equal(Store.activeProfile().pianoVariety, true, 'a fresh profile starts with variety on');
+  Store.addProfile('Sib', 'fox');
+  assert.equal(Store.activeProfile().pianoVariety, true, 'so does an added child');
+  console.log('ok - pianoVariety: new children start with variety on');
+}
+
+{
+  // vr counts only digital rounds played with variety on.
+  const { Store } = load();
+  const id = Store.activeProfile().id;
+  Store.recordRound('red', 'red', true);
+  Store.recordRound('red', 'yellow', false);
+  Store.recordRealPianoRound('red', 'red', true, 0.9);
+  assert.equal(plain(Store.activeProfile().history[0]).vr, 2, 'mic rounds are not counted');
+  Store.updateProfile(id, { pianoVariety: false });
+  Store.recordRound('red', 'red', true);
+  assert.equal(plain(Store.activeProfile().history[0]).vr, 2, 'rounds with variety off are not counted');
+  assert.equal(plain(Store.activeProfile().history[0]).t.red[0], 3);
+
+  const off = load();
+  off.Store.updateProfile(off.Store.activeProfile().id, { pianoVariety: false });
+  off.Store.recordRound('red', 'red', true);
+  off.Store.recordRealPianoRound('red', 'red', true, 0.9);
+  assert.ok(!('vr' in plain(off.Store.activeProfile().history[0])), 'absent means 0');
+  console.log('ok - history: vr counts digital rounds played with variety on');
+}
+
+{
+  // A version-10 save: a child with practice keeps the steady sound, one
+  // without starts on, and an explicit boolean is respected.
+  const profile = (id, extra) => ({
+    id, name: id, avatar: 'fox', activeColors: ['red', 'yellow'], roundsPerSet: 20, realPianoMode: false, flagPictures: true,
+    stats: {}, sessions: [], events: [], garden: [], history: [],
+    colorDates: { red: { added: '2026-09-01', ready: null }, yellow: { added: '2026-09-01', ready: null } },
+    readySeen: null, ...extra,
+  });
+  const v10 = {
+    version: 10, activeProfileId: 'none', pin: '2468',
+    profiles: [
+      profile('none', {}),
+      profile('stats', { stats: { red: { correct: 1, seen: 1 } } }),
+      profile('events', { events: [{ c: 'red', a: 'red', ok: true, ts: at(8, 25) }] }),
+      profile('sessions', { sessions: [{ ts: at(8, 25), rounds: 1, correct: 1, colors: ['red'] }] }),
+      profile('garden', { garden: [{ day: '2026-09-25', sets: 1, colors: ['red'] }] }),
+      profile('history', { history: [{ day: '2026-09-25', sets: 0, t: {} }] }),
+      profile('explicit', { events: [{ c: 'red', a: 'red', ok: true, ts: at(8, 25) }], pianoVariety: true }),
+      profile('junk', { pianoVariety: 'yes' }),
+    ],
+  };
+  const { Store } = load({ 'rainbow-pitch:v1': JSON.stringify(v10) });
+  const byId = Object.fromEntries(Store.all().profiles.map((p) => [p.id, p.pianoVariety]));
+  assert.deepEqual(plain(byId), {
+    none: true, stats: false, events: false, sessions: false, garden: false, history: false, explicit: true, junk: true,
+  });
+  assert.equal(Store.all().version, 11);
+  console.log('ok - migration: a version-10 save keeps the steady sound for children who already practise');
+}

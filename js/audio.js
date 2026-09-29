@@ -12,8 +12,18 @@
  * changes loudness) and only 3.4 s of each note sits unpacked in memory. They
  * load lazily on first use and the service worker keeps them for offline play.
  *
+ * Natural variety (opt-in per child, see setVariety): a person at a real piano
+ * never plays a chord the same way twice, and a child who only ever hears one
+ * recording may partly learn that recording instead of the chord. So each
+ * chord is played from one of three loudness layers (main, soft, firm — each a
+ * folder of the same 18 files) with tiny random timing and level differences
+ * between its notes. Only HOW a chord is played varies, never WHICH notes:
+ * pitch, voicing, inversion and octave are untouched, and chordPlan() never
+ * looks at the notes, so the variety can't become a hint about the chord.
+ * With variety off, playback is exactly the single steady main recording.
+ *
  * Public API: unlock, playChord, playReward, playSparkle, stopAll,
- * whenOutputSilent, isChordRinging.
+ * whenOutputSilent, isChordRinging, setVariety, chordPlan.
  */
 
 const PianoAudio = (() => {
@@ -21,13 +31,15 @@ const PianoAudio = (() => {
   // it runs; currentScript is null afterwards), so the app page and the
   // real-piano acceptance tool (which loads ../../js/audio.js) both find them.
   // New content goes in a new vN folder, never over v1 (see sw.js).
-  const SAMPLE_BASE_PATH = '../assets/piano/v1/main/';
+  const SAMPLE_BASE_ROOT = '../assets/piano/v1/';
+  const LAYERS = ['main', 'soft', 'firm'];
   const SCRIPT_SRC = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) || '';
-  function sampleBase() {
+  function sampleBase(layer) {
+    const path = SAMPLE_BASE_ROOT + layer + '/';
     try {
-      if (SCRIPT_SRC) return new URL(SAMPLE_BASE_PATH, SCRIPT_SRC).href;
+      if (SCRIPT_SRC) return new URL(path, SCRIPT_SRC).href;
     } catch (e) { /* fall through to the page-relative path */ }
-    return SAMPLE_BASE_PATH.replace('../', '');
+    return path.replace('../', '');
   }
 
   // One sample per note the chords use, keyed the way Tone spells it
@@ -57,7 +69,44 @@ const PianoAudio = (() => {
   // clean gap before the next chord instead of bleeding into it.
   const RELEASE_SECONDS = 0.3;
 
-  let sampler = null;
+  // ---- natural variety: the chord plan -----------------------------------
+  // Decided per chord, from random numbers only. The layer is one draw for the
+  // whole chord (a pianist plays a chord at one dynamic): main half the time,
+  // soft and firm a quarter each. Each note also gets its own small delay
+  // (a hand never lands three keys at the same instant) and level nudge. The
+  // delays are shifted so the earliest note is at 0 and the chord never
+  // starts later than it does with variety off.
+  const MAX_OFFSET_MS = 20;
+  const MAX_GAIN_DB = 1.5;
+
+  function chordPlan(notes, { variety = false, rand = Math.random } = {}) {
+    if (!variety) {
+      return { layer: 'main', notes: notes.map((note) => ({ note, offsetMs: 0, gainDb: 0 })) };
+    }
+    const r = rand();
+    const layer = r < 0.5 ? 'main' : r < 0.75 ? 'soft' : 'firm';
+    const offsets = notes.map(() => rand() * MAX_OFFSET_MS);
+    const earliest = offsets.length ? Math.min(...offsets) : 0;
+    return {
+      layer,
+      notes: notes.map((note, i) => ({
+        note,
+        offsetMs: offsets[i] - earliest,
+        gainDb: (rand() * 2 - 1) * MAX_GAIN_DB,
+      })),
+    };
+  }
+
+  // ---- samplers -----------------------------------------------------------
+  // One Tone.Sampler per layer, all built the same way. `main` is the piano:
+  // unlock() waits for it. soft and firm exist only while variety is on (about
+  // 24 MB unpacked each) and load in the background, so they can never delay
+  // or fail unlock(); until a layer has loaded, a chord planned for it plays
+  // on main instead.
+  const samplers = {};
+  const ready = {};      // layer -> its files have loaded
+  const loading = {};    // layer -> the load promise while in flight
+  let varietyOn = false;
   let started = false;
   let pendingPitchedOperations = 0;
   // A stop invalidates playback that crossed an async load boundary.
@@ -69,46 +118,65 @@ const PianoAudio = (() => {
   // "ringing" for reward-replay purposes.
   let pitchedHeldUntil = 0;
 
-  // Build the sampler on demand and remember the "loaded" promise.
-  let loadPromise = null;
-  function ensureSampler() {
-    if (sampler) return loadPromise;
-    loadPromise = new Promise((resolve, reject) => {
+  // Build a layer's sampler on demand and remember its "loaded" promise.
+  function ensureLayer(layer) {
+    if (samplers[layer]) return loading[layer];
+    loading[layer] = new Promise((resolve, reject) => {
       // onload and onerror both fire from Tone's internals, and the timeout
       // fires from us — guard so only the first of the three ever settles
       // the promise (a late onload after a timeout rejection, etc).
       let settled = false;
+      const fail = (error) => {
+        settled = true;
+        samplers[layer] = null;
+        loading[layer] = null; // let a later call rebuild the sampler and retry
+        reject(error);
+      };
       const timer = setTimeout(() => {
         if (settled) return;
-        settled = true;
-        sampler = null;
-        loadPromise = null; // let a later call rebuild the sampler and retry
-        reject(new Error('Piano samples timed out loading.'));
+        fail(new Error('Piano samples timed out loading.'));
       }, LOAD_TIMEOUT_MS);
 
-      sampler = new Tone.Sampler({
+      samplers[layer] = new Tone.Sampler({
         urls: sampleUrls(),
-        baseUrl: sampleBase(),
+        baseUrl: sampleBase(layer),
         release: RELEASE_SECONDS,
         onload: () => {
           if (settled) return;
           settled = true;
           clearTimeout(timer);
+          ready[layer] = true;
           resolve();
         },
         onerror: (err) => {
           if (settled) return;
-          settled = true;
           clearTimeout(timer);
-          sampler = null;
-          loadPromise = null; // reset so a retry rebuilds a fresh sampler
-          reject(err instanceof Error ? err : new Error('Piano samples failed to load.'));
+          fail(err instanceof Error ? err : new Error('Piano samples failed to load.'));
         },
       }).toDestination();
-      sampler.volume.value = -4;
+      samplers[layer].volume.value = -4;
     });
-    return loadPromise;
+    return loading[layer];
   }
+  function ensureSampler() { return ensureLayer('main'); }
+
+  // The extra layers, in the background. A failure is silent: chords just keep
+  // playing on main, and the next unlock() or setVariety(true) tries again.
+  function loadExtraLayers() {
+    if (!varietyOn || !started || typeof Tone === 'undefined') return;
+    for (const layer of LAYERS) {
+      if (layer !== 'main') ensureLayer(layer).catch(() => {});
+    }
+  }
+
+  // Turn natural variety on or off (a per-child setting; the app calls this
+  // whenever the active child or the setting changes). Off by default.
+  function setVariety(on) {
+    varietyOn = !!on;
+    loadExtraLayers();
+  }
+
+  const allSamplers = () => Object.values(samplers).filter(Boolean);
 
   /**
    * Unlock the audio context. Browsers require this to happen inside a user
@@ -132,7 +200,10 @@ const PianoAudio = (() => {
     } catch (e) { /* unsupported session type — nothing else to try */ }
     await Tone.start();
     started = true;
-    await ensureSampler();
+    const mainReady = ensureSampler();
+    // Start the extra layers once main has loaded; never awaited.
+    mainReady.then(loadExtraLayers, () => {});
+    await mainReady;
   }
 
   /**
@@ -147,14 +218,30 @@ const PianoAudio = (() => {
       if (!started) await unlock();
       await ensureSampler();
       if (operationGeneration !== pitchedOperationGeneration) return;
-      sampler.releaseAll();
+      for (const s of allSamplers()) s.releaseAll();
       const delay = 0.05;
-      sampler.triggerAttackRelease(notes, duration, Tone.now() + delay, velocity);
+      const start = Tone.now() + delay;
+      let spreadMs = 0;
+      if (!varietyOn) {
+        samplers.main.triggerAttackRelease(notes, duration, start, velocity);
+      } else {
+        const plan = chordPlan(notes, { variety: true });
+        // A layer that hasn't loaded (or failed) falls back to main.
+        const target = ready[plan.layer] && samplers[plan.layer] ? samplers[plan.layer] : samplers.main;
+        for (const n of plan.notes) {
+          // Tone applies velocity as a plain gain (no 0–1 clamp), so a +1.5 dB
+          // nudge on a full-velocity chord really is louder; there's headroom
+          // (the loudest firm chord peaks at -2.8 dBFS before the -4 dB volume).
+          const v = velocity * 10 ** (n.gainDb / 20);
+          target.triggerAttackRelease(n.note, duration, start + n.offsetMs / 1000, v);
+          spreadMs = Math.max(spreadMs, n.offsetMs);
+        }
+      }
       pitchedOutputUntil = Math.max(
         pitchedOutputUntil,
-        Date.now() + (delay + duration + RELEASE_SECONDS) * 1000
+        Date.now() + (delay + duration + RELEASE_SECONDS) * 1000 + spreadMs
       );
-      pitchedHeldUntil = Math.max(pitchedHeldUntil, Date.now() + (delay + duration) * 1000);
+      pitchedHeldUntil = Math.max(pitchedHeldUntil, Date.now() + (delay + duration) * 1000 + spreadMs);
     } finally {
       pendingPitchedOperations -= 1;
     }
@@ -206,8 +293,9 @@ const PianoAudio = (() => {
   function stopAll() {
     pitchedOperationGeneration += 1;
     pitchedHeldUntil = 0;
-    if (!sampler) return;
-    sampler.releaseAll();
+    const all = allSamplers();
+    if (!all.length) return;
+    for (const s of all) s.releaseAll();
     if (pitchedOutputUntil > Date.now()) {
       pitchedOutputUntil = Date.now() + RELEASE_SECONDS * 1000;
     }
@@ -249,5 +337,7 @@ const PianoAudio = (() => {
     stopAll,
     whenOutputSilent,
     isChordRinging,
+    setVariety,
+    chordPlan,
   };
 })();
