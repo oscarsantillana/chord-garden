@@ -327,20 +327,8 @@ const chords = [
     html,
     /script-src 'self' 'sha384-c6Uo4N9c3SOEigMVzP6IshUG1wQ5uMp3xeoQFiHWAQ86joWdgyajkvopySyKy\/Z6';/
   );
-  for (const file of [
-    'A0.mp3', 'C1.mp3', 'Ds1.mp3', 'Fs1.mp3',
-    'A1.mp3', 'C2.mp3', 'Ds2.mp3', 'Fs2.mp3',
-    'A2.mp3', 'C3.mp3', 'Ds3.mp3', 'Fs3.mp3',
-    'A3.mp3', 'C4.mp3', 'Ds4.mp3', 'Fs4.mp3',
-    'A4.mp3', 'C5.mp3', 'Ds5.mp3', 'Fs5.mp3',
-    'A5.mp3', 'C6.mp3',
-  ]) {
-    assert.ok(
-      html.includes(`https://tonejs.github.io/audio/salamander/${file}`),
-      `CSP must allow only the exact production sample path for ${file}`
-    );
-  }
-  assert.doesNotMatch(html, /connect-src https:\/\/tonejs\.github\.io(?:;|\s)/);
+  assert.doesNotMatch(html, /tonejs\.github\.io/);
+  assert.match(html, /connect-src 'self';/);
   assert.match(html, /media-src 'none'/);
   assert.match(
     html,

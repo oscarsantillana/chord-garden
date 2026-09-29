@@ -5,24 +5,50 @@
  * piano matters here: the child is building a lasting mental link between a
  * timbre+pitch and a colour, so the sound should be pleasant and consistent.
  *
- * Samples: the public "Salamander" grand piano set hosted on the Tone.js CDN.
- * These load lazily on first use and are cached by the browser afterwards.
+ * Samples: self-hosted Salamander Grand Piano V3 (Alexander Holm, CC BY 3.0),
+ * built by tools/piano-samples into assets/piano/vN/. There is one file per
+ * note the chords use, already tuned to A = 440 and levelled, so Tone never
+ * repitches a sample (stretching pitch in the browser drifts the tuning and
+ * changes loudness) and only 3.4 s of each note sits unpacked in memory. They
+ * load lazily on first use and the service worker keeps them for offline play.
  *
  * Public API: unlock, playChord, playReward, playSparkle, stopAll,
  * whenOutputSilent, isChordRinging.
  */
 
 const PianoAudio = (() => {
-  const SAMPLE_BASE = 'https://tonejs.github.io/audio/salamander/';
-  const SAMPLES = {
-    A0: 'A0.mp3', C1: 'C1.mp3', 'D#1': 'Ds1.mp3', 'F#1': 'Fs1.mp3',
-    A1: 'A1.mp3', C2: 'C2.mp3', 'D#2': 'Ds2.mp3', 'F#2': 'Fs2.mp3',
-    A2: 'A2.mp3', C3: 'C3.mp3', 'D#3': 'Ds3.mp3', 'F#3': 'Fs3.mp3',
-    A3: 'A3.mp3', C4: 'C4.mp3', 'D#4': 'Ds4.mp3', 'F#4': 'Fs4.mp3',
-    A4: 'A4.mp3', C5: 'C5.mp3', 'D#5': 'Ds5.mp3', 'F#5': 'Fs5.mp3',
-    A5: 'A5.mp3', C6: 'C6.mp3',
-  };
-  // If the CDN never answers (offline, blocked, flaky network) the samples'
+  // Where the piano files live, resolved against THIS script (captured while
+  // it runs; currentScript is null afterwards), so the app page and the
+  // real-piano acceptance tool (which loads ../../js/audio.js) both find them.
+  // New content goes in a new vN folder, never over v1 (see sw.js).
+  const SAMPLE_BASE_PATH = '../assets/piano/v1/main/';
+  const SCRIPT_SRC = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) || '';
+  function sampleBase() {
+    try {
+      if (SCRIPT_SRC) return new URL(SAMPLE_BASE_PATH, SCRIPT_SRC).href;
+    } catch (e) { /* fall through to the page-relative path */ }
+    return SAMPLE_BASE_PATH.replace('../', '');
+  }
+
+  // One sample per note the chords use, keyed the way Tone spells it
+  // ('A#3'; Tone maps 'Bb3' to the same key) with the file name written
+  // without '#' ('As3.mp3'). Read from CHORDS when the sampler is built.
+  const FLAT_TO_SHARP = { Db: 'C#', Eb: 'D#', Gb: 'F#', Ab: 'G#', Bb: 'A#' };
+  function sampleUrls() {
+    const urls = {};
+    if (typeof CHORDS === 'undefined') return urls;
+    for (const chord of CHORDS) {
+      for (const note of chord.notes) {
+        const m = /^([A-G])([#b]?)(-?\d+)$/.exec(note);
+        if (!m) continue;
+        const name = m[2] === 'b' ? FLAT_TO_SHARP[m[1] + 'b'] : m[1] + m[2];
+        if (!name) continue;
+        urls[name + m[3]] = name.replace('#', 's') + m[3] + '.mp3';
+      }
+    }
+    return urls;
+  }
+  // If the files never arrive (offline, blocked, flaky network) the samples'
   // onload would just never fire — this bounds how long the Start button can
   // sit on "Waking the piano…" before we give up and let the grown-up retry.
   const LOAD_TIMEOUT_MS = 20000;
@@ -61,8 +87,8 @@ const PianoAudio = (() => {
       }, LOAD_TIMEOUT_MS);
 
       sampler = new Tone.Sampler({
-        urls: SAMPLES,
-        baseUrl: SAMPLE_BASE,
+        urls: sampleUrls(),
+        baseUrl: sampleBase(),
         release: RELEASE_SECONDS,
         onload: () => {
           if (settled) return;

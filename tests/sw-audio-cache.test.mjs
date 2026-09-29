@@ -84,12 +84,118 @@ const audioUrls = (w) => [TONE, ...w.sampleUrls()];
 const cacheHas = (device, name, url) => device.stores.get(name)?.has(url) ?? false;
 const versioned = () => /CACHE_NAME = '([^']+)'/.exec(swSource)[1];
 
-test('sw.js sample list matches SAMPLE_BASE and SAMPLES in js/audio.js', () => {
-  const base = audioSource.match(/SAMPLE_BASE\s*=\s*'([^']+)'/)[1];
-  const block = audioSource.match(/SAMPLES\s*=\s*\{([\s\S]*?)\}/)[1];
-  const fromAudio = [...block.matchAll(/:\s*'([^']+)'/g)].map(m => base + m[1]);
-  assert.ok(fromAudio.length > 20);
-  assert.deepEqual(loadWorker(makeDevice()).sampleUrls().sort(), fromAudio.sort());
+// The 22 files a 0.5.x device fetched from the Tone.js host.
+const OLD_BASE = 'https://tonejs.github.io/audio/salamander/';
+const oldSampleUrls = () => [
+  'A0', 'C1', 'Ds1', 'Fs1', 'A1', 'C2', 'Ds2', 'Fs2', 'A2', 'C3', 'Ds3', 'Fs3',
+  'A3', 'C4', 'Ds4', 'Fs4', 'A4', 'C5', 'Ds5', 'Fs5', 'A5', 'C6',
+].map(n => OLD_BASE + n + '.mp3');
+
+// The file name for a note, as written in data.js: 'Bb3' -> 'As3.mp3'.
+const FLAT = { Db: 'Cs', Eb: 'Ds', Gb: 'Fs', Ab: 'Gs', Bb: 'As' };
+const fileFor = (note) => {
+  const [, letter, acc, octave] = /^([A-G])([#b]?)(-?\d+)$/.exec(note);
+  const name = acc === 'b' ? FLAT[letter + 'b'] : letter + (acc === '#' ? 's' : '');
+  return name + octave + '.mp3';
+};
+
+// Load audio.js in a vm and make it build its sampler; returns the options
+// it passed to Tone.Sampler.
+async function samplerOptions(extra) {
+  let options;
+  class StubSampler {
+    constructor(o) { options = o; this.volume = {}; setImmediate(o.onload); }
+    toDestination() { return this; }
+  }
+  const sandbox = {
+    console, setTimeout, clearTimeout, Date, URL,
+    Tone: { Sampler: StubSampler, async start() {} },
+    ...extra,
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(audioSource + '\nthis.PianoAudio = PianoAudio;', sandbox);
+  sandbox.PianoAudio.unlock().catch(() => {});
+  await new Promise(r => setImmediate(r));
+  assert.ok(options, 'audio.js built a sampler');
+  return options;
+}
+
+test('the notes in data.js, sw.js, assets/piano/v1/main and js/audio.js all agree', async () => {
+  const dataSandbox = {};
+  vm.createContext(dataSandbox);
+  vm.runInContext(fs.readFileSync(new URL('../js/data.js', import.meta.url), 'utf8') + '\nthis.CHORDS = CHORDS;', dataSandbox);
+  const fromData = [...new Set(dataSandbox.CHORDS.flatMap(c => c.notes.map(fileFor)))].sort();
+  assert.equal(fromData.length, 18);
+
+  const swBase = root + 'assets/piano/v1/main/';
+  const fromSw = loadWorker(makeDevice()).sampleUrls().map(u => {
+    assert.ok(u.startsWith(swBase), u);
+    return u.slice(swBase.length);
+  }).sort();
+  assert.deepEqual(fromSw, fromData);
+
+  const onDisk = fs.readdirSync(new URL('../assets/piano/v1/main/', import.meta.url)).filter(f => f.endsWith('.mp3')).sort();
+  assert.deepEqual(onDisk, fromData);
+
+  // audio.js as a classic script at <root>/js/audio.js, with data.js's globals.
+  const options = await samplerOptions({
+    document: { currentScript: { src: root + 'js/audio.js' } },
+    CHORDS: dataSandbox.CHORDS,
+  });
+  assert.equal(options.baseUrl, swBase, 'audio.js resolves against its own location');
+  const urls = { ...options.urls };
+  assert.deepEqual(Object.values(urls).sort(), fromData);
+  assert.equal(urls['A#3'], 'As3.mp3');
+  assert.ok(!Object.keys(urls).some(k => k.includes('b')), 'keys use Tone sharp spelling');
+});
+
+test('audio.js without data.js or a script tag (test sandboxes) still builds a sampler', async () => {
+  const options = await samplerOptions({});
+  assert.deepEqual({ ...options.urls }, {});
+  assert.equal(options.baseUrl, 'assets/piano/v1/main/');
+});
+
+test('the acceptance tool, at tools/real-piano-acceptance/, finds the same files via ../../js/audio.js', async () => {
+  const src = 'https://example.test/tools/real-piano-acceptance/../../js/audio.js';
+  const options = await samplerOptions({ document: { currentScript: { src: new URL(src).href } } });
+  assert.equal(options.baseUrl, 'https://example.test/assets/piano/v1/main/');
+});
+
+test('piano files are same-origin and cached-first; the old Tone.js host is no longer intercepted', async () => {
+  const device = makeDevice();
+  const w = loadWorker(device);
+  for (const url of w.sampleUrls()) assert.ok(url.startsWith(root) && url.endsWith('.mp3'), url);
+  await w.install();
+  device.offline = true;
+  const hit = await w.fetch(w.sampleUrls()[0]);
+  assert.equal(await hit.text(), 'body of ' + w.sampleUrls()[0]);
+  const old = OLD_BASE + 'A4.mp3';
+  device.offline = false;
+  await w.fetch(old);
+  await new Promise(r => setImmediate(r));
+  assert.ok(!cacheHas(device, AUDIO, old) && !cacheHas(device, versioned(), old), 'not cached by the worker');
+});
+
+test('an existing 0.5.1 device holding the 22 tonejs files updates: they are pruned, the new files cached, offline Play works', async () => {
+  const device = makeDevice();
+  const w = loadWorker(device);
+  const oldUrls = oldSampleUrls();
+  assert.equal(oldUrls.length, 22);
+  const audio = new Map(oldUrls.map(u => [u, new Response('old ' + u)]));
+  audio.set(TONE, new Response('tone'));
+  device.stores.set(AUDIO, audio);
+  device.stores.set('rainbow-pitch-v0.5.1', new Map([[root + 'index.html', new Response('old shell')]]));
+  await w.install();
+  await w.activate();
+  device.offline = true;
+  assert.ok(!device.stores.has('rainbow-pitch-v0.5.1'));
+  for (const u of oldUrls) assert.ok(!cacheHas(device, AUDIO, u), 'pruned ' + u);
+  for (const url of audioUrls(w)) {
+    const res = await w.fetch(url);
+    assert.ok(res, url);
+    assert.equal(await res.text(), url === TONE ? 'tone' : 'body of ' + url);
+  }
+  assert.equal(await device.stores.get(AUDIO).get(TONE).text(), 'tone', 'Tone.js kept');
 });
 
 test('first install fetches Tone.js and every sample into the audio cache', async () => {
@@ -130,7 +236,7 @@ test('activate deletes old versioned caches, keeps the audio cache, prunes stale
   const device = makeDevice();
   const w = loadWorker(device);
   await w.install();
-  const stale = 'https://tonejs.github.io/audio/salamander/Old.mp3';
+  const stale = root + 'assets/piano/v0/main/Old.mp3';
   device.stores.set('rainbow-pitch-v0.5.0', new Map([['x', new Response('x')]]));
   device.stores.set('unrelated-cache', new Map());
   device.stores.get(AUDIO).set(stale, new Response('stale'));

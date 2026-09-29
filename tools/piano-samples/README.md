@@ -34,5 +34,8 @@ layers 6–8, so it keeps the sound children already know.
 **Changing the files:** build into a new folder (`v2`, and so on), never over
 `v1`. Installed apps keep piano files in a long-lived cache keyed by URL (see
 `AUDIO_CACHE` in `sw.js`), so new content under an old URL would never reach
-them. Update the list in `sw.js` and `js/audio.js` to match; a test checks
-that they agree.
+them. Then point the app at the new folder: change `SAMPLE_BASE_PATH` in
+`js/audio.js` (it is resolved against audio.js's own location, and the file
+names come from the chords in `js/data.js`) and `SAMPLE_BASE` and
+`SAMPLE_FILES` in `sw.js`. `tests/sw-audio-cache.test.mjs` checks that the
+chords, `sw.js`, `js/audio.js` and the files on disk agree.

@@ -71,11 +71,12 @@ python3 -m http.server 8000
 Push to GitHub and enable **GitHub Pages** (serve from the repo root), or drop
 the folder onto Netlify / Vercel / Cloudflare Pages.
 
-The piano sound uses [Tone.js](https://tonejs.github.io/) with the public
-"Salamander" grand-piano samples, loaded from a CDN on first tap. The first
-visit needs an internet connection; after that, a service worker keeps the
-whole app — including the piano samples — working fully offline when served
-over http(s) (e.g. GitHub Pages). Opening `index.html` directly via `file://`
+The piano sound is played by [Tone.js](https://tonejs.github.io/). The piano
+note files are self-hosted in `assets/piano/`, built from the Salamander Grand
+Piano recordings by [`tools/piano-samples/`](tools/piano-samples/). The first
+visit needs an internet connection, to fetch Tone.js and to fill the offline
+cache; after that, a service worker keeps the whole app — including the piano —
+working fully offline when served over http(s) (e.g. GitHub Pages). Opening `index.html` directly via `file://`
 still works, just without offline caching.
 
 An installed copy also updates itself: a new version downloads in the
@@ -163,8 +164,9 @@ rainbow-pitch/
 │  └─ app.js           # all screens & the practice loop
 ├─ sw.js               # service worker — offline cache for the app shell + piano samples
 ├─ tests/              # plain-Node logic, detector, gate, and piano-fixture tests
+├─ tools/piano-samples/ # builds the piano note files from Salamander (needs ffmpeg)
 ├─ tools/real-piano-acceptance/ # isolated guided physical-test harness
-└─ assets/             # favicon, web-app manifest, app icons, bundled fonts (Grandstander + Nunito, OFL)
+└─ assets/             # favicon, web-app manifest, app icons, piano/ note files, bundled fonts (Grandstander + Nunito, OFL)
 ```
 
 ## Development
@@ -203,3 +205,7 @@ ground-truth evidence.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+The piano sound is adapted from the Salamander Grand Piano V3 by Alexander Holm,
+licensed [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/): trimmed,
+tuned and levelled for Chord Garden.
