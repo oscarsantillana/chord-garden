@@ -246,4 +246,29 @@ function ev(c, a, ok) {
   console.log('ok - nextColor, readyForNext and unseenReadiness');
 }
 
+// --- keepRecent -------------------------------------------------------------
+
+{
+  const DAY = 24 * 60 * 60 * 1000;
+  const now = 100 * DAY;
+  // Newest first, one item per half day going back.
+  const list = Array.from({ length: 40 }, (_, i) => ({ i, ts: now - i * DAY / 2 }));
+
+  const byDay = Logic.keepRecent(list, { days: 5, now });
+  assert.equal(byDay.length, 11, 'items from the last 5 days (ts >= cutoff, inclusive) survive');
+  assert.equal(byDay[10].i, 10);
+
+  assert.equal(Logic.keepRecent(list, { days: 5, min: 20, now }).length, 20, 'min keeps older items past the cutoff');
+  assert.equal(Logic.keepRecent(list, { days: 5, min: 3, now }).length, 11, 'min never shrinks the day window');
+  assert.equal(Logic.keepRecent(list, { days: 5, max: 4, now }).length, 4, 'max caps the day window');
+  assert.equal(Logic.keepRecent(list, { days: 5, min: 8, max: 4, now }).length, 4, 'max wins over min');
+
+  const messy = [{ ts: now }, { c: 'red' }, { ts: 'x' }, { ts: now - 50 * DAY }, { c: 'blue' }];
+  assert.equal(Logic.keepRecent(messy, { days: 5, now }).length, 1, 'items without a numeric ts are dropped outside min');
+  assert.equal(Logic.keepRecent(messy, { days: 5, min: 3, now }).length, 3, 'items without a numeric ts survive inside min');
+
+  assert.deepEqual(Logic.keepRecent([], { days: 5, min: 10, max: 20, now }), []);
+  console.log('ok - keepRecent: day cutoff, min floor, max ceiling, missing ts, empty list');
+}
+
 console.log('\nAll logic.test.mjs assertions passed.');
