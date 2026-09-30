@@ -118,6 +118,111 @@ const PianoAudio = (() => {
   // "ringing" for reward-replay purposes.
   let pitchedHeldUntil = 0;
 
+  // ---- keeping the audio context alive (iOS) -------------------------------
+  // iOS suspends or "interrupts" Web Audio when the app is backgrounded, the
+  // screen locks, or Siri, a call or an alarm takes the audio session. Some-
+  // times the context then never comes back: it stays 'suspended' or the
+  // non-standard 'interrupted', resume() never settles, or it claims to be
+  // 'running' while its clock is frozen. Nothing sounds until the app is
+  // force-closed, which is the only thing that made a fresh context. So we
+  // track whether the context MAY be unhealthy (`suspect`) and, on the next
+  // Play/flower tap, replace it. All of this is a no-op where document,
+  // window or Tone.getContext are missing (tests, older fakes).
+  let suspect = false;
+  let startAttempted = false; // Tone.start() has been called at least once
+  let audioEpoch = 0;         // bumped on rebuild; stale sample loads are ignored
+  let listenedRaw = null;     // the raw context our statechange listener is on
+  let healthRun = 0;          // cancels an older health check when a new one starts
+  let wasHidden = false;
+  // resume() on a dead iOS context can simply never settle, which would leave
+  // the Play button on "Waking the piano…" forever. Give up after this long;
+  // the child's next tap then rebuilds the context inside its own gesture.
+  const START_TIMEOUT_MS = 2500;
+  // After the page returns, the context is healthy once it reports 'running'
+  // AND its clock has moved: at least MIN_CLOCK_ADVANCE seconds over at least
+  // MIN_WALL_MS of real time, checked for up to HEALTH_WINDOW_MS.
+  const HEALTH_WINDOW_MS = 1500;
+  const HEALTH_POLL_MS = 100;
+  const MIN_WALL_MS = 150;
+  const MIN_CLOCK_ADVANCE = 0.05;
+
+  function toneContext() {
+    try {
+      if (typeof Tone !== 'undefined' && typeof Tone.getContext === 'function') return Tone.getContext() || null;
+    } catch (e) { /* treat as no context */ }
+    return null;
+  }
+
+  // Watch the current raw context: leaving 'running' after the piano has
+  // started (an interruption while the page stays visible, say Siri) means the
+  // next tap should rebuild it.
+  function watchContext() {
+    try {
+      const ctx = toneContext();
+      const raw = ctx && ctx.rawContext;
+      if (!raw || raw === listenedRaw || typeof raw.addEventListener !== 'function') return;
+      listenedRaw = raw;
+      raw.addEventListener('statechange', () => {
+        if (raw === listenedRaw && startAttempted && raw.state !== 'running') suspect = true;
+      });
+    } catch (e) { /* no state events — visibility and timeouts still work */ }
+  }
+
+  // Run when the page becomes visible again and after every start. Reading
+  // state needs no user gesture, so a healthy context is recognised and left
+  // alone; one that never proves healthy within the window is marked
+  // `suspect` for the next tap to act on.
+  function checkHealth() {
+    const run = ++healthRun;
+    const began = Date.now();
+    let base = null;
+    const tick = () => {
+      if (run !== healthRun) return;
+      try {
+        const ctx = toneContext();
+        const raw = ctx && ctx.rawContext;
+        if (!ctx || !raw) return;
+        const now = Date.now();
+        if (ctx.state === 'running') {
+          if (base === null) base = { time: raw.currentTime, at: now };
+          else if (now - base.at >= MIN_WALL_MS && raw.currentTime - base.time >= MIN_CLOCK_ADVANCE) {
+            suspect = false;
+            return;
+          }
+        } else {
+          base = null; // restart the clock measurement once it is running
+        }
+        if (now - began < HEALTH_WINDOW_MS) setTimeout(tick, HEALTH_POLL_MS);
+        else suspect = true; // never ran with a moving clock: the next tap rebuilds
+      } catch (e) { suspect = true; }
+    };
+    tick();
+  }
+
+  function onPageVisible() {
+    if (!startAttempted) return;
+    suspect = true; // assume the worst until the check proves otherwise
+    checkHealth();
+  }
+
+  if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
+    wasHidden = document.visibilityState === 'hidden';
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') { wasHidden = true; return; }
+      if (wasHidden && document.visibilityState === 'visible') {
+        wasHidden = false;
+        onPageVisible();
+      }
+    });
+  }
+  // A page restored from the back/forward cache (or an iOS resume) fires
+  // pageshow with persisted set, possibly without a visibilitychange.
+  if (typeof window !== 'undefined' && window && typeof window.addEventListener === 'function') {
+    window.addEventListener('pageshow', (event) => {
+      if (event && event.persisted) onPageVisible();
+    });
+  }
+
   // Build a layer's sampler on demand and remember its "loaded" promise.
   function ensureLayer(layer) {
     if (samplers[layer]) return loading[layer];
@@ -126,10 +231,15 @@ const PianoAudio = (() => {
       // fires from us — guard so only the first of the three ever settles
       // the promise (a late onload after a timeout rejection, etc).
       let settled = false;
+      // A rebuild (see rebuildContext) replaces the samplers; a load that
+      // belonged to the old ones must not touch the new state when it ends.
+      const epoch = audioEpoch;
       const fail = (error) => {
         settled = true;
-        samplers[layer] = null;
-        loading[layer] = null; // let a later call rebuild the sampler and retry
+        if (epoch === audioEpoch) {
+          samplers[layer] = null;
+          loading[layer] = null; // let a later call rebuild the sampler and retry
+        }
         reject(error);
       };
       const timer = setTimeout(() => {
@@ -145,7 +255,7 @@ const PianoAudio = (() => {
           if (settled) return;
           settled = true;
           clearTimeout(timer);
-          ready[layer] = true;
+          if (epoch === audioEpoch) ready[layer] = true;
           resolve();
         },
         onerror: (err) => {
@@ -178,6 +288,62 @@ const PianoAudio = (() => {
 
   const allSamplers = () => Object.values(samplers).filter(Boolean);
 
+  // Replace a context that may be dead with a fresh one. Must run
+  // synchronously inside the tap handler: iOS only lets a NEW AudioContext
+  // start while the user gesture is still live, and the gesture is gone after
+  // the first `await`. Samplers belong to the old context, so they are thrown
+  // away and rebuilt lazily (from the service worker's audio cache, so this
+  // works offline).
+  function rebuildContext() {
+    if (typeof Tone.getContext !== 'function' || typeof Tone.setContext !== 'function'
+      || typeof Tone.Context !== 'function') return;
+    stopAll();
+    const old = Tone.getContext();
+    const fresh = new Tone.Context(); // if this throws, nothing has been torn down
+    audioEpoch += 1;
+    for (const s of allSamplers()) { try { s.dispose(); } catch (e) { /* already gone */ } }
+    if (sparkleSynth) { try { sparkleSynth.dispose(); } catch (e) { /* already gone */ } }
+    sparkleSynth = null;
+    for (const layer of Object.keys(samplers)) delete samplers[layer];
+    for (const layer of Object.keys(ready)) delete ready[layer];
+    for (const layer of Object.keys(loading)) delete loading[layer];
+    Tone.setContext(fresh);
+    // Context.dispose() also calls close() but drops its promise, which would
+    // surface a rejection from a dead context as an unhandled one. So close
+    // it ourselves first (dispose's own close is then a no-op) and swallow.
+    if (old && old !== fresh) {
+      try {
+        if (typeof old.close === 'function') Promise.resolve(old.close()).catch(() => {});
+      } catch (e) { /* ignore */ }
+      try { if (typeof old.dispose === 'function') old.dispose(); } catch (e) { /* ignore */ }
+    }
+    listenedRaw = null;
+    watchContext();
+    suspect = false;
+  }
+
+  // Tone.start() with a bound, then a check that the context really runs.
+  // Called synchronously from unlock() so the gesture is still live.
+  async function startContext() {
+    let timer;
+    const timeout = new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('The piano did not wake up.')), START_TIMEOUT_MS);
+    });
+    try {
+      await Promise.race([Tone.start(), timeout]);
+    } catch (e) {
+      suspect = true;
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+    const ctx = toneContext();
+    if (ctx && ctx.state !== 'running') {
+      suspect = true;
+      throw new Error('The piano did not wake up.');
+    }
+  }
+
   /**
    * Unlock the audio context. Browsers require this to happen inside a user
    * gesture (a tap/click), so call it from a button handler.
@@ -198,8 +364,18 @@ const PianoAudio = (() => {
     try {
       if (typeof navigator !== 'undefined' && navigator.audioSession) navigator.audioSession.type = 'playback';
     } catch (e) { /* unsupported session type — nothing else to try */ }
-    await Tone.start();
+    // A context that may have died while we were away is replaced here, before
+    // any await, so the fresh AudioContext starts inside this tap's gesture.
+    if ((started || startAttempted) && suspect) rebuildContext();
+    startAttempted = true;
+    await startContext();
+    watchContext();
     started = true;
+    // iOS can also report 'running' with the clock stuck and no visibility
+    // or state event to warn us. Check in the background; if it never ticks,
+    // the next Play tap rebuilds it. `suspect` is only set if the check
+    // fails, so quick taps on flowers don't rebuild a healthy context.
+    checkHealth();
     const mainReady = ensureSampler();
     // Start the extra layers once main has loaded; never awaited.
     mainReady.then(loadExtraLayers, () => {});
