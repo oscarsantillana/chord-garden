@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.7.1';
+  const APP_VERSION = '0.7.2';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -1368,9 +1368,11 @@
     // it would light a star on Home and list a "0 of 0" in Progress.
     // `rounds` counts scored rounds, so a round stopped after a first miss
     // counts (its miss is already in the stats) and a skipped real-piano
-    // round doesn't. Same reasoning applies to the garden: nothing scored
-    // means nothing to water, so `watering` stays null and the celebration
-    // shows no can at all.
+    // round doesn't. The garden follows FINISHED sets only: a set stopped
+    // early is saved for the grown-up but waters nothing (a child once
+    // stopped set after set to grow the flower from a few chords), so
+    // `watering` stays null and the celebration shows no can at all. Stopping
+    // still looks and feels like any other calm ending.
     let watering = null;
     if (session.played > 0) {
       const before = Logic.plantStage((Logic.gardenDays(Store.activeProfile().garden).today || { sets: 0 }).sets);
@@ -1384,8 +1386,10 @@
         ...(session.mode === 'mic' ? { src: 'mic' } : {}),
       });
       syncIconBadge(); // this set may have made the child ready for a new colour
-      const today = Logic.gardenDays(Store.activeProfile().garden).today;
-      watering = { before, after: Logic.plantStage(today.sets), colors: today.colors };
+      if (!early) {
+        const today = Logic.gardenDays(Store.activeProfile().garden).today;
+        watering = { before, after: Logic.plantStage(today.sets), colors: today.colors };
+      }
     }
     renderCelebration(early, session.colors, watering);
     session = null;
@@ -1403,9 +1407,10 @@
     const again = playButton(I18n.t('home.playAgain'), startError);
 
     if (watering === null) {
-      // Nothing was scored (a calm stop before any first tap) — there's no
-      // plant to water, so this is the old layout minus the stickers row:
-      // mascot, title and actions all shown right away.
+      // No plant to water: either nothing was scored, or the set was stopped
+      // early (only finished sets water the garden, so stopping can't be used
+      // to grow the flower faster). Same warm layout minus the can: mascot,
+      // title and actions all shown right away.
       PianoAudio.playSparkle(); // non-pitched flourish — see audio.js for why
       app.appendChild(el('section', { class: 'screen celebrate' },
         el('div', { class: 'cele-mascot', html: Sprites.mascot(p.avatar, 'happy') }),

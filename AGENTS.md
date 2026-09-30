@@ -75,8 +75,10 @@ builds the DOM with its `el()` helper.
 - **Only the piano is pitched.** Decorative sounds must be non-pitched
   (`PianoAudio.playSparkle()` is filtered noise), so nothing competes with
   the chord-colour pairing.
-- **Rewards follow practice, not accuracy.** A set waters today's plant
-  whether or not the child was right; no plant ever wilts.
+- **Rewards follow practice, not accuracy.** A *finished* set waters
+  today's plant whether or not the child was right; a set stopped early waters
+  nothing (so stopping can't be used to grow the flower faster); no plant ever
+  wilts.
 - **Real piano mode is experimental.** `tools/real-piano-acceptance` mirrors
   production timing (the 1100 ms reward-replay delay); change both together.
 

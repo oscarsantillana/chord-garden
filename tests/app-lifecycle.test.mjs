@@ -365,6 +365,40 @@ console.log('ok - Celebration: the actions show themselves after 8s even if the 
 console.log('ok - Celebration: nothing scored means nothing to water');
 
 {
+  // A set stopped after scoring something is the grown-up's record, but it
+  // waters nothing: same no-can celebration, garden untouched.
+  const ui = setup();
+  await ui.click('Play'); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  await ui.clock.tick(800);
+  await ui.click('All done');
+  assert.equal(ui.app.querySelector('.water-can'), null);
+  assert.equal(ui.app.querySelector('.cele-title').textContent, 'Nice listening!');
+  assert.equal(ui.app.querySelector('.cele-actions').classList.contains('waiting'), false);
+  const profile = ui.store.activeProfile();
+  assert.equal(profile.garden.length, 0);
+  assert.equal(profile.sessions.length, 1);
+  assert.equal(profile.sessions[0].early, true);
+  assert.ok(profile.sessions[0].rounds >= 1);
+}
+console.log('ok - Celebration: a set stopped after scoring waters nothing');
+
+{
+  // Four finished sets plus a stopped one leaves the plant at stage 4.
+  const ui = setup();
+  const today = Date.now();
+  for (let i = 0; i < 4; i++) ui.store.recordSession({ ts: today, rounds: 2, correct: 2, colors: ['red'] });
+  ui.store.recordSession({ ts: today, rounds: 1, correct: 1, colors: ['blue'], early: true });
+  const profile = ui.store.activeProfile();
+  assert.equal(profile.garden.length, 1);
+  assert.equal(profile.garden[0].sets, 4);
+  assert.deepEqual(Array.from(profile.garden[0].colors), ['red']);
+  assert.equal(profile.sessions.length, 5);
+  assert.equal(profile.history.find(h => h.day === profile.garden[0].day).sets, 5);
+}
+console.log('ok - Storage: a stopped set is recorded but does not grow the garden');
+
+{
   // The guardian-only flagPictures toggle (default on): Home's flags and a
   // practice round's flags follow it, without anything else changing.
   const ui = setup();

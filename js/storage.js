@@ -324,21 +324,25 @@ const Store = (() => {
     save();
   }
 
-  // Record a finished (or calmly stopped) Practice Set for guardian progress,
-  // and water that day's plant: find or start today's garden entry, add one
-  // set, and fold in whatever colours this set practised (see js/logic.js's
-  // Growing garden helpers for dayKey/orderColors/plantStage).
+  // Record a finished (or calmly stopped) Practice Set for guardian progress.
+  // Only a FINISHED set also waters that day's plant: find or start today's
+  // garden entry, add one set, and fold in whatever colours this set practised
+  // (see js/logic.js's Growing garden helpers for dayKey/orderColors/
+  // plantStage). A stopped set (`early`) is still the grown-up's record, but
+  // leaves the garden alone; a child once stopped set after set to grow the
+  // flower from a handful of chords, so watering follows finished sets.
   function recordSession(session) {
     const p = activeProfile();
     p.sessions.unshift(session);
     p.sessions = Logic.keepRecent(p.sessions, { days: 15, min: 60, max: 300 });
     const day = Logic.dayKey(typeof session.ts === 'number' ? session.ts : Date.now());
+    historyEntry(p, day).sets += 1;
+    if (session.early) { save(); return; }
     let entry = p.garden.find((e) => e.day === day);
     if (!entry) {
       entry = { day, sets: 0, colors: [] };
       p.garden.unshift(entry);
     }
-    historyEntry(p, day).sets += 1;
     entry.sets += 1;
     entry.colors = Logic.orderColors([...entry.colors, ...(session.colors || [])]);
     p.garden = p.garden.slice(0, 365); // keep it small
