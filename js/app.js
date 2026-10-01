@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.7.3';
+  const APP_VERSION = '0.7.4';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -2038,12 +2038,17 @@
         checkBtn.disabled = true;
         status.classList.remove('bad');
         status.textContent = I18n.t('settings.about.checking');
+        // check() can take up to ~20 s; the grown-up may have left Settings by then
+        // (and a child started a set), so only apply if this screen is still up.
+        // Otherwise Home applies the waiting update the next time it shows.
+        const generation = screenGeneration;
         const result = await Updates.check();
-        if (result === 'updating') {
-          // A reload is imminent (Updates.check() already called apply()) —
-          // leave the button disabled rather than re-enabling it for an
-          // instant right before the page goes away.
+        if (result === 'ready') {
+          if (generation !== screenGeneration) return;
+          // A reload is imminent — leave the button disabled rather than
+          // re-enabling it for an instant right before the page goes away.
           status.textContent = I18n.t('settings.about.updating');
+          Updates.apply();
           return;
         }
         checkBtn.disabled = false;
