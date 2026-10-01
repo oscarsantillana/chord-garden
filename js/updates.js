@@ -94,7 +94,10 @@ const Updates = (() => {
     else register();
   }
 
-  // A grown-up's "Check for updates" tap in Settings — see js/app.js.
+  // A grown-up's "Check for updates" tap in Settings — see js/app.js. Only
+  // finds the update and hands it to setWaiting(); it never applies it, since
+  // the grown-up may have left Settings (and a child pressed Play) during the
+  // wait. 'ready' means an update is waiting; app.js decides whether to apply.
   async function check() {
     if (!registration) return 'unsupported';
     try {
@@ -104,16 +107,14 @@ const Updates = (() => {
     }
     if (registration.waiting) {
       setWaiting(registration.waiting);
-      apply();
-      return 'updating';
+      return 'ready';
     }
     if (registration.installing) {
       const worker = registration.installing;
       const installed = await whenInstalled(worker);
       if (!installed) return 'none';
       setWaiting(worker);
-      apply();
-      return 'updating';
+      return 'ready';
     }
     return 'none';
   }

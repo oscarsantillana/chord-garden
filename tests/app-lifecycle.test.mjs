@@ -9,7 +9,8 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   // Only the update-check tests below pass a `navigator.serviceWorker` — by
   // default it's {} (no serviceWorker), so js/updates.js's Updates.init()
   // stays inert, same as opening the app via file:// or in an old browser.
-  const location = { protocol: 'https:', reload: () => {} };
+  let reloads = 0;
+  const location = { protocol: 'https:', reload: () => { reloads++; } };
   const { app, document } = fakeDom(), clock = fakeClock();
   // The growing garden's past-days layer (see index.html's #garden, right
   // after the hills svg) — not part of fakeDom() itself since only this
@@ -57,7 +58,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   };
   const colorBtn = name => app.querySelector(`.color-btn[data-color="${name}"]`);
   return { app, document, garden, clock, click, played, listens, pendingStarts, pendingChords, windowEvents, rewards, varietyCalls,
-    store: sandbox.store, i18n: sandbox.I18n, saved, chordByName, colorBtn, get micStarts() { return micStarts; }, get micStops() { return micStops; } };
+    get reloads() { return reloads; }, store: sandbox.store, i18n: sandbox.I18n, saved, chordByName, colorBtn, get micStarts() { return micStarts; }, get micStops() { return micStops; } };
 }
 // With two+ active colours the round's target is picked at random; the only
 // way to know which one without reaching into session state is to match the
@@ -569,6 +570,81 @@ console.log('ok - Store.requestPersistence: asked once after the correct PIN, ne
   assert.equal(ui.app.querySelector('.about-status').textContent, 'You’re up to date.');
 }
 console.log('ok - Settings → About: "Check for updates" reports up to date when nothing new is found');
+
+// A service worker whose update() produces an installing worker that the test
+// finishes installing on demand, so the "Check for updates" wait can overlap
+// whatever the grown-up and child do meanwhile.
+function fakeUpdatingServiceWorker() {
+  const worker = {
+    state: 'installing', posted: [], listeners: [],
+    postMessage(msg) { worker.posted.push(msg); },
+    addEventListener(name, cb) { if (name === 'statechange') worker.listeners.push(cb); },
+    finishInstall() { worker.state = 'installed'; worker.listeners.forEach((cb) => cb()); },
+  };
+  const swListeners = [];
+  const registration = {
+    waiting: null, installing: null, addEventListener() {},
+    update: async () => { registration.installing = worker; },
+  };
+  const serviceWorker = {
+    controller: {}, register: async () => registration,
+    addEventListener(name, cb) { if (name === 'controllerchange') swListeners.push(cb); },
+  };
+  return { worker, serviceWorker, controllerChange: () => swListeners.forEach((cb) => cb()) };
+}
+const startUpdateCheck = async () => {
+  const sw = fakeUpdatingServiceWorker();
+  const ui = setup({ navigator: { serviceWorker: sw.serviceWorker } });
+  ui.windowEvents.load(); await flush();
+  await openSettings(ui);
+  await ui.click('Check for updates');
+  return { ui, sw };
+};
+
+{
+  // The install finishes while Settings is still showing: the grown-up asked
+  // for it, so it applies.
+  const { ui, sw } = await startUpdateCheck();
+  assert.equal(sw.worker.posted.length, 0, 'nothing is applied while the update is still installing');
+  sw.worker.finishInstall(); await flush();
+  assert.equal(JSON.stringify(sw.worker.posted), JSON.stringify([{ type: 'SKIP_WAITING' }]));
+  assert.equal(ui.app.querySelector('.about-status').textContent, 'Updating…');
+  sw.controllerChange();
+  assert.equal(ui.reloads, 1);
+}
+console.log('ok - Settings → About: a check that finishes while Settings is showing applies the update');
+
+{
+  // The grown-up leaves and a child starts a set before the install finishes:
+  // the update waits for Home.
+  const { ui, sw } = await startUpdateCheck();
+  await ui.click('Done');
+  await ui.click('Play'); await ui.clock.tick(500);
+  assert.ok(ui.app.querySelector('.practice'), 'a set is running when the install finishes');
+  sw.worker.finishInstall(); await flush();
+  sw.controllerChange();
+  assert.equal(sw.worker.posted.length, 0, 'no SKIP_WAITING mid-set');
+  assert.equal(ui.reloads, 0, 'no reload mid-set');
+  await ui.click('All done'); await ui.click('Home'); await flush();
+  assert.ok(ui.app.querySelector('.home'));
+  assert.equal(JSON.stringify(sw.worker.posted), JSON.stringify([{ type: 'SKIP_WAITING' }]), 'Home applies it once the set is over');
+  sw.controllerChange();
+  assert.equal(ui.reloads, 1);
+}
+console.log('ok - Settings → About: an update found during a set waits until Home shows again');
+
+{
+  // The grown-up leaves for an idle Home: the install finishing applies
+  // straight away, through onReady.
+  const { ui, sw } = await startUpdateCheck();
+  await ui.click('Done');
+  assert.ok(ui.app.querySelector('.home'));
+  sw.worker.finishInstall(); await flush();
+  assert.equal(JSON.stringify(sw.worker.posted), JSON.stringify([{ type: 'SKIP_WAITING' }]));
+  sw.controllerChange();
+  assert.equal(ui.reloads, 1);
+}
+console.log('ok - Settings → About: an update found while Home is idle applies through onReady');
 
 {
   // seenVersion (js/storage.js): non-strings normalise to null, version

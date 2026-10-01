@@ -156,7 +156,7 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
   console.log("ok - Updates.check: 'offline' when registration.update() rejects");
 }
 
-// --- check(): 'updating' when update() produces a waiting worker directly -----
+// --- check(): 'ready' when update() produces a waiting worker directly --------
 
 {
   const registration = fakeRegistration({});
@@ -165,14 +165,19 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
   const ui = setup({ registration, documentComplete: true });
   ui.Updates.init({});
   await ui.fireLoad();
-  assert.equal(await ui.Updates.check(), 'updating');
-  assert.equal(JSON.stringify(waiting.posted), JSON.stringify([{ type: 'SKIP_WAITING' }]), 'check() applies the update it finds');
+  assert.equal(await ui.Updates.check(), 'ready');
+  assert.ok(ui.Updates.hasUpdate());
+  assert.equal(waiting.posted.length, 0, 'check() leaves applying to the caller');
+  ui.fireControllerChange();
+  assert.equal(ui.reloads, 0, 'no reload until apply() is called');
+  ui.Updates.apply();
+  assert.equal(JSON.stringify(waiting.posted), JSON.stringify([{ type: 'SKIP_WAITING' }]));
   ui.fireControllerChange();
   assert.equal(ui.reloads, 1);
-  console.log("ok - Updates.check: 'updating' when update() leaves a waiting worker, and it applies + reloads");
+  console.log("ok - Updates.check: 'ready' when update() leaves a waiting worker, and apply() switches + reloads");
 }
 
-// --- check(): 'updating' via the installing -> installed path ------------------
+// --- check(): 'ready' via the installing -> installed path ---------------------
 
 {
   const registration = fakeRegistration({});
@@ -184,9 +189,31 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
   const pending = Updates.check();
   await flush();
   installing.setState('installed');
-  assert.equal(await pending, 'updating');
-  assert.equal(JSON.stringify(installing.posted), JSON.stringify([{ type: 'SKIP_WAITING' }]));
-  console.log("ok - Updates.check: 'updating' via the installing -> installed path");
+  assert.equal(await pending, 'ready');
+  assert.equal(installing.posted.length, 0, 'check() does not apply an update that installs late');
+  assert.ok(Updates.hasUpdate());
+  console.log("ok - Updates.check: 'ready' via the installing -> installed path, without applying");
+}
+
+// --- check() never applies, and still reports the update through onReady -------
+
+{
+  const registration = fakeRegistration({});
+  const installing = fakeWorker('installing');
+  registration.update = async () => { registration.installing = installing; };
+  const ui = setup({ registration, documentComplete: true });
+  let ready = 0;
+  ui.Updates.init({ onReady: () => ready++ });
+  await ui.fireLoad();
+  const pending = ui.Updates.check();
+  await flush();
+  installing.setState('installed');
+  assert.equal(await pending, 'ready');
+  assert.equal(ready, 1, 'onReady lets app.js decide when to apply');
+  ui.fireControllerChange();
+  assert.equal(JSON.stringify(installing.posted), '[]', 'no SKIP_WAITING without apply()');
+  assert.equal(ui.reloads, 0);
+  console.log('ok - Updates.check: never posts SKIP_WAITING itself, even when the worker installs late');
 }
 
 // --- a first install (no controller) reaching 'installed' is NOT an update ----
