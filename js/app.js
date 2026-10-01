@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.7.4';
+  const APP_VERSION = '0.7.5';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -1559,6 +1559,10 @@
     ['settings', I18n.t('guardian.tabSettings')],
   ];
 
+  // Set by renderGuardian to redraw the header's child chip from the saved
+  // profile; only meaningful while the grown-up area is showing.
+  let refreshGuardianChild = () => {};
+
   function renderGuardian(tab) {
     clearScreen();
     setMode('adult');
@@ -1575,6 +1579,18 @@
         onclick: () => renderGuardian(id),
       }, lbl, id === 'colors' && activeReady && tab !== 'colors' ? el('span', { class: 'g-tab-dot', 'aria-hidden': 'true' }) : null)));
 
+    // The chip is redrawn in place (refreshGuardianChild) when Settings renames
+    // the child or changes their avatar, so typed-but-unsaved fields on that
+    // screen aren't lost to a rebuild.
+    const childChip = el('span', { class: 'g-child' });
+    refreshGuardianChild = () => {
+      const cur = Store.activeProfile();
+      clear(childChip);
+      childChip.appendChild(el('span', { class: 'g-child-ava', html: Sprites.mascot(cur.avatar) }));
+      childChip.appendChild(document.createTextNode(cur.name));
+    };
+    refreshGuardianChild();
+
     const body = el('div', { class: 'g-body' });
     if (tab === 'colors') guardianColors(body);
     else if (tab === 'progress') guardianProgress(body);
@@ -1585,9 +1601,7 @@
       el('header', { class: 'g-head' },
         backButton(I18n.t('guardian.done'), renderHome),
         el('h2', {}, I18n.t('guardian.area')),
-        el('span', { class: 'g-child' },
-          el('span', { class: 'g-child-ava', html: Sprites.mascot(p.avatar) }),
-          p.name)),
+        childChip),
       tabs, body));
   }
 
@@ -1607,6 +1621,22 @@
     return el('details', { class: 'g-details' },
       el('summary', {}, summary, el('span', { class: 'btn-ico', html: Sprites.icon('chevron') })),
       el('div', { class: 'g-details-body' }, paragraphs.map((t) => el('p', {}, t))));
+  }
+
+  // A role=switch button for Settings. `isOn` reads the saved value and
+  // `toggle` saves the flip (and may be async); the switch then shows what was
+  // saved, so the screen isn't rebuilt and anything typed elsewhere on it
+  // survives.
+  function switchButton(label, isOn, toggle, extra = {}) {
+    const btn = el('button', {
+      class: 'switch', role: 'switch', 'aria-checked': isOn() ? 'true' : 'false', 'aria-label': label,
+      ...extra,
+      onclick: async () => {
+        await toggle();
+        btn.setAttribute('aria-checked', isOn() ? 'true' : 'false');
+      },
+    });
+    return btn;
   }
 
   function avatarPicker(selected, onPick) {
@@ -2075,12 +2105,20 @@
 
     body.appendChild(languageSection());
 
-    const lengths = el('div', { class: 'segmented', role: 'radiogroup', 'aria-label': I18n.t('settings.roundsPerSet') },
-      [10, 15, 20, 25].map((n) => el('button', {
+    const lengths = el('div', { class: 'segmented', role: 'radiogroup', 'aria-label': I18n.t('settings.roundsPerSet') });
+    [10, 15, 20, 25].forEach((n) => {
+      const btn = el('button', {
         class: 'seg' + (p.roundsPerSet === n ? ' sel' : ''),
         role: 'radio', 'aria-checked': p.roundsPerSet === n ? 'true' : 'false',
-        onclick: () => { Store.updateProfile(p.id, { roundsPerSet: n }); renderGuardian('settings'); },
-      }, String(n))));
+        onclick: () => {
+          Store.updateProfile(p.id, { roundsPerSet: n });
+          lengths.querySelectorAll('.seg').forEach((b) => { b.classList.remove('sel'); b.setAttribute('aria-checked', 'false'); });
+          btn.classList.add('sel');
+          btn.setAttribute('aria-checked', 'true');
+        },
+      }, String(n));
+      lengths.appendChild(btn);
+    });
     body.appendChild(section(I18n.t('settings.practiceSection'), el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row stack' }, el('span', { class: 'g-row-title' }, I18n.t('settings.roundsPerSet')), lengths)),
       I18n.t('settings.practiceHint')));
@@ -2089,28 +2127,26 @@
     // badge needs the Badging API, and iPhone/iPad only allow it once
     // notifications are permitted (Chord Garden never sends any).
     const badgeSupported = typeof navigator !== 'undefined' && typeof navigator.setAppBadge === 'function';
-    const badgeOn = badgeSupported && Store.getIconBadge();
-    const notifBlocked = typeof Notification !== 'undefined' && Notification.permission === 'denied';
-    const dotSwitch = el('button', {
-      class: 'switch', role: 'switch', 'aria-checked': Store.getLockDot() ? 'true' : 'false', 'aria-label': I18n.t('settings.newColour.dot'),
-      onclick: () => { Store.setLockDot(!Store.getLockDot()); renderGuardian('settings'); },
-    });
-    const badgeSwitch = el('button', {
-      class: 'switch', role: 'switch', 'aria-checked': badgeOn ? 'true' : 'false', 'aria-label': I18n.t('settings.newColour.badge'),
-      disabled: badgeSupported ? null : 'true',
-      onclick: async () => {
-        if (!Store.getIconBadge()) {
-          if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-            try { await Notification.requestPermission(); } catch (e) { /* ignore */ }
-          }
-          Store.setIconBadge(true);
-        } else {
-          Store.setIconBadge(false);
+    const notifBlocked = () => typeof Notification !== 'undefined' && Notification.permission === 'denied';
+    const dotSwitch = switchButton(I18n.t('settings.newColour.dot'), () => Store.getLockDot(),
+      () => { Store.setLockDot(!Store.getLockDot()); });
+    const badgeKey = () => (!badgeSupported ? 'settings.newColour.badgeUnsupported'
+      : Store.getIconBadge() && notifBlocked() ? 'settings.newColour.badgeBlocked' : 'settings.newColour.badgeSub');
+    const badgeSub = el('span', { class: 'g-row-sub' }, I18n.t(badgeKey()));
+    // Asking for permission can change whether the sub-line says "blocked",
+    // so it is re-read after the save.
+    const badgeSwitch = switchButton(I18n.t('settings.newColour.badge'), () => badgeSupported && Store.getIconBadge(), async () => {
+      if (!Store.getIconBadge()) {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          try { await Notification.requestPermission(); } catch (e) { /* ignore */ }
         }
-        syncIconBadge();
-        renderGuardian('settings');
-      },
-    });
+        Store.setIconBadge(true);
+      } else {
+        Store.setIconBadge(false);
+      }
+      syncIconBadge();
+      badgeSub.textContent = I18n.t(badgeKey());
+    }, { disabled: badgeSupported ? null : 'true' });
     body.appendChild(section(I18n.t('settings.newColour.section'), el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row' },
         el('span', { class: 'g-row-main' },
@@ -2120,15 +2156,12 @@
       el('div', { class: 'g-row' },
         el('span', { class: 'g-row-main' },
           el('span', { class: 'g-row-title' }, I18n.t('settings.newColour.badge')),
-          el('span', { class: 'g-row-sub' }, I18n.t(!badgeSupported ? 'settings.newColour.badgeUnsupported'
-            : badgeOn && notifBlocked ? 'settings.newColour.badgeBlocked' : 'settings.newColour.badgeSub'))),
+          badgeSub),
         badgeSwitch)),
       I18n.t('settings.newColour.hint')));
 
-    const pictureSwitch = el('button', {
-      class: 'switch', role: 'switch', 'aria-checked': p.flagPictures ? 'true' : 'false', 'aria-label': I18n.t('settings.picturesAria'),
-      onclick: () => { Store.updateProfile(p.id, { flagPictures: !p.flagPictures }); renderGuardian('settings'); },
-    });
+    const pictureSwitch = switchButton(I18n.t('settings.picturesAria'), () => p.flagPictures,
+      () => { Store.updateProfile(p.id, { flagPictures: !p.flagPictures }); });
     body.appendChild(section(I18n.t('settings.flagsSection'), el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row' },
         el('span', { class: 'g-row-main' },
@@ -2136,10 +2169,8 @@
         pictureSwitch)),
       I18n.t('settings.flagsHint')));
 
-    const varietySwitch = el('button', {
-      class: 'switch', role: 'switch', 'aria-checked': p.pianoVariety ? 'true' : 'false', 'aria-label': I18n.t('settings.varietyAria'),
-      onclick: () => { Store.updateProfile(p.id, { pianoVariety: !p.pianoVariety }); syncPianoVariety(); renderGuardian('settings'); },
-    });
+    const varietySwitch = switchButton(I18n.t('settings.varietyAria'), () => p.pianoVariety,
+      () => { Store.updateProfile(p.id, { pianoVariety: !p.pianoVariety }); syncPianoVariety(); });
     body.appendChild(section(I18n.t('settings.pianoSection'), el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row' },
         el('span', { class: 'g-row-main' },
@@ -2147,10 +2178,8 @@
         varietySwitch)),
       I18n.t('settings.varietyHint')));
 
-    const micSwitch = el('button', {
-      class: 'switch', role: 'switch', 'aria-checked': p.realPianoMode ? 'true' : 'false', 'aria-label': I18n.t('mic.realPianoMode'),
-      onclick: () => { Store.updateProfile(p.id, { realPianoMode: !p.realPianoMode }); renderGuardian('settings'); },
-    });
+    const micSwitch = switchButton(I18n.t('mic.realPianoMode'), () => p.realPianoMode,
+      () => { Store.updateProfile(p.id, { realPianoMode: !p.realPianoMode }); });
     const micSection = section(I18n.t('mic.realPianoMode'), el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row' },
         el('span', { class: 'g-row-main' },
@@ -2170,11 +2199,12 @@
         el('div', { class: 'input-row' }, nameInput,
           el('button', { class: 'primary-btn', onclick: () => {
             Store.updateProfile(p.id, { name: nameInput.value.trim() || p.name });
-            renderGuardian('settings');
+            nameInput.value = p.name;
+            refreshGuardianChild();
           } }, I18n.t('common.save')))),
       el('div', { class: 'g-row stack' },
         el('span', { class: 'g-row-title' }, I18n.t('settings.lookTitle')),
-        avatarPicker(p.avatar, (a) => { Store.updateProfile(p.id, { avatar: a }); renderGuardian('settings'); })))));
+        avatarPicker(p.avatar, (a) => { Store.updateProfile(p.id, { avatar: a }); refreshGuardianChild(); })))));
 
     const pinInput = el('input', {
       class: 'text-input pin-input', type: 'password', inputmode: 'numeric', pattern: '[0-9]*',

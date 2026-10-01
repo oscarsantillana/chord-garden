@@ -1,6 +1,9 @@
 // Minimal DOM and controllable clock for testing the application's actual UI handlers.
 export class Element {
   constructor(tag, text = '') { this.tag = tag; this.children = []; this.parentNode = null; this.attrs = {}; this.listeners = {}; this.style = {}; this._text = text; this.className = ''; }
+  // Like a real <input>: starts from the value attribute until set.
+  get value() { return this._value ?? this.attrs.value ?? ''; }
+  set value(v) { this._value = v; }
   get firstChild() { return this.children[0]; }
   appendChild(child) { this.children.push(child); child.parentNode = this; return child; }
   removeChild(child) { this.children.splice(this.children.indexOf(child), 1); child.parentNode = null; }

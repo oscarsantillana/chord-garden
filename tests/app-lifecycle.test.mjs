@@ -25,7 +25,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
     window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
     navigator, location,
     localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
-    Sprites: { animals: ['fox'], icon: () => '', mascot: () => '', shape: () => '',
+    Sprites: { animals: ['fox', 'owl'], icon: () => '', mascot: () => '', shape: () => '',
       // Reveals whether a caller passed { picture: false } (the flagPictures
       // toggle — see js/storage.js/js/app.js), without needing real SVG markup.
       flag: (c, o = {}) => (o.picture === false ? 'plain-flag' : 'picture-flag'),
@@ -875,3 +875,71 @@ console.log('ok - Home: flowers sing their own chord songs');
   assert.equal(ui.varietyCalls[ui.varietyCalls.length - 1], true);
 }
 console.log('ok - Settings: the natural piano variety switch flips the setting and PianoAudio follows');
+
+{
+  // Settings controls update in place, so a half-typed name or PIN survives a
+  // switch toggle or a rounds change (the screen isn't rebuilt).
+  const ui = setup({ navigator: { setAppBadge: () => {}, clearAppBadge: () => {} } });
+  await openSettings(ui);
+  const p = ui.store.activeProfile();
+  const nameInput = () => ui.app.querySelector('.text-input');
+  const pinInput = () => ui.app.querySelector('.pin-input');
+  const switchNamed = (label) => ui.app.querySelectorAll('.switch').find((s) => ariaOf(s) === label);
+  const saved = () => JSON.stringify([ui.store.getLockDot(), ui.store.getIconBadge(), p.flagPictures, p.pianoVariety, p.realPianoMode]);
+  nameInput().value = 'Draft name';
+  pinInput().value = '13';
+  const labels = ui.app.querySelectorAll('.switch').map(ariaOf);
+  assert.equal(labels.length, 5, `five switches: ${labels}`);
+  for (const label of labels) {
+    const checkedBefore = switchNamed(label).attrs['aria-checked'], savedBefore = saved();
+    switchNamed(label).click(); await flush();
+    assert.notEqual(switchNamed(label).attrs['aria-checked'], checkedBefore, `${label} flips`);
+    assert.notEqual(saved(), savedBefore, `${label} saves`);
+    assert.equal(nameInput().value, 'Draft name', `the name draft survives ${label}`);
+    assert.equal(pinInput().value, '13', `the PIN draft survives ${label}`);
+  }
+  const seg = (n) => ui.app.querySelectorAll('.seg').find((b) => b.textContent === String(n));
+  seg(20).click(); await flush();
+  assert.equal(p.roundsPerSet, 20);
+  assert.ok(seg(20).classList.contains('sel') && seg(20).attrs['aria-checked'] === 'true');
+  assert.ok(!seg(10).classList.contains('sel') && seg(10).attrs['aria-checked'] === 'false');
+  assert.equal(nameInput().value, 'Draft name', 'the name draft survives a rounds change');
+  assert.equal(pinInput().value, '13', 'the PIN draft survives a rounds change');
+}
+console.log('ok - Settings: switches and rounds update in place and keep typed drafts');
+
+{
+  const ui = setup();
+  await openSettings(ui);
+  const p = ui.store.activeProfile();
+  const nameInput = ui.app.querySelector('.text-input');
+  const pinInput = ui.app.querySelector('.pin-input');
+  pinInput.value = '97';
+  nameInput.value = '  Zoe  ';
+  ui.app.querySelectorAll('.primary-btn')[0].click(); await flush();
+  assert.equal(p.name, 'Zoe');
+  assert.equal(nameInput.value, 'Zoe', 'the box shows the saved, trimmed name');
+  assert.ok(ui.app.querySelector('.g-child').textContent.includes('Zoe'), 'the header chip shows the new name');
+  assert.equal(ui.app.querySelector('.text-input'), nameInput, 'the screen was not rebuilt');
+  assert.equal(pinInput.value, '97', 'the PIN draft survives a name save');
+  const avaBefore = ui.app.querySelector('.g-child-ava');
+  const other = ui.app.querySelectorAll('.avatar-opt').find((b) => b.attrs['aria-checked'] === 'false');
+  const avatarBefore = p.avatar;
+  nameInput.value = 'Half typed';
+  other.click(); await flush();
+  assert.notEqual(p.avatar, avatarBefore, 'the avatar is saved');
+  assert.ok(other.classList.contains('sel'));
+  assert.notEqual(ui.app.querySelector('.g-child-ava'), avaBefore, 'the chip avatar is redrawn');
+  assert.ok(ui.app.querySelector('.g-child').textContent.includes('Zoe'));
+  assert.equal(nameInput.value, 'Half typed', 'the name draft survives an avatar pick');
+  assert.equal(pinInput.value, '97', 'the PIN draft survives an avatar pick');
+}
+console.log('ok - Settings: name Save and avatar pick update the header chip and keep drafts');
+
+{
+  const ui = setup();
+  await openSettings(ui);
+  await ui.click('Español');
+  assert.ok(ui.app.textContent.includes('Ajustes'), 'every string on the screen follows the new language');
+}
+console.log('ok - Settings: changing the language redraws the screen in that language');
