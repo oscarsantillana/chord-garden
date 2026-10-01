@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.7.5';
+  const APP_VERSION = '0.7.6';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -1714,7 +1714,7 @@
     const colorRow = (c) => {
       const on = active.includes(c.name);
       const locked = on && lastOne; // the set can't be emptied
-      const acc = on ? Logic.recentAccuracy(p.events, c.name).pct : null;
+      const acc = on ? Logic.recentAccuracy(p.events, c.name, 20, { solo: active.length < 2 }).pct : null;
       return el('button', {
         class: 'g-row',
         'aria-pressed': on ? 'true' : 'false',
@@ -1874,7 +1874,7 @@
     const grid = el('div', { class: 'acc-grid' });
     p.activeColors.forEach((name) => {
       const c = CHORD_BY_NAME[name];
-      const recent = Logic.recentAccuracy(p.events, name);
+      const recent = Logic.recentAccuracy(p.events, name, 20, { solo: p.activeColors.length < 2 });
       const s = p.stats[name] || { correct: 0, seen: 0 };
       grid.appendChild(el('div', { class: 'acc-row' },
         el('span', { class: 'acc-name' }, el('span', { class: 'swatch sm', style: `background:${c.swatch}` }), I18n.color(c.name)),

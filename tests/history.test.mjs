@@ -155,7 +155,7 @@ function v9Save() {
 {
   const { Store, map } = load({ 'rainbow-pitch:v1': JSON.stringify(v9Save()) });
   const p = Store.activeProfile();
-  assert.equal(Store.all().version, 11);
+  assert.equal(Store.all().version, 12);
   assert.deepEqual(plain(p.history), [
     { day: '2026-09-26', sets: 0, t: { yellow: [1, 0], red: [4, 4] }, m: { red: [1, 1] } },
     { day: '2026-09-25', sets: 2, t: { red: [5, 5] } },
@@ -244,6 +244,25 @@ console.log('\nAll history.test.mjs assertions passed.');
   assert.deepEqual(plain(byId), {
     none: true, stats: false, events: false, sessions: false, garden: false, history: false, explicit: true, junk: true,
   });
-  assert.equal(Store.all().version, 11);
+  assert.equal(Store.all().version, 12);
   console.log('ok - migration: a version-10 save keeps the steady sound for children who already practise');
+}
+
+{
+  const { Store } = load();
+  const p = Store.activeProfile();
+  Store.removeColor('yellow');
+  for (let i = 0; i < 12; i++) Store.recordRound('red', 'red', true);
+  assert.equal(p.events.length, 12);
+  assert.ok(p.events.every((e) => e.solo === true), 'rounds with one flag are marked solo');
+  assert.equal(p.colorDates.red.ready, null, 'one flag proves nothing about telling chords apart');
+
+  Store.addColor('yellow');
+  Store.recordRound('red', 'red', true);
+  assert.equal(p.events[0].solo, undefined, 'rounds with two flags carry no mark');
+  assert.equal('solo' in p.events[0], false);
+  assert.equal(p.colorDates.red.ready, null, 'solo padding does not stamp ready on the first two-flag round');
+  for (let i = 0; i < 7; i++) Store.recordRound('red', 'red', true);
+  assert.equal(p.colorDates.red.ready, '2026-09-26', 'eight rounds with a choice do');
+  console.log('ok - recordRound marks solo rounds and does not stamp ready from them');
 }

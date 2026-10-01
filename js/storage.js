@@ -9,7 +9,7 @@
 const Store = (() => {
   const KEY = 'rainbow-pitch:v1';
   const BACKUP_KEY = 'rainbow-pitch:backup';
-  const VERSION = 11; // bumped: added per-profile `pianoVariety` (natural piano variety) and the `vr` day tally; before that `history` and `colorDates`
+  const VERSION = 12; // bumped: events from single-flag rounds carry `solo` (older events lack it and count as rounds with a choice); before that `pianoVariety` (natural piano variety) and the `vr` day tally, and before that `history` and `colorDates`
 
   const DEFAULT_ACTIVE = ['red', 'yellow']; // start with two so there is a real choice
   const DEFAULT_ROUNDS = 20;                // a standard Practice Set
@@ -121,6 +121,8 @@ const Store = (() => {
   // there. Runs silently on every load so old localStorage never gets lost.
   function normalise(data) {
     data.profiles.forEach((p) => {
+      // Events saved before `solo` existed carry no mark and can't be told
+      // apart, so they stay as they are and count as rounds with a choice.
       if (!Array.isArray(p.events)) p.events = [];
       if (typeof p.realPianoMode !== 'boolean') p.realPianoMode = false;
       if (typeof p.flagPictures !== 'boolean') p.flagPictures = true;
@@ -292,7 +294,12 @@ const Store = (() => {
     s.seen += 1;
     if (correct) s.correct += 1;
     p.stats[colorName] = s;
-    p.events.unshift({ c: colorName, a: answeredColorName, ok: correct, ts: Date.now() });
+    // With a single flag every tap is right, so readiness must not count the
+    // round as telling chords apart (see Logic.recentEvents).
+    const solo = p.activeColors.length < 2;
+    const event = { c: colorName, a: answeredColorName, ok: correct, ts: Date.now() };
+    if (solo) event.solo = true;
+    p.events.unshift(event);
     p.events = trimEvents(p.events);
     tallyRound(p, 't', colorName, correct);
     if (p.pianoVariety) {
@@ -301,8 +308,10 @@ const Store = (() => {
     }
     // First time this colour clears the readiness bar (the Colours tab's own
     // check). With a single flag every answer is right, so it proves nothing.
+    // `solo: false` because readyColors would treat this one-colour question
+    // as the listening stage and let earlier single-flag rounds count.
     const dates = p.colorDates[colorName] || (p.colorDates[colorName] = { added: todayKey(), ready: null });
-    if (!dates.ready && p.activeColors.length >= 2 && Logic.readyColors(p.events, [colorName]).length) {
+    if (!dates.ready && !solo && Logic.readyColors(p.events, [colorName], { solo: false }).length) {
       dates.ready = todayKey();
     }
     save();
