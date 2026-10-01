@@ -311,4 +311,68 @@ function ev(c, a, ok) {
   console.log('ok - firstReadyDay: never ready, specific day, mic ignored, 90% / 8-tries bar');
 }
 
+// --- single-flag (solo) rounds ---------------------------------------------
+
+{
+  const solo = (c) => ({ ...ev(c, c, true), solo: true });
+  const rounds = (n, c, oks) => Array.from({ length: n }, (_, i) => ev(c, c, oks ? oks(i) : true));
+  // Newest first: yellow 8/8 and red 2/4 with a choice, over red alone x16.
+  const events = [
+    ...rounds(8, 'yellow'),
+    ...rounds(4, 'red', (i) => i < 2),
+    ...Array.from({ length: 16 }, () => solo('red')),
+  ];
+  const active = ['red', 'yellow'];
+  assert.deepEqual([...Logic.readyColors(events, active)], ['yellow'], 'red is held back by its misses with a choice');
+  assert.equal(Logic.readyForNext({ activeColors: active, events }, ['red', 'yellow', 'blue']), null);
+  assert.equal(Logic.recentAccuracy(events, 'red').seen, 4, 'solo rounds are skipped by default');
+  assert.equal(Logic.recentAccuracy(events, 'red', 20, { solo: true }).seen, 20, 'solo: true counts them');
+  assert.equal(Logic.recentAccuracy(events, 'red', 20, { solo: true }).pct, 90);
+  assert.equal(Logic.recentEvents(events, 'red', null).length, 4);
+  assert.equal(Logic.recentEvents(events, 'red', null, { solo: true }).length, 20);
+  console.log('ok - solo rounds do not make a colour ready once there is a choice');
+}
+
+{
+  const solo = (c) => ({ ...ev(c, c, true), solo: true });
+  const eight = Array.from({ length: 8 }, () => solo('red'));
+  assert.equal(Logic.readyForNext({ activeColors: ['red'], events: eight }, ['red', 'yellow']), 'yellow');
+  assert.equal(Logic.readyForNext({ activeColors: ['red'], events: eight.slice(1) }, ['red', 'yellow']), null);
+  assert.deepEqual([...Logic.readyColors(eight, ['red'])], ['red']);
+  assert.deepEqual([...Logic.readyColors(eight, ['red'], { solo: false })], [], 'explicit solo: false still excludes them');
+  console.log('ok - one active colour: solo rounds are the bar for adding a second');
+}
+
+{
+  const solo = (c) => ({ ...ev(c, c, true), solo: true });
+  const padding = Array.from({ length: 16 }, () => solo('red'));
+  const choice = (n) => Array.from({ length: n }, () => ev('red', 'red', true));
+  const active = ['red', 'yellow'];
+  const yellow = Array.from({ length: 8 }, () => ev('yellow', 'yellow', true));
+  assert.deepEqual([...Logic.readyColors([...yellow, ...padding], active)], ['yellow']);
+  assert.deepEqual([...Logic.readyColors([...yellow, ...choice(7), ...padding], active)], ['yellow'], '7 with a choice is not enough');
+  assert.deepEqual([...Logic.readyColors([...yellow, ...choice(8), ...padding], active)], ['red', 'yellow']);
+  assert.equal(Logic.readyForNext({ activeColors: active, events: [...yellow, ...choice(8), ...padding] }, ['red', 'yellow', 'blue']), 'blue');
+  console.log('ok - after adding a colour, red needs 8 rounds with a choice');
+}
+
+{
+  const legacy = Array.from({ length: 8 }, () => ev('red', 'red', true)); // no `solo` field
+  assert.deepEqual([...Logic.readyColors(legacy, ['red', 'yellow'])], ['red'], 'legacy events count as rounds with a choice');
+  const mic = legacy.map((e) => ({ ...e, src: 'mic' }));
+  assert.deepEqual([...Logic.readyColors(mic, ['red', 'yellow'])], []);
+  assert.deepEqual([...Logic.readyColors(mic, ['red'])], [], 'mic rounds are excluded even in the listening stage');
+  assert.equal(Logic.recentAccuracy(mic, 'red', 20, { solo: true }).seen, 0);
+  console.log('ok - legacy events without solo count; mic events stay excluded');
+}
+
+{
+  const at = (d, h) => new Date(2026, 8, d, h).getTime();
+  const solo = Array.from({ length: 10 }, (_, i) => ({ c: 'red', a: 'red', ok: true, ts: at(10, 8 + i), solo: true }));
+  assert.equal(Logic.firstReadyDay([...solo].reverse(), 'red'), null, 'solo rounds never make a colour ready');
+  const choice = Array.from({ length: 8 }, (_, i) => ({ c: 'red', a: 'red', ok: true, ts: at(12, 8 + i) }));
+  assert.equal(Logic.firstReadyDay([...choice, ...solo].reverse(), 'red'), '2026-09-12', 'only the rounds with a choice count');
+  console.log('ok - firstReadyDay ignores solo rounds');
+}
+
 console.log('\nAll logic.test.mjs assertions passed.');

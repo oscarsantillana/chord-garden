@@ -25,16 +25,21 @@ const Logic = {
   // (app-chosen, Tone.js-played) path has. Absent `src` (every digital
   // event) already means "counts", so this is a pure no-op against any
   // existing/legacy events.
-  recentEvents(events, colorName, windowSize) {
-    const matches = events.filter((e) => e.c === colorName && e.src !== 'mic');
+  //
+  // `e.solo` marks a round played with a single flag, where every tap is
+  // right, so it says nothing about telling chords apart. Those rounds are
+  // skipped unless the caller opts in with `solo: true`. Events saved before
+  // the field existed can't be told apart and count as rounds with a choice.
+  recentEvents(events, colorName, windowSize, { solo = false } = {}) {
+    const matches = events.filter((e) => e.c === colorName && e.src !== 'mic' && (solo || !e.solo));
     return windowSize == null ? matches : matches.slice(0, windowSize);
   },
 
   // Rolling accuracy for one colour over its last `windowSize` attempts.
   // pct is null (not 0) when nothing has been seen yet, so callers can tell
   // "no data" apart from "seen and got it all wrong".
-  recentAccuracy(events, colorName, windowSize = 20) {
-    const recent = Logic.recentEvents(events, colorName, windowSize);
+  recentAccuracy(events, colorName, windowSize = 20, opts = {}) {
+    const recent = Logic.recentEvents(events, colorName, windowSize, opts);
     const seen = recent.length;
     const correct = recent.filter((e) => e.ok).length;
     return { seen, correct, pct: seen ? Math.round((correct / seen) * 100) : null };
@@ -78,9 +83,14 @@ const Logic = {
   // The active colours that individually clear the readiness bar, in their
   // original order — lets the guardian see "4 of 6 ready" instead of only a
   // yes/no, with the same thresholds readiness() itself uses.
-  readyColors(events, activeColors, { minSeen = 8, minPct = 90, windowSize = 20 } = {}) {
+  //
+  // With one active flag the child is in the listening stage, and those
+  // single-flag rounds are the bar for adding a second colour, so they count
+  // (`solo` defaults on). From two flags on only rounds with a choice count.
+  // Callers asking about one colour outside that stage pass `solo: false`.
+  readyColors(events, activeColors, { minSeen = 8, minPct = 90, windowSize = 20, solo = activeColors.length < 2 } = {}) {
     return activeColors.filter((name) => {
-      const { seen, pct } = Logic.recentAccuracy(events, name, windowSize);
+      const { seen, pct } = Logic.recentAccuracy(events, name, windowSize, { solo });
       return seen >= minSeen && pct !== null && pct >= minPct;
     });
   },
@@ -201,15 +211,18 @@ const Logic = {
   // the newest `windowSize` events up to that point, so "ready" has one
   // definition and this can't drift from the Colours tab. Returns null if it
   // never got there. `events` is newest-first; events with no numeric `ts`
-  // can't be placed on a day, so they are skipped.
+  // can't be placed on a day, so they are skipped. Single-flag rounds are
+  // skipped too: this asks about one colour at a time, which would otherwise
+  // look like the listening stage, and they prove nothing about telling
+  // chords apart.
   firstReadyDay(events, colorName, opts = {}) {
     const windowSize = opts.windowSize || 20;
     const chrono = (events || [])
-      .filter((e) => e && e.c === colorName && e.src !== 'mic' && typeof e.ts === 'number')
+      .filter((e) => e && e.c === colorName && e.src !== 'mic' && !e.solo && typeof e.ts === 'number')
       .reverse();
     for (let k = 1; k <= chrono.length; k++) {
       const window = chrono.slice(Math.max(0, k - windowSize), k).reverse(); // newest-first, like p.events
-      if (Logic.readyColors(window, [colorName], opts).length) return Logic.dayKey(chrono[k - 1].ts);
+      if (Logic.readyColors(window, [colorName], { ...opts, solo: false }).length) return Logic.dayKey(chrono[k - 1].ts);
     }
     return null;
   },

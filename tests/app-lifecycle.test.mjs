@@ -787,7 +787,7 @@ console.log('ok - Settings: the badge switch saves the device-wide setting');
 {
   const oldProfile = { id: 'o', name: 'Old', avatar: 'fox', activeColors: ['red'], roundsPerSet: 20, stats: {}, sessions: [], events: [], garden: [] };
   const ui = setup({ seed: { 'rainbow-pitch:v1': JSON.stringify({ version: 8, activeProfileId: 'o', profiles: [oldProfile], pin: '2468' }) } });
-  assert.equal(ui.store.all().version, 11);
+  assert.equal(ui.store.all().version, 12);
   assert.equal(ui.store.activeProfile().readySeen, null);
   assert.equal(ui.store.getLockDot(), true);
   assert.equal(ui.store.getIconBadge(), false);
