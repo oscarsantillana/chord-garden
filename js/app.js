@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.7.6';
+  const APP_VERSION = '0.7.7';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -488,7 +488,24 @@
     } catch (e) { /* ignore */ }
   }
 
+  // The calendar day Home was last drawn for. Today's plant and the garden's
+  // past days both split on it, so a Home that outlives midnight (suspended
+  // overnight, or simply left open) shows yesterday's plant as today's, and
+  // that flower twice once a resize redraws the hill.
+  let homeDay = null;
+
+  // Redraws an idle child Home that was drawn for an earlier day. Returns true
+  // if it did, so callers can skip their own partial redraw. Anywhere else (a
+  // set, the celebration, the grown-up area) is left alone: Home is drawn
+  // fresh when the child gets back to it.
+  function refreshHomeForNewDay() {
+    if (!onChildHome() || Logic.dayKey(Date.now()) === homeDay) return false;
+    renderHome();
+    return true;
+  }
+
   function renderHome() {
+    homeDay = Logic.dayKey(Date.now());
     clearScreen();
     clearConfetti();
     setMode('child');
@@ -1176,6 +1193,9 @@
   }
 
   function relayout() {
+    // A new day redraws all of Home (the hill included), and does so first so
+    // the measurements below are of the screen that is actually showing.
+    const redrew = refreshHomeForNewDay();
     fitAnswers();
     if (!session && app.querySelector('.home')) fitHomeFlags();
     drawTerraces();
@@ -1183,7 +1203,7 @@
     // The garden's flower slots are laid out from window width (renderGarden
     // above), so a rotation/resize on Home needs a redraw to keep them
     // spaced right, same as the vine/flags above.
-    if (!session && app.querySelector('.home')) {
+    if (!redrew && !session && app.querySelector('.home')) {
       renderGarden(Store.activeProfile());
       hideBlockedFlowerTaps();
     }
@@ -2284,6 +2304,11 @@
     session = null;
     MicCapture.stop();
     PianoAudio.stopAll();
+  });
+  // A suspended app resumes without a reload; catch a day that rolled over
+  // while it was away.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshHomeForNewDay();
   });
   window.addEventListener('pageshow', event => {
     if (event.persisted) renderHome();
