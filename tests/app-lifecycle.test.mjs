@@ -21,7 +21,14 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   // module eval time) reads it back — same as a returning device.
   Object.entries(seed).forEach(([k, v]) => saved.set(k, v));
   let micStarts = 0, micStops = 0;
-  const sandbox = { console, document, ...clock, requestAnimationFrame: callback => callback(),
+  // The sandbox's Date.now() and no-argument `new Date()` follow a clock the
+  // test can move forward (ui.advance), so a day can roll over mid-test.
+  let clockOffset = 0;
+  class SandboxDate extends Date {
+    constructor(...args) { super(...(args.length ? args : [Date.now() + clockOffset])); }
+    static now() { return Date.now() + clockOffset; }
+  }
+  const sandbox = { console, document, Date: SandboxDate, ...clock, requestAnimationFrame: callback => callback(),
     window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
     navigator, location,
     localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
@@ -57,7 +64,8 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
     const pending = button.click(); await flush(); return { pending };
   };
   const colorBtn = name => app.querySelector(`.color-btn[data-color="${name}"]`);
-  return { app, document, garden, clock, click, played, listens, pendingStarts, pendingChords, windowEvents, rewards, varietyCalls,
+  const advance = ms => { clockOffset += ms; };
+  return { app, document, garden, clock, advance, click, played, listens, pendingStarts, pendingChords, windowEvents, rewards, varietyCalls,
     get reloads() { return reloads; }, store: sandbox.store, i18n: sandbox.I18n, saved, chordByName, colorBtn, get micStarts() { return micStarts; }, get micStops() { return micStops; } };
 }
 // With two+ active colours the round's target is picked at random; the only
@@ -943,3 +951,70 @@ console.log('ok - Settings: name Save and avatar pick update the header chip and
   assert.ok(ui.app.textContent.includes('Ajustes'), 'every string on the screen follows the new language');
 }
 console.log('ok - Settings: changing the language redraws the screen in that language');
+
+// The practice loop up to the celebration, finished through the water can.
+async function finishSet(ui) {
+  await ui.click('Play'); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  await ui.clock.tick(800); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  await ui.clock.tick(800);
+  ui.app.querySelector('.water-can').click();
+  await ui.clock.tick(900);
+}
+// Long enough to land on a later calendar day whatever the time of day.
+const NEXT_DAY = 30 * 60 * 60 * 1000;
+const plantsOnHill = ui => ui.garden.querySelectorAll('.garden-flower').map(node => node.textContent);
+
+{
+  const ui = setup();
+  await finishSet(ui); await ui.click('Home');
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-1');
+  assert.deepEqual(plantsOnHill(ui), []);
+  ui.advance(NEXT_DAY); ui.windowEvents.resize();
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-0', 'the new day starts from a seed');
+  assert.deepEqual(plantsOnHill(ui), ['plant-1'], 'the finished day is on the hill exactly once');
+}
+console.log('ok - Home: a resize on a new day redraws today\'s plant and the hill together');
+
+{
+  const ui = setup();
+  await finishSet(ui); await ui.click('Home');
+  ui.advance(NEXT_DAY);
+  ui.document.visibilityState = 'hidden'; ui.document.listeners.visibilitychange();
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-1', 'a hidden page is left alone');
+  ui.document.visibilityState = 'visible'; ui.document.listeners.visibilitychange();
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-0');
+  assert.deepEqual(plantsOnHill(ui), ['plant-1']);
+}
+console.log('ok - Home: becoming visible on a new day redraws Home');
+
+{
+  const ui = setup();
+  await finishSet(ui); await ui.click('Home');
+  const home = ui.app.querySelector('.home');
+  ui.windowEvents.resize(); ui.document.listeners.visibilitychange();
+  assert.equal(ui.app.querySelector('.home'), home, 'the same day does not redraw Home');
+  assert.deepEqual(plantsOnHill(ui), []);
+  ui.advance(NEXT_DAY); ui.windowEvents.resize();
+  const redrawn = ui.app.querySelector('.home');
+  assert.notEqual(redrawn, home);
+  ui.windowEvents.resize(); ui.document.listeners.visibilitychange();
+  assert.equal(ui.app.querySelector('.home'), redrawn, 'one redraw per day change');
+}
+console.log('ok - Home: nothing redraws unless the day changed');
+
+{
+  const ui = setup();
+  await finishSet(ui); await ui.click('Home');
+  await ui.click('Play'); await ui.clock.tick(500);
+  const practice = ui.app.children[0];
+  ui.advance(NEXT_DAY);
+  ui.windowEvents.resize(); ui.document.listeners.visibilitychange();
+  assert.equal(ui.app.children[0], practice, 'a running set is not redrawn');
+  assert.equal(ui.app.querySelector('.home'), null);
+  await ui.click('All done'); await ui.click('Home');
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-0');
+  assert.deepEqual(plantsOnHill(ui), ['plant-1']);
+}
+console.log('ok - Home: a day change mid-set waits until the child is back on Home');

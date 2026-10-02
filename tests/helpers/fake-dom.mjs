@@ -39,6 +39,8 @@ export function fakeDom() {
   // document.documentElement.lang and document.title) has somewhere to
   // write, same as a real page's <html> and <title>.
   return { app, document: { body, documentElement: new Element('html'), title: '',
+    visibilityState: 'visible', listeners: {},
+    addEventListener(event, callback) { this.listeners[event] = callback; },
     createElement: tag => new Element(tag), createTextNode: text => new Element('#text', text),
     getElementById(id) { return [body, ...body.querySelectorAll('')].find(node => node.id === id) || null; },
   } };
