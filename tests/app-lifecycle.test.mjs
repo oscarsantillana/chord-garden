@@ -198,6 +198,9 @@ console.log('ok - real-piano low-confidence retry, stale input, and a second ret
   ui.app.querySelector('.color-btn').click();
   await ui.clock.tick(800);
   assert.ok(ui.app.querySelector('.practice').classList.contains('continuing'), 'the next round does not replay the fade-in');
+  // Placing the new round's mascot switches its transition off; if that were
+  // left on 'none' the step along the vine would pop instead of glide.
+  assert.equal(ui.document.getElementById('mascot').style.transition, '', 'the mascot glides again after being placed');
   await ui.click('All done'); await ui.click('Play again');
   assert.equal(ui.app.querySelector('.practice').classList.contains('continuing'), false, 'a new set fades in again');
 }

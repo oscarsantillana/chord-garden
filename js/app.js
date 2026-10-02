@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.7.7';
+  const APP_VERSION = '0.7.8';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -1128,8 +1128,19 @@
       `</svg>` + leaves.join('');
     // The chin of the face sits ~91% down its 36px box, onto the line.
     const x = to * w;
+    // Only the real step glides. Placing the mascot must not: each round's
+    // re-render makes a fresh element whose stylesheet spot is left 0, so a
+    // transition would sweep it in from the edge, and after a resize it should
+    // simply be where it belongs. The transition is off until that position
+    // has been computed.
+    const place = from === to;
+    if (place) mascotEl.style.transition = 'none';
     mascotEl.style.left = x.toFixed(1) + 'px';
     mascotEl.style.top = (vineY(x) - 33).toFixed(1) + 'px';
+    if (place) {
+      void mascotEl.offsetWidth;
+      mascotEl.style.transition = '';
+    }
   }
 
   // Practice flags fill the space left for answers (Layout.fitFlags). Capped
