@@ -79,6 +79,15 @@ builds the DOM with its `el()` helper.
   today's plant whether or not the child was right; a set stopped early waters
   nothing (so stopping can't be used to grow the flower faster); no plant ever
   wilts.
+- **The echo game is a toy, not a reward for practice.** After any flower
+  sings (today's or a garden flower), the child can repeat its melody on the
+  flags; the whole melody brings a butterfly. It must stay decoration only:
+  nothing is saved, watered or counted, so it can't be farmed. A right chord
+  gets white rings and sparkles; a wrong flag only plays its own chord (never
+  mark it wrong). Two misses in a row make the flower sing again. Chord
+  colours stay on petals and flags, so the butterfly is white and ink. The
+  game (`echo` in app.js) must end through `stopFlowerSong()` so Home's title
+  and Play always come back, and it holds back app updates while it runs.
 - **Real piano mode is experimental.** `tools/real-piano-acceptance` mirrors
   production timing (the 1100 ms reward-replay delay); change both together.
 
