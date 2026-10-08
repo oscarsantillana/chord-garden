@@ -211,12 +211,13 @@ body.adult #garden-taps { display: none; }
   35% { stroke: #fff; stroke-opacity: 1; stroke-width: 4; }
   100% { stroke: #fff; stroke-opacity: .95; stroke-width: 1.6; }
 }
-.today-colors.inviting .today-swatch { animation: flag-invite 1.6s ease-in-out infinite; }
-.today-colors.inviting .today-swatch:nth-child(2) { animation-delay: .15s; }
-.today-colors.inviting .today-swatch:nth-child(3) { animation-delay: .3s; }
-.today-colors.inviting .today-swatch:nth-child(4) { animation-delay: .45s; }
-.today-colors.inviting .today-swatch:nth-child(5) { animation-delay: .6s; }
-@keyframes flag-invite { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+/* The flags bob (translate, so the pop-in and the press tilt keep their transform). */
+.today-colors.inviting .today-swatch { animation: pop .4s ease backwards, flag-invite 1.6s ease-in-out infinite; }
+.today-colors.inviting .today-swatch:nth-child(2) { animation-delay: .05s, .15s; }
+.today-colors.inviting .today-swatch:nth-child(3) { animation-delay: .1s, .3s; }
+.today-colors.inviting .today-swatch:nth-child(4) { animation-delay: .15s, .45s; }
+.today-colors.inviting .today-swatch:nth-child(5) { animation-delay: .2s, .6s; }
+@keyframes flag-invite { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
 .echo-spark {
   position: absolute; width: 14px; height: 14px; background: #fff; pointer-events: none;
   clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
