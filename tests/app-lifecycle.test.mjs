@@ -36,7 +36,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
       // Reveals whether a caller passed { picture: false } (the flagPictures
       // toggle — see js/storage.js/js/app.js), without needing real SVG markup.
       flag: (c, o = {}) => (o.picture === false ? 'plain-flag' : 'picture-flag'),
-      plant: (stage) => `plant-${stage}` },
+      plant: (stage) => `plant-${stage}`, butterfly: () => 'butterfly' },
     PianoAudio: {
       async unlock() {}, stopAll() {}, setVariety(on) { varietyCalls.push(on); }, async whenOutputSilent() {}, playSparkle() {},
       isChordRinging: () => ringing,
@@ -863,6 +863,99 @@ console.log('ok - Store: a version-8 save loads with readySeen null, lockDot on 
   }
 }
 console.log('ok - Home: flowers sing their own chord songs');
+
+{
+  // The echo game: after a flower sings, the child plays the same melody back
+  // on the flags. A right chord is acknowledged, a wrong flag only plays its
+  // own chord, two misses in a row make the flower sing again, and the whole
+  // melody earns a butterfly (decoration only: nothing is saved).
+  const BEAT = 480, colors = ['red', 'yellow'];
+  const start = async () => {
+    const ui = setup({ colors });
+    for (let i = 0; i < 5; i++) ui.store.recordSession({ ts: Date.now(), rounds: 2, correct: 2, colors });
+    await ui.click('Play'); await ui.click('All done'); await ui.click('Home');
+    const entry = ui.store.activeProfile().garden[0];
+    const song = Songs.compose(entry.colors.map(name => ({ name, top: Math.max(...ui.chordByName[name].notes.map(Songs.midi)) })), entry.day);
+    const names = song.map(step => step.name);
+    const length = song.reduce((n, step) => n + step.beats, 0) * BEAT + 400;
+    const flag = name => ui.app.querySelectorAll('.today-swatch').find(b => b.attrs['aria-label'] === ui.chordByName[name].label);
+    const tapFlag = async name => { flag(name).click(); await flush(); };
+    const inviting = () => ui.app.querySelector('.today-colors').classList.contains('inviting');
+    const fx = () => ui.document.getElementById('confetti');
+    const sing = async () => { ui.app.querySelector('.today-plant').click(); await flush(); await ui.clock.tick(length); };
+    ui.played.length = 0;
+    return { ui, song, names, length, tapFlag, inviting, fx, sing, other: name => colors.find(c => c !== name) };
+  };
+  {
+    const { ui, names, tapFlag, inviting, fx, sing } = await start();
+    await sing();
+    assert.ok(inviting(), 'once the flower has sung, the flags invite the child to answer');
+    ui.played.length = 0;
+    for (const name of names) await tapFlag(name);
+    assert.equal(ui.played.length, names.length, 'each flag still plays its own chord');
+    await ui.clock.tick(800);
+    assert.ok(fx().querySelector('.reward-butterfly'), 'repeating the whole melody earns the butterfly');
+    assert.equal(inviting(), false, 'the flags stop inviting once the melody is done');
+    assert.ok(fx().children.length > 1, 'confetti falls too');
+    await ui.clock.tick(8000);
+    assert.equal(fx().querySelector('.reward-butterfly'), null, 'the butterfly leaves again');
+    assert.equal(ui.store.activeProfile().garden[0].sets, 5, 'the reward waters and saves nothing');
+  }
+  {
+    const { ui, song, names, length, tapFlag, inviting, fx, sing, other } = await start();
+    await sing();
+    // One wrong flag does nothing to the melody, and the right one still counts.
+    await tapFlag(other(names[0]));
+    await tapFlag(names[0]);
+    for (const name of names.slice(1)) await tapFlag(name);
+    await ui.clock.tick(800);
+    assert.ok(fx().querySelector('.reward-butterfly'), 'one wrong try is forgiven');
+    await ui.clock.tick(8000);
+    // Two wrong flags in a row: the flower sings again, then the child starts over.
+    await sing();
+    await tapFlag(names[0]);
+    ui.played.length = 0;
+    await tapFlag(other(names[1])); await tapFlag(other(names[1]));
+    assert.equal(ui.played.length, 2, 'the wrong flags only play their own chords');
+    await ui.clock.tick(900);
+    assert.equal(ui.played.length, 3, 'the flower begins singing the melody again');
+    await ui.clock.tick(length);
+    assert.equal(ui.played.length, 2 + song.length, 'the whole melody is sung again');
+    assert.ok(inviting(), 'then it is the child\'s turn again');
+    for (const name of names) await tapFlag(name);
+    await ui.clock.tick(800);
+    assert.ok(fx().querySelector('.reward-butterfly'), 'from the start, the full melody still wins');
+  }
+  {
+    const { ui, names, tapFlag, inviting, sing } = await start();
+    await sing();
+    await ui.clock.tick(24000);
+    assert.ok(inviting(), 'the flower waits a good while');
+    await tapFlag(names[0]);
+    await ui.clock.tick(24000);
+    assert.ok(inviting(), 'each tap gives it more time');
+    await ui.clock.tick(2000);
+    assert.equal(inviting(), false, 'a game nobody plays ends quietly');
+  }
+  {
+    const { ui, names, tapFlag, inviting, fx } = await start();
+    ui.app.querySelector('.today-plant').click(); await flush();
+    await tapFlag(names[0]); // a flag tapped while the flower is still singing stops the song, as before
+    await ui.clock.tick(8000);
+    assert.equal(inviting(), false);
+    assert.equal(fx().querySelector('.reward-butterfly'), null);
+  }
+  {
+    // Leaving Home ends the game.
+    const { ui, inviting, sing } = await start();
+    await sing();
+    assert.ok(inviting());
+    await ui.click('Play');
+    assert.equal(ui.app.querySelector('.today-colors'), null);
+    await ui.clock.tick(30000);
+  }
+}
+console.log('ok - Home: a flower can be echoed back on the flags for a butterfly');
 
 {
   // Natural piano variety: the Settings switch flips the child's setting and

@@ -122,6 +122,41 @@ const Songs = {
     return names.map((name, i) => ({ name, beats: rhythm[i] }));
   },
 
+  // Follows a child repeating a flower's melody on the flags (the echo game).
+  // `names` is the song's chord names in order; rhythm doesn't matter, only
+  // the order. tap(name) answers { kind, step }:
+  //   'right'  the flag was the next chord; the melody moves on
+  //   'done'   it was the last chord: the whole melody was repeated
+  //   'wrong'  not the next chord; nothing moves, so the child just tries again
+  //   'replay' a second miss in a row on the same step: the flower should sing
+  //            the melody again, and the child starts over from its first chord
+  // A wrong flag is never counted against the child anywhere; it only decides
+  // when the flower sings again to help.
+  tracker(names) {
+    const list = Array.isArray(names) ? names.slice() : [];
+    const t = {
+      step: 0,
+      misses: 0,
+      next() { return t.step < list.length ? list[t.step] : null; },
+      tap(name) {
+        if (!list.length || t.step >= list.length) return { kind: 'done', step: t.step };
+        if (name === list[t.step]) {
+          t.step += 1;
+          t.misses = 0;
+          return { kind: t.step === list.length ? 'done' : 'right', step: t.step };
+        }
+        t.misses += 1;
+        if (t.misses >= 2) {
+          t.step = 0;
+          t.misses = 0;
+          return { kind: 'replay', step: 0 };
+        }
+        return { kind: 'wrong', step: t.step };
+      },
+    };
+    return t;
+  },
+
   // Beats per step for each song length; the last chord is always held for 2.
   RHYTHMS: {
     4: [[1, 1, 1, 2], [2, 1, 1, 2], [1, 1, 2, 2]],

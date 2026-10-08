@@ -527,5 +527,18 @@ const Sprites = (() => {
     return `<svg viewBox="0 0 60 90" xmlns="http://www.w3.org/2000/svg" class="sprite plant" aria-hidden="true" focusable="false">${body}</svg>`;
   }
 
-  return { mascot, icon, animals, shape, flag, plant };
+  // The reward butterfly of the flower echo game: white wings with a soft ink
+  // outline, so it never borrows a chord colour. The wings are separate
+  // groups so CSS can flap them (see .bf-wing in styles.css).
+  function butterfly() {
+    const wing = (cls, d) => `<g class="bf-wing ${cls}"><path d="${d}" fill="#fff" stroke="#35584A" stroke-width="2" stroke-linejoin="round"/></g>`;
+    return `<svg viewBox="0 0 80 60" xmlns="http://www.w3.org/2000/svg" class="sprite butterfly" aria-hidden="true" focusable="false">`
+      + wing('bf-l', 'M38 28 C30 6 8 2 4 14 C0 26 16 32 38 30 C20 34 10 46 20 54 C28 58 36 44 38 32 Z')
+      + wing('bf-r', 'M42 28 C50 6 72 2 76 14 C80 26 64 32 42 30 C60 34 70 46 60 54 C52 58 44 44 42 32 Z')
+      + `<ellipse cx="40" cy="31" rx="2.6" ry="13" fill="#35584A"/>`
+      + `<path d="M39 19 C37 12 34 9 31 8 M41 19 C43 12 46 9 49 8" fill="none" stroke="#35584A" stroke-width="1.4" stroke-linecap="round"/>`
+      + `</svg>`;
+  }
+
+  return { mascot, icon, animals, shape, flag, plant, butterfly };
 })();

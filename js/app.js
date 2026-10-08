@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.7.8';
+  const APP_VERSION = '0.8.0';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -381,6 +381,7 @@
   }
 
   function stopFlowerSong() {
+    endEcho(false); // a game that is running ends with the song, whatever stopped it
     songSerial += 1;
     songTimers.forEach((t) => clearTimeout(t));
     songTimers = [];
@@ -394,6 +395,33 @@
       songPlaying = false;
       PianoAudio.stopAll();
     }
+  }
+
+  // Plays `song` on `target`, one chord per step, glowing that colour's
+  // petals. `lead` delays the first chord (while a grown flower rises).
+  function singSong(target, song, serial, generation, lead, onEnd) {
+    songFlower = target;
+    songPlaying = true;
+    target.classList.add('singing');
+    let at = lead;
+    song.forEach((step, i) => {
+      const chord = CHORD_BY_NAME[step.name];
+      const last = i === song.length - 1;
+      const seconds = step.beats * BEAT_MS / 1000 + (last ? 0.8 : 0.1);
+      const sound = () => {
+        if (serial !== songSerial || generation !== screenGeneration) return;
+        glowPetals(target, chord.swatch);
+        PianoAudio.playChord(chord.notes, seconds).catch(() => {});
+      };
+      if (at === 0) sound();
+      else songTimers.push(setTimeout(sound, at));
+      at += step.beats * BEAT_MS;
+    });
+    songTimers.push(setTimeout(() => {
+      if (serial !== songSerial || generation !== screenGeneration) return;
+      songPlaying = false; // the last chord rings out on its own
+      onEnd();
+    }, at + 300));
   }
 
   async function playFlowerSong(flower, colorNames, seed) {
@@ -416,28 +444,247 @@
     const song = Songs.compose(names.map((n) => ({
       name: n, top: Math.max(...CHORD_BY_NAME[n].notes.map(Songs.midi)),
     })), seed);
-    songFlower = flower;
-    songPlaying = true;
-    flower.classList.add('singing');
-    let at = 0;
-    song.forEach((step, i) => {
-      const chord = CHORD_BY_NAME[step.name];
-      const last = i === song.length - 1;
-      const seconds = step.beats * BEAT_MS / 1000 + (last ? 0.8 : 0.1);
-      const sound = () => {
-        if (serial !== songSerial || generation !== screenGeneration) return;
-        glowPetals(flower, chord.swatch);
-        PianoAudio.playChord(chord.notes, seconds).catch(() => {});
-      };
-      if (at === 0) sound();
-      else songTimers.push(setTimeout(sound, at));
-      at += step.beats * BEAT_MS;
+    // The echo game needs a real choice (two colours or more) and every chord
+    // of the melody on today's flags, so the child can play it back.
+    const songNames = song.map((step) => step.name);
+    const game = new Set(songNames).size >= 2 && songNames.every((n) => homeFlagNames.includes(n));
+    if (!game) {
+      singSong(flower, song, serial, generation, 0, () => stopFlowerSong());
+      return;
+    }
+    const g = {
+      source: flower, flower, song, names: songNames, tracker: Songs.tracker(songNames),
+      awake: new Set(), listening: false, pendingReplay: false, won: false,
+      layer: null, fromTransform: '',
+    };
+    echo = g;
+    g.flower = openStage(g);
+    singSong(g.flower, song, serial, generation, g.flower === flower ? 0 : STAGE_LEAD_MS, () => beginListening(g));
+  }
+
+  // --- The echo game -------------------------------------------------------
+  // After a flower has sung, the child can sing it back on the flags, chord
+  // for chord. Any flower plays, not just today's. While it does, the flower
+  // grows in the middle of Home (the title and Play fade away) so its petals
+  // are easy to follow. A right chord makes its petals ring and sparkle and
+  // stay lit; a wrong flag only plays its own chord, so nothing ever says
+  // "wrong". Two wrong tries in a row and the flower sings again to help.
+  // Repeating the whole melody earns a butterfly. The butterfly is a toy: it
+  // saves nothing and waters nothing, so it can't be farmed.
+  const STAGE_LEAD_MS = 600;
+  const ECHO_IDLE_MS = 25000;
+  const ECHO_WIN_MS = 7500;
+  const ECHO_REPLAY_MS = 900;
+  let echo = null;
+  let echoIdleTimer = null;
+  let homeFlagNames = [];
+  let homeFlagsEl = null;
+
+  const canMeasure = (node) => !!node && typeof node.getBoundingClientRect === 'function';
+  const chordOfPetal = (petal) => {
+    const fill = (petal.getAttribute('fill') || '').toLowerCase();
+    return CHORDS.find((c) => c.swatch.toLowerCase() === fill) || null;
+  };
+
+  // Grow the flower in the middle of Home (a copy: the real one stays put,
+  // hidden, and comes back when the game ends). Without real layout (tests)
+  // the game just runs on the flower where it stands.
+  function openStage(g) {
+    const source = g.source;
+    const home = app.querySelector('.home');
+    const main = app.querySelector('.home-main');
+    const flagsBox = app.querySelector('.home-flags');
+    if (!home || !canMeasure(source) || !canMeasure(main) || !canMeasure(flagsBox) || !document.body) return source;
+    const from = source.getBoundingClientRect();
+    if (!from.width || !from.height) return source;
+    const m = main.getBoundingClientRect();
+    const f = flagsBox.getBoundingClientRect();
+    const bottom = f.top >= m.bottom - 4 ? f.top - 28 : m.bottom - 20; // flags below, or beside, the middle
+    const height = Math.min(380, Math.max(120, bottom - 110));
+    const width = height * from.width / from.height;
+    const cx = m.left + m.width / 2;
+    const stage = el('div', {
+      class: 'stage-flower', html: source.innerHTML,
+      style: `left:${(cx - width / 2).toFixed(1)}px;top:${(bottom - height).toFixed(1)}px;width:${width.toFixed(1)}px;height:${height.toFixed(1)}px`,
+      onclick: () => replayEcho(g),
     });
+    g.fromTransform = `translate(${((from.left + from.width / 2) - cx).toFixed(1)}px,${(from.bottom - bottom).toFixed(1)}px) scale(${(from.height / height).toFixed(3)})`;
+    stage.style.transform = g.fromTransform;
+    g.layer = el('div', { class: 'stage-layer' }, stage);
+    document.body.appendChild(g.layer);
+    source.style.visibility = 'hidden';
+    home.classList.add('echoing');
+    void stage.offsetWidth; // commit the start position so the move below animates
+    stage.style.transform = '';
+    return stage;
+  }
+
+  function closeStage(g) {
+    if (!g.layer) {
+      g.source.style.visibility = '';
+      return;
+    }
+    const layer = g.layer;
+    const stage = layer.firstChild;
+    g.layer = null;
+    if (stage) {
+      stage.style.pointerEvents = 'none';
+      stage.style.transform = g.fromTransform;
+    }
+    setTimeout(() => {
+      layer.remove();
+      // A newer game on the same flower keeps it hidden.
+      if (!(echo && echo.source === g.source)) g.source.style.visibility = '';
+    }, 550);
+  }
+
+  // Bright, white-ringed petals for the colours the child has got so far; the
+  // rest stay dim until they are heard in the melody.
+  function paintAwake(g) {
+    petalsOf(g.flower).forEach((petal) => {
+      const chord = chordOfPetal(petal);
+      const on = !!chord && g.awake.has(chord.name);
+      petal.setAttribute('fill-opacity', on ? '1' : '.35');
+      if (on) petal.classList.add('awake');
+      else petal.classList.remove('awake');
+    });
+  }
+
+  function setInviting(on) {
+    if (!homeFlagsEl) return;
+    if (on) homeFlagsEl.classList.add('inviting');
+    else homeFlagsEl.classList.remove('inviting');
+  }
+
+  function armEchoIdle(g) {
+    clearTimeout(echoIdleTimer);
+    echoIdleTimer = setTimeout(() => { if (echo === g) endEcho(true); }, ECHO_IDLE_MS);
+  }
+
+  // The song is over: the child's turn.
+  function beginListening(g) {
+    if (echo !== g) return;
+    g.flower.classList.remove('singing');
+    glowPetals(g.flower, null);
+    songFlower = null;
+    g.listening = true;
+    paintAwake(g);
+    setInviting(true);
+    armEchoIdle(g);
+  }
+
+  // The flower sings the melody again and the child starts over.
+  function replayEcho(g) {
+    if (echo !== g || g.won) return;
+    clearTimeout(echoIdleTimer);
+    songTimers.forEach((t) => clearTimeout(t));
+    songTimers = [];
+    songSerial += 1;
+    g.listening = false;
+    g.pendingReplay = false;
+    g.awake.clear();
+    g.tracker = Songs.tracker(g.names);
+    setInviting(false);
+    petalsOf(g.flower).forEach((petal) => petal.classList.remove('awake'));
+    glowPetals(g.flower, null);
+    singSong(g.flower, g.song, songSerial, screenGeneration, 0, () => beginListening(g));
+  }
+
+  // White sparkles popping off the petals that were just right.
+  function cheerPetals(g, chord) {
+    const hit = petalsOf(g.flower).filter((petal) => {
+      const c = chordOfPetal(petal);
+      return !!c && c.name === chord.name;
+    });
+    hit.forEach((petal) => {
+      petal.classList.remove('echo-pop');
+      if (canMeasure(petal)) petal.getBoundingClientRect(); // restart the ring if it was still running
+      petal.classList.add('echo-pop');
+      setTimeout(() => petal.classList.remove('echo-pop'), 700);
+    });
+    const layer = document.getElementById('confetti');
+    if (!layer || !hit.length || !canMeasure(hit[0])) return;
+    hit.slice(0, 2).forEach((petal) => {
+      const r = petal.getBoundingClientRect();
+      for (let k = 0; k < 5; k++) {
+        const angle = k * (Math.PI * 2 / 5) + Math.random() * 0.6;
+        const dist = 26 + Math.random() * 22;
+        const spark = el('span', {
+          class: 'echo-spark',
+          style: `left:${(r.left + r.width / 2 - 7).toFixed(1)}px;top:${(r.top + r.height / 2 - 7).toFixed(1)}px;` +
+            `--dx:${Math.round(Math.cos(angle) * dist)}px;--dy:${Math.round(Math.sin(angle) * dist)}px`,
+        });
+        layer.appendChild(spark);
+        setTimeout(() => spark.remove(), 900);
+      }
+    });
+  }
+
+  function showButterfly(g) {
+    const layer = document.getElementById('confetti');
+    if (!layer) return;
+    const r = canMeasure(g.flower) ? g.flower.getBoundingClientRect() : null;
+    const spot = r && r.width ? `left:${Math.round(r.right - 10)}px;top:${Math.round(r.top - 30)}px` : 'left:60%;top:30%';
+    const fly = el('div', { class: 'reward-butterfly', style: spot, html: Sprites.butterfly() });
+    layer.appendChild(fly);
+    songTimers.push(setTimeout(() => fly.classList.add('leaving'), ECHO_WIN_MS - 1800));
+  }
+
+  // The whole melody, repeated: the big reward.
+  function echoWin(g) {
+    g.won = true;
+    g.listening = false;
+    clearTimeout(echoIdleTimer);
+    setInviting(false);
+    g.flower.classList.add('dance');
     songTimers.push(setTimeout(() => {
-      if (serial !== songSerial || generation !== screenGeneration) return;
-      songPlaying = false; // the last chord rings out on its own
-      stopFlowerSong();
-    }, at + 300));
+      if (echo !== g) return;
+      burstConfetti(28, g.names.map((n) => CHORD_BY_NAME[n]));
+      Promise.resolve(PianoAudio.playSparkle()).catch(() => {});
+      showButterfly(g);
+    }, 700));
+    songTimers.push(setTimeout(() => { if (echo === g) endEcho(true); }, ECHO_WIN_MS));
+  }
+
+  function echoTap(name) {
+    const g = echo;
+    if (!g || !g.listening || g.pendingReplay || g.won) return;
+    armEchoIdle(g);
+    const result = g.tracker.tap(name);
+    if (result.kind === 'right' || result.kind === 'done') {
+      g.awake.add(name);
+      paintAwake(g);
+      cheerPetals(g, CHORD_BY_NAME[name]);
+      if (result.kind === 'done') echoWin(g);
+    } else if (result.kind === 'replay') {
+      g.pendingReplay = true;
+      songTimers.push(setTimeout(() => replayEcho(g), ECHO_REPLAY_MS));
+    }
+  }
+
+  // Put everything back. `natural` is the game running its course (the reward
+  // finished, or the child wandered off): then an update that arrived in the
+  // meantime can apply, now that Home is quiet again.
+  function endEcho(natural) {
+    const g = echo;
+    if (!g) return;
+    echo = null;
+    clearTimeout(echoIdleTimer);
+    echoIdleTimer = null;
+    setInviting(false);
+    const home = app.querySelector('.home');
+    if (home) home.classList.remove('echoing');
+    const fx = document.getElementById('confetti');
+    if (fx) {
+      fx.querySelectorAll('.reward-butterfly').forEach((n) => n.remove());
+      fx.querySelectorAll('.echo-spark').forEach((n) => n.remove());
+    }
+    petalsOf(g.flower).forEach((petal) => { petal.classList.remove('awake'); petal.classList.remove('echo-pop'); });
+    glowPetals(g.flower, null);
+    g.flower.classList.remove('singing');
+    g.flower.classList.remove('dance');
+    closeStage(g);
+    if (natural && Updates.hasUpdate() && onChildHome()) Updates.apply();
   }
 
   // The big round Play button (home and celebration). The label sits inside
@@ -456,7 +703,7 @@
   // without surprising or interrupting anyone — see the Updates.init/
   // renderHome calls below and at the bottom of this file.
   function onChildHome() {
-    return !session && !!app.querySelector('.home');
+    return !session && !echo && !!app.querySelector('.home');
   }
 
   // --- "A new colour is ready" signals ------------------------------------
@@ -526,13 +773,18 @@
           // Presentation-mode taps are best-effort — if the piano hasn't
           // loaded yet, the Play button above is where a real retry with a
           // friendly message happens, so a failure here just stays silent.
-          stopFlowerSong();
+          // While a flower waits to be echoed, a flag is the child's answer.
+          if (echo && echo.listening) echoTap(c.name);
+          else stopFlowerSong();
           try {
             await PianoAudio.unlock();
             PianoAudio.playChord(c.notes).catch(() => {});
           } catch (e) { /* no-op — see comment above */ }
         },
       })));
+
+    homeFlagNames = colors.map((c) => c.name);
+    homeFlagsEl = flags;
 
     // Today's own plant, growing a stage per Practice Set played today
     // (Logic.plantStage) — a gentle cadence nudge with no numbers and
@@ -1204,6 +1456,9 @@
   }
 
   function relayout() {
+    // The garden is about to be redrawn (and the grown flower's place may have
+    // moved), so a running echo game ends first.
+    if (echo) stopFlowerSong();
     // A new day redraws all of Home (the hill included), and does so first so
     // the measurements below are of the screen that is actually showing.
     const redrew = refreshHomeForNewDay();

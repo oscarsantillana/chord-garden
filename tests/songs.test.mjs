@@ -93,3 +93,30 @@ assert.deepEqual(Songs.compose([], 'x'), []);
   assert.deepEqual(dup, Songs.compose(colors(['red', 'yellow']), 'd'));
 }
 console.log('ok - songs');
+
+// tracker: following a child repeating a melody on the flags.
+{
+  const t = Songs.tracker(['red', 'yellow', 'red', 'blue']);
+  assert.equal(t.next(), 'red');
+  assert.deepEqual({ ...t.tap('red') }, { kind: 'right', step: 1 });
+  assert.equal(t.next(), 'yellow');
+  assert.deepEqual({ ...t.tap('blue') }, { kind: 'wrong', step: 1 }, 'a wrong flag moves nothing');
+  assert.deepEqual({ ...t.tap('yellow') }, { kind: 'right', step: 2 }, 'a right flag after one miss still counts');
+  assert.deepEqual({ ...t.tap('red') }, { kind: 'right', step: 3 }, 'a repeated chord needs its own tap');
+  assert.deepEqual({ ...t.tap('blue') }, { kind: 'done', step: 4 });
+  assert.equal(t.next(), null);
+  assert.equal(t.tap('red').kind, 'done', 'taps after the end change nothing');
+}
+{
+  const t = Songs.tracker(['red', 'yellow', 'red']);
+  t.tap('red');
+  assert.equal(t.tap('red').kind, 'wrong');
+  assert.deepEqual({ ...t.tap('red') }, { kind: 'replay', step: 0 }, 'two misses in a row: sing it again, start over');
+  assert.equal(t.next(), 'red');
+  assert.equal(t.tap('red').kind, 'right');
+  assert.equal(t.tap('blue').kind, 'wrong');
+  assert.equal(t.tap('yellow').kind, 'right', 'a right flag clears the miss count');
+  assert.equal(t.tap('blue').kind, 'wrong', 'so the next miss is a first miss again');
+}
+assert.equal(Songs.tracker([]).tap('red').kind, 'done');
+console.log('ok - Songs: tracker follows a melody on the flags');
