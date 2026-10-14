@@ -289,14 +289,22 @@ const Logic = {
     return Math.max(0, Math.min(5, Math.floor(sets) || 0));
   },
 
-  // Split a garden (newest first) into today's entry (growing right now) and
-  // every other day (settled on the hill forever). Tolerates a missing or
-  // malformed garden — e.g. a profile normalise() hasn't reached yet — by
-  // treating it as empty rather than throwing.
+  // Split a garden (newest first) into the plant growing right now and every
+  // other one (settled on the hill forever). The growing plant is today's
+  // entry, or — when today has none yet — the newest entry from an earlier day
+  // that has not bloomed, so a flower the child didn't finish carries over to
+  // the next day instead of starting a fresh seed and leaving it stuck. A
+  // flower that bloomed (5 sets) is finished: the next day plants a new seed.
+  // Tolerates a missing or malformed garden — e.g. a profile normalise()
+  // hasn't reached yet — by treating it as empty rather than throwing.
   gardenDays(garden, now = Date.now()) {
     const list = Array.isArray(garden) ? garden : [];
     const key = Logic.dayKey(now);
-    const today = list.find((entry) => entry && entry.day === key) || null;
+    let today = list.find((entry) => entry && entry.day === key) || null;
+    if (!today) {
+      const newest = list.find((entry) => entry);
+      if (newest && newest.day < key && Logic.plantStage(newest.sets) < 5) today = newest;
+    }
     const past = list.filter((entry) => entry !== today);
     return { today, past };
   },

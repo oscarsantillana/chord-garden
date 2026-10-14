@@ -115,10 +115,56 @@ function plain(value) {
   assert.equal(today, null);
   assert.deepEqual(plain(past), []);
   const older = { day: '2026-09-20', sets: 1, colors: [] };
-  ({ today, past } = Logic.gardenDays([older], now));
+  ({ today, past } = Logic.gardenDays([{ ...older, sets: 5 }], now));
   assert.equal(today, null);
-  assert.deepEqual(plain(past), [older]);
+  assert.equal(past.length, 1);
   console.log('ok - Logic.gardenDays: tolerates a missing/non-array garden, and no-entry-today');
+}
+
+// An unfinished flower carries over: the child keeps growing it the next day
+// instead of starting a new seed and leaving this one stuck on the hill.
+{
+  const { Logic } = loadContext({ withStore: false });
+  const now = new Date(2026, 8, 26, 12, 0).getTime();
+  const yesterday = { day: '2026-09-25', sets: 2, colors: ['red'] };
+  const older = { day: '2026-09-20', sets: 1, colors: [] };
+  let { today, past } = Logic.gardenDays([yesterday, older], now);
+  assert.equal(today, yesterday, "yesterday's unfinished flower is still the one growing");
+  assert.deepEqual(plain(past), [older], 'only the older one settles on the hill');
+  ({ today, past } = Logic.gardenDays([{ ...yesterday, sets: 5 }, older], now));
+  assert.equal(today, null, 'a flower that bloomed stays on the hill and a new day starts a new seed');
+  ({ today } = Logic.gardenDays([{ day: '2026-09-25', sets: 4, colors: [] }], now));
+  assert.equal(today.sets, 4, 'a bud that is one set short carries over too');
+  const weeksAgo = { day: '2026-08-01', sets: 1, colors: ['red'] };
+  assert.equal(Logic.gardenDays([weeksAgo], now).today, weeksAgo, 'however long ago it was left');
+  const future = { day: '2026-09-27', sets: 1, colors: [] };
+  assert.equal(Logic.gardenDays([future], now).today, null, 'a clock that moved back never makes a future flower today\'s');
+  console.log('ok - Logic.gardenDays: an unfinished flower carries over to the next day');
+}
+{
+  const { Store } = loadContext();
+  const day = (d, h = 12) => new Date(2026, 8, d, h, 0).getTime();
+  Store.recordSession({ ts: day(24), rounds: 20, correct: 20, colors: ['red'] });
+  Store.recordSession({ ts: day(24, 15), rounds: 20, correct: 20, colors: ['red'] });
+  Store.recordSession({ ts: day(25), rounds: 20, correct: 20, colors: ['red', 'yellow'] });
+  let garden = Store.activeProfile().garden;
+  assert.equal(garden.length, 1, 'the next day waters the same flower');
+  assert.equal(garden[0].day, '2026-09-24', 'it keeps the day it was planted');
+  assert.equal(garden[0].sets, 3);
+  assert.deepEqual(plain(garden[0].colors), ['red', 'yellow'], 'and takes in the new colours');
+  Store.recordSession({ ts: day(26), rounds: 20, correct: 20, colors: ['red'] });
+  Store.recordSession({ ts: day(26, 15), rounds: 20, correct: 20, colors: ['red'] });
+  garden = Store.activeProfile().garden;
+  assert.equal(garden.length, 1);
+  assert.equal(garden[0].sets, 5, 'two sets later it blooms');
+  Store.recordSession({ ts: day(27), rounds: 20, correct: 20, colors: ['red'] });
+  garden = Store.activeProfile().garden;
+  assert.equal(garden.length, 2, 'once it has bloomed, a new day plants a new seed');
+  assert.equal(garden[0].day, '2026-09-27');
+  assert.equal(garden[0].sets, 1);
+  Store.recordSession({ ts: day(27, 15), rounds: 20, correct: 20, colors: ['red'], early: true });
+  assert.equal(Store.activeProfile().garden[0].sets, 1, 'a stopped set still waters nothing');
+  console.log('ok - Store.recordSession: sets on later days finish the unfinished flower');
 }
 
 // --- Logic.orderColors ----------------------------------------------------------

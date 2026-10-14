@@ -1061,33 +1061,50 @@ async function finishSet(ui) {
 // Long enough to land on a later calendar day whatever the time of day.
 const NEXT_DAY = 30 * 60 * 60 * 1000;
 const plantsOnHill = ui => ui.garden.querySelectorAll('.garden-flower').map(node => node.textContent);
+// A flower that has bloomed (5 finished sets) is done; the next day plants a new seed.
+const bloom = async ui => { for (let i = 0; i < 5; i++) { await finishSet(ui); await ui.click('Home'); } };
 
 {
   const ui = setup();
-  await finishSet(ui); await ui.click('Home');
-  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-1');
+  await bloom(ui);
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-5');
   assert.deepEqual(plantsOnHill(ui), []);
   ui.advance(NEXT_DAY); ui.windowEvents.resize();
   assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-0', 'the new day starts from a seed');
-  assert.deepEqual(plantsOnHill(ui), ['plant-1'], 'the finished day is on the hill exactly once');
+  assert.deepEqual(plantsOnHill(ui), ['plant-5'], 'the finished day is on the hill exactly once');
 }
 console.log('ok - Home: a resize on a new day redraws today\'s plant and the hill together');
 
 {
+  // A flower the child didn't finish is still the one growing the next day:
+  // it stays on Home (not stuck on the hill) and the next set waters it.
   const ui = setup();
   await finishSet(ui); await ui.click('Home');
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-1');
+  ui.advance(NEXT_DAY); ui.windowEvents.resize();
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-1', 'yesterday\'s unfinished flower carries over');
+  assert.deepEqual(plantsOnHill(ui), [], 'it is not left on the hill');
+  await finishSet(ui); await ui.click('Home');
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-2', 'and today\'s set waters it');
+  assert.equal(ui.store.activeProfile().garden.length, 1);
+}
+console.log('ok - Home: an unfinished flower carries over to the next day');
+
+{
+  const ui = setup();
+  await bloom(ui);
   ui.advance(NEXT_DAY);
   ui.document.visibilityState = 'hidden'; ui.document.listeners.visibilitychange();
-  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-1', 'a hidden page is left alone');
+  assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-5', 'a hidden page is left alone');
   ui.document.visibilityState = 'visible'; ui.document.listeners.visibilitychange();
   assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-0');
-  assert.deepEqual(plantsOnHill(ui), ['plant-1']);
+  assert.deepEqual(plantsOnHill(ui), ['plant-5']);
 }
 console.log('ok - Home: becoming visible on a new day redraws Home');
 
 {
   const ui = setup();
-  await finishSet(ui); await ui.click('Home');
+  await bloom(ui);
   const home = ui.app.querySelector('.home');
   ui.windowEvents.resize(); ui.document.listeners.visibilitychange();
   assert.equal(ui.app.querySelector('.home'), home, 'the same day does not redraw Home');
@@ -1102,7 +1119,7 @@ console.log('ok - Home: nothing redraws unless the day changed');
 
 {
   const ui = setup();
-  await finishSet(ui); await ui.click('Home');
+  await bloom(ui);
   await ui.click('Play'); await ui.clock.tick(500);
   const practice = ui.app.children[0];
   ui.advance(NEXT_DAY);
@@ -1111,6 +1128,6 @@ console.log('ok - Home: nothing redraws unless the day changed');
   assert.equal(ui.app.querySelector('.home'), null);
   await ui.click('All done'); await ui.click('Home');
   assert.equal(ui.app.querySelector('.today-plant').textContent, 'plant-0');
-  assert.deepEqual(plantsOnHill(ui), ['plant-1']);
+  assert.deepEqual(plantsOnHill(ui), ['plant-5']);
 }
 console.log('ok - Home: a day change mid-set waits until the child is back on Home');

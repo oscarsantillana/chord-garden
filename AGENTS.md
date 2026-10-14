@@ -78,7 +78,10 @@ builds the DOM with its `el()` helper.
 - **Rewards follow practice, not accuracy.** A *finished* set waters
   today's plant whether or not the child was right; a set stopped early waters
   nothing (so stopping can't be used to grow the flower faster); no plant ever
-  wilts.
+  wilts. The growing plant is today's garden entry, or the newest earlier one
+  that hasn't bloomed (`Logic.gardenDays`), so an unfinished flower carries
+  over to the next day; a bloomed one stays on the hill and a new day plants a
+  new seed. Songs are seeded by the entry's own `day`.
 - **The echo game is a toy, not a reward for practice.** After any flower
   sings (today's or a garden flower), the child can repeat its melody on the
   flags; the whole melody brings a butterfly. It must stay decoration only:
