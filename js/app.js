@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.8.0';
+  const APP_VERSION = '0.8.1';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -799,7 +799,7 @@
       html: Sprites.plant(stage, swatchesOf(todayColors)),
       // Tap for today's flower to sing its song; the day key seeds it, so
       // today's plant sings the same tune all day.
-      onclick: () => playFlowerSong(todayPlant, Songs.visibleColors(stage, todayColors), Logic.dayKey(Date.now())),
+      onclick: () => playFlowerSong(todayPlant, Songs.visibleColors(stage, todayColors), today ? today.day : Logic.dayKey(Date.now())),
     });
 
     const startError = el('p', { class: 'start-error', hidden: true },
