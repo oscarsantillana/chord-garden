@@ -149,7 +149,13 @@ body {
   background: var(--sky);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  /* Little fingers press and hold: no text selection, magnifier or callout.
+     Fields stay selectable so typing still works on iOS. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
+input, textarea { -webkit-user-select: text; user-select: text; }
 body.adult { background: var(--bg); }
 
 /* The garden scenery (clouds + two hills, see index.html) sits fixed behind
