@@ -126,13 +126,19 @@ const PianoAudio = (() => {
   // 'running' while its clock is frozen. Nothing sounds until the app is
   // force-closed, which is the only thing that made a fresh context. So we
   // track whether the context MAY be unhealthy (`suspect`) and, on the next
-  // Play/flower tap, replace it. All of this is a no-op where document,
+  // tap (on any screen, see recoverOnGesture), replace it. All of this is a no-op where document,
   // window or Tone.getContext are missing (tests, older fakes).
   let suspect = false;
   let startAttempted = false; // Tone.start() has been called at least once
   let audioEpoch = 0;         // bumped on rebuild; stale sample loads are ignored
   let listenedRaw = null;     // the raw context our statechange listener is on
   let healthRun = 0;          // cancels an older health check when a new one starts
+  // An output route change (headphones plugged or unplugged) can leave the
+  // context 'running' with a moving clock while sound goes nowhere, so a good
+  // health check proves nothing. Until a rebuild, `suspect` must stay set.
+  let routeChanged = false;
+  let healthActive = false;   // a health check is in flight (see checkHealth)
+  let gestureRebuildAt = 0;   // when a tap last rebuilt the context (see recoverOnGesture)
   let wasHidden = false;
   // resume() on a dead iOS context can simply never settle, which would leave
   // the Play button on "Waking the piano…" forever. Give up after this long;
@@ -145,6 +151,9 @@ const PianoAudio = (() => {
   const HEALTH_POLL_MS = 100;
   const MIN_WALL_MS = 150;
   const MIN_CLOCK_ADVANCE = 0.05;
+  // One tap fires touchend and then click. The first one rebuilds; the second
+  // must not rebuild again, even if the new context already looks unhealthy.
+  const GESTURE_REBUILD_GAP_MS = 600;
 
   function toneContext() {
     try {
@@ -172,29 +181,38 @@ const PianoAudio = (() => {
   // state needs no user gesture, so a healthy context is recognised and left
   // alone; one that never proves healthy within the window is marked
   // `suspect` for the next tap to act on.
-  function checkHealth() {
+  //
+  // `onlyIfIdle` is for callers that run often (every chord): a check already
+  // in flight is left to finish, so a constant stream of chords can't keep
+  // restarting it and starve it of ever reaching a verdict.
+  function checkHealth(onlyIfIdle = false) {
+    if (onlyIfIdle && healthActive) return;
     const run = ++healthRun;
+    healthActive = true;
     const began = Date.now();
     let base = null;
+    // Only the newest run owns the flag; a cancelled run just stops.
+    const finish = () => { if (run === healthRun) healthActive = false; };
     const tick = () => {
       if (run !== healthRun) return;
       try {
         const ctx = toneContext();
         const raw = ctx && ctx.rawContext;
-        if (!ctx || !raw) return;
+        if (!ctx || !raw) { finish(); return; }
         const now = Date.now();
         if (ctx.state === 'running') {
           if (base === null) base = { time: raw.currentTime, at: now };
           else if (now - base.at >= MIN_WALL_MS && raw.currentTime - base.time >= MIN_CLOCK_ADVANCE) {
-            suspect = false;
+            if (!routeChanged) suspect = false;
+            finish();
             return;
           }
         } else {
           base = null; // restart the clock measurement once it is running
         }
         if (now - began < HEALTH_WINDOW_MS) setTimeout(tick, HEALTH_POLL_MS);
-        else suspect = true; // never ran with a moving clock: the next tap rebuilds
-      } catch (e) { suspect = true; }
+        else { suspect = true; finish(); } // never ran with a moving clock: the next tap rebuilds
+      } catch (e) { suspect = true; finish(); }
     };
     tick();
   }
@@ -202,8 +220,43 @@ const PianoAudio = (() => {
   function onPageVisible() {
     if (!startAttempted) return;
     suspect = true; // assume the worst until the check proves otherwise
+    // A context that is merely suspended or interrupted often just needs a
+    // resume(). Outside a tap iOS may refuse, so this is only a best effort;
+    // if it works the health check below clears `suspect` and nothing is
+    // rebuilt, and if not the next tap rebuilds.
+    try {
+      const ctx = toneContext();
+      const raw = ctx && ctx.rawContext;
+      if (raw && raw.state !== 'running' && typeof raw.resume === 'function') {
+        Promise.resolve(raw.resume()).catch(() => {});
+      }
+    } catch (e) { /* the tap-time rebuild is the fallback */ }
     checkHealth();
   }
+
+  // The output route changed (jack headphones in or out, Bluetooth, AirPlay).
+  // Treat it like a return from the background, except that a healthy-looking
+  // context is not trusted: the next tap rebuilds it onto the new route.
+  function onRouteChange() {
+    if (!startAttempted) return;
+    routeChanged = true;
+    suspect = true;
+    healthRun += 1;        // a check already in flight must not clear the flag
+    healthActive = false;
+    try {
+      const ctx = toneContext();
+      const raw = ctx && ctx.rawContext;
+      if (raw && raw.state !== 'running' && typeof raw.resume === 'function') {
+        Promise.resolve(raw.resume()).catch(() => {});
+      }
+    } catch (e) { /* the tap-time rebuild is the fallback */ }
+  }
+  try {
+    if (typeof navigator !== 'undefined' && navigator && navigator.mediaDevices
+      && typeof navigator.mediaDevices.addEventListener === 'function') {
+      navigator.mediaDevices.addEventListener('devicechange', onRouteChange);
+    }
+  } catch (e) { /* no route events — statechange and the clock check still work */ }
 
   if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
     wasHidden = document.visibilityState === 'hidden';
@@ -221,6 +274,32 @@ const PianoAudio = (() => {
     window.addEventListener('pageshow', (event) => {
       if (event && event.persisted) onPageVisible();
     });
+  }
+
+  // Any tap, on any screen, repairs a context marked `suspect`. unlock() does
+  // the same for Home taps, but mid-set (flags, "listen again"), on the
+  // celebration screen and in the grown-up area nothing calls unlock(), so
+  // without this the piano would stay silent until the child got back Home.
+  // It listens in the capture phase so the context is already new when the
+  // tap's own handler plays a chord, and on touchend as well as click because
+  // both count as user activation on iOS. When all is well it is one boolean
+  // check per tap.
+  function recoverOnGesture() {
+    if (!started || !suspect || typeof Tone === 'undefined') return;
+    if (Date.now() - gestureRebuildAt < GESTURE_REBUILD_GAP_MS) return; // same tap's second event
+    gestureRebuildAt = Date.now();
+    try { rebuildContext(); } catch (e) { return; } // leaves `suspect` set: the next tap tries again
+    startContext().then(() => {
+      watchContext();
+      checkHealth();
+      const mainReady = ensureSampler();
+      mainReady.then(loadExtraLayers, () => {});
+      mainReady.catch(() => {});
+    }, () => { /* startContext left `suspect` set, so the next tap tries again */ });
+  }
+
+  if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
+    for (const type of ['touchend', 'click']) document.addEventListener(type, recoverOnGesture, true);
   }
 
   // Build a layer's sampler on demand and remember its "loaded" promise.
@@ -320,6 +399,7 @@ const PianoAudio = (() => {
     listenedRaw = null;
     watchContext();
     suspect = false;
+    routeChanged = false;
   }
 
   // Tone.start() with a bound, then a check that the context really runs.
@@ -366,7 +446,12 @@ const PianoAudio = (() => {
     } catch (e) { /* unsupported session type — nothing else to try */ }
     // A context that may have died while we were away is replaced here, before
     // any await, so the fresh AudioContext starts inside this tap's gesture.
-    if ((started || startAttempted) && suspect) rebuildContext();
+    // (Normally recoverOnGesture already did this in the capture phase of the
+    // same tap and cleared `suspect`, so there is nothing left to do here.)
+    if ((started || startAttempted) && suspect) {
+      gestureRebuildAt = Date.now();
+      rebuildContext();
+    }
     startAttempted = true;
     await startContext();
     watchContext();
@@ -418,9 +503,23 @@ const PianoAudio = (() => {
         Date.now() + (delay + duration + RELEASE_SECONDS) * 1000 + spreadMs
       );
       pitchedHeldUntil = Math.max(pitchedHeldUntil, Date.now() + (delay + duration) * 1000 + spreadMs);
+      watchAfterPlaying();
     } finally {
       pendingPitchedOperations -= 1;
     }
+  }
+
+  // After a chord is scheduled, look at the context: iOS can silence it
+  // mid-set with no event we hear about. A context that isn't running is
+  // marked at once (the child's next tap rebuilds it); a 'running' one with a
+  // frozen clock is caught by the background check.
+  function watchAfterPlaying() {
+    if (!started) return;
+    try {
+      const ctx = toneContext();
+      if (ctx && ctx.state !== 'running') suspect = true;
+      checkHealth(true);
+    } catch (e) { /* a failed check must never break playback */ }
   }
 
   function playChord(notes, duration = 3.0) {
