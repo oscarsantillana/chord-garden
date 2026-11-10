@@ -49,6 +49,48 @@ const Layout = {
     return { cols, h, w: Math.floor(h * aspect) };
   },
 
+  // Today's plant (css .today-plant) is 64x96 on short screens, 76x114 up to
+  // 700px tall and 92x138 above; the garden leaves room for it in the middle.
+  todayPlantWidth(viewportHeight) {
+    return viewportHeight <= 640 ? 64 : viewportHeight <= 700 ? 76 : 92;
+  },
+
+  // Where the past days' flowers stand, in two depths, zigzagged. The front
+  // row is on the back hill and holds the newest flowers, big; the back row
+  // is on a farther ridge and holds smaller ones, each standing in the gap
+  // between two front flowers (never behind one, so it can be seen and
+  // tapped). Front slots sit on a grid centred in the middle of the screen,
+  // `pitch` apart (a front flower's width + 12px so tap buttons never touch,
+  // + 3/4 of a back flower so one fits in each gap); back slots sit at the
+  // midpoints between them, plus one beyond the outermost. Both rows keep
+  // clear of today's plant (`gapHalf` = half its width) and the screen edges.
+  // Returns { front, back }, each a list of { x, w, h } with x as a fraction
+  // of the width, nearest-the-centre first; the caller fills front, then back.
+  gardenSlots(width, { gapHalf = 46 } = {}) {
+    const frontW = Math.min(68, Math.max(40, Math.round(width * 0.103)));
+    const backW = Math.max(22, Math.round(frontW / 2));
+    const pitch = frontW + 12 + 0.75 * backW;
+    const fits = (off, w) => off + w / 2 <= width / 2 && off - w / 2 >= gapHalf + 4;
+    const make = (offsets, w) => {
+      const h = Math.round(w * 1.5);
+      const slots = [];
+      offsets.forEach((off) => slots.push({ x: 0.5 - off / width, w, h }, { x: 0.5 + off / width, w, h }));
+      return slots;
+    };
+    const front = [];
+    for (let k = 0; (k + 0.5) * pitch < width / 2; k++) {
+      if (fits((k + 0.5) * pitch, frontW)) front.push((k + 0.5) * pitch);
+    }
+    // Midpoints sit at whole multiples of the pitch: k between front k-1/2
+    // and k+1/2. The first one past the outermost front flower is allowed.
+    const back = [];
+    if (front.length) {
+      const last = Math.round(front[front.length - 1] / pitch + 0.5);
+      for (let k = 1; k <= last; k++) if (fits(k * pitch, backW)) back.push(k * pitch);
+    }
+    return { front: make(front, frontW), back: make(back, backW), pitch };
+  },
+
   // The distinct row baselines from every flag's pole base (px from the top
   // of the viewport), sorted top (back) to bottom (front). Bases within
   // `tolerance` px count as one row, since flags in a row differ by a pixel
