@@ -83,3 +83,61 @@ const PRACTICE = { maxH: 230, minH: 72, gapX: 10, gapY: 18, aspect: 110 / 168 };
   assert.equal(Layout.terraceShade(1, 3), 0.5);
   assert.equal(Layout.terraceShade(0, 1), 1);
 }
+
+// --- todayPlantWidth / gardenSlots ----------------------------------------
+
+{
+  assert.equal(Layout.todayPlantWidth(810), 92);
+  assert.equal(Layout.todayPlantWidth(700), 76);
+  assert.equal(Layout.todayPlantWidth(640), 64);
+}
+
+{
+  // A phone shows 4 big flowers up front, a tablet in landscape 8; the back
+  // row is half the size and fills the gaps between them.
+  const phone = Layout.gardenSlots(390, { gapHalf: 46 });
+  assert.equal(phone.front.length, 4);
+  assert.equal(phone.front[0].w, 40);
+  assert.equal(phone.back.length, 4);
+  const tablet = Layout.gardenSlots(1080, { gapHalf: 46 });
+  assert.equal(tablet.front.length, 8);
+  assert.equal(tablet.front[0].w, 68);
+  assert.equal(tablet.front[0].h, 102);
+  assert.equal(tablet.back[0].w, 34);
+  assert.equal(tablet.back.length, 8);
+  assert.equal(Layout.gardenSlots(810, { gapHalf: 46 }).front.length, 6);
+}
+
+for (const width of [320, 390, 600, 810, 1080, 1366]) {
+  // Slots keep clear of today's plant and the screen edges, and neighbouring
+  // flowers (so their tap buttons) never touch; nearest-to-centre comes first.
+  const gapHalf = 46;
+  const { front, back, pitch } = Layout.gardenSlots(width, { gapHalf });
+  for (const row of [front, back]) {
+    const xs = row.map((s) => s.x * width);
+    row.forEach((s) => {
+      const left = s.x * width - s.w / 2;
+      const right = s.x * width + s.w / 2;
+      assert.ok(left >= -0.001 && right <= width + 0.001, `${width}: on screen`);
+      assert.ok(Math.abs(s.x * width - width / 2) - s.w / 2 >= gapHalf, `${width}: clear of today's plant`);
+    });
+    row.forEach((a, i) => row.slice(i + 1).forEach((b) => {
+      assert.ok(Math.abs(a.x - b.x) * width >= a.w + 12 - 0.001, `${width}: spaced`);
+    }));
+    xs.slice(1).forEach((x, i) => assert.ok(Math.abs(x - width / 2) >= Math.abs(xs[i] - width / 2) - 0.001, `${width}: centre first`));
+  }
+  // Zigzag: a back flower's centre is never inside a front flower, its whole
+  // width stays clear of the front flowers' tap buttons (fully tappable), and
+  // it stands at a midpoint between two front grid positions.
+  back.forEach((b) => {
+    const bx = b.x * width;
+    front.forEach((f) => {
+      const fx = f.x * width;
+      assert.ok(Math.abs(bx - fx) > f.w / 2, `${width}: back centre not behind a front flower`);
+      const overlap = Math.max(0, (f.w + b.w) / 2 - Math.abs(bx - fx));
+      assert.ok(overlap <= 0.3 * b.w, `${width}: at least 70% of a back flower stays tappable`);
+    });
+    const units = Math.abs(bx - width / 2) / pitch;
+    assert.ok(Math.abs(units - Math.round(units)) < 1e-6, `${width}: between two front grid positions`);
+  });
+}

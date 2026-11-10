@@ -890,16 +890,42 @@ console.log('ok - Home: flowers sing their own chord songs');
     const { ui, names, tapFlag, inviting, fx, sing } = await start();
     await sing();
     assert.ok(inviting(), 'once the flower has sung, the flags invite the child to answer');
+    const dimmed = () => ui.app.querySelectorAll('.today-swatch').filter(b => b.classList.contains('off-song')).length;
+    const inSong = ui.app.querySelectorAll('.today-swatch').filter(b => names.some(n => b.attrs['aria-label'] === ui.chordByName[n].label)).length;
+    assert.equal(dimmed(), ui.app.querySelectorAll('.today-swatch').length - inSong, 'only the flags outside the song are dimmed');
     ui.played.length = 0;
     for (const name of names) await tapFlag(name);
     assert.equal(ui.played.length, names.length, 'each flag still plays its own chord');
     await ui.clock.tick(800);
     assert.ok(fx().querySelector('.reward-butterfly'), 'repeating the whole melody earns the butterfly');
     assert.equal(inviting(), false, 'the flags stop inviting once the melody is done');
+    assert.equal(dimmed(), 0, 'no flag stays dimmed once the game is over');
     assert.ok(fx().children.length > 1, 'confetti falls too');
     await ui.clock.tick(8000);
     assert.equal(fx().querySelector('.reward-butterfly'), null, 'the butterfly leaves again');
     assert.equal(ui.store.activeProfile().garden[0].sets, 5, 'the reward waters and saves nothing');
+  }
+  {
+    // Four colours on Home but a flower grown from two: while the child's turn
+    // is on, the two flags outside the song fade back (still tappable), and
+    // the fade lifts when the game ends.
+    const all = ['red', 'yellow', 'blue', 'green'], sung = ['red', 'yellow'];
+    const ui = setup({ colors: all });
+    for (let i = 0; i < 5; i++) ui.store.recordSession({ ts: Date.now(), rounds: 2, correct: 2, colors: sung });
+    await ui.click('Play'); await ui.click('All done'); await ui.click('Home');
+    const swatches = () => ui.app.querySelectorAll('.today-swatch');
+    const label = name => ui.chordByName[name].label;
+    const dimmedLabels = () => swatches().filter(b => b.classList.contains('off-song')).map(b => b.attrs['aria-label']).sort();
+    assert.deepEqual(dimmedLabels(), [], 'nothing is dimmed before a flower sings');
+    ui.app.querySelector('.today-plant').click(); await flush(); await ui.clock.tick(20000);
+    assert.ok(ui.app.querySelector('.today-colors').classList.contains('inviting'), 'the flags invite the child');
+    assert.deepEqual(dimmedLabels(), ['blue', 'green'].map(label).sort(), 'only the flags outside the song fade back');
+    const before = ui.played.length;
+    swatches().find(b => b.attrs['aria-label'] === label('blue')).click(); await flush();
+    assert.equal(ui.played.length, before + 1, 'a dimmed flag still plays its own chord');
+    await ui.clock.tick(30000);
+    assert.equal(ui.app.querySelector('.today-colors').classList.contains('inviting'), false, 'the idle game ends');
+    assert.deepEqual(dimmedLabels(), [], 'no flag stays dimmed once the game is over');
   }
   {
     const { ui, song, names, length, tapFlag, inviting, fx, sing, other } = await start();

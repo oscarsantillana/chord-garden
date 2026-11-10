@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.8.3';
+  const APP_VERSION = '0.9.0';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -295,12 +295,17 @@
     }).join('');
   }
 
-  // Draws every PAST day's plant along the back hill (today's plant lives in
-  // .today-plant on the home screen itself, not here — see renderHome).
+  // Draws every PAST day's plant in two depths (today's plant lives in
+  // .today-plant on the home screen itself, not here — see renderHome). The
+  // newest stand big on the back hill; the next older stand small, a little
+  // dimmed, on a farther, paler ridge drawn behind the hills (only when
+  // there are flowers for it). Layout.gardenSlots decides the slots.
   // Flowers are placed by percentage of #garden, which is styled to match
   // .scene-hills exactly (see styles.css), because the hills stretch
   // non-uniformly with the viewport; percentages of that box are what keep
   // a flower sitting on the ridge at any width.
+  const FAR_RISE = 28; // how far above the back hill (in the hills' 340-unit box) the far ridge stands
+  const FAR_RIDGE = 'M0 62 C90 2 200 12 390 46 L390 340 L0 340 Z'; // index.html's .hill-back, FAR_RISE higher
   function renderGarden(p) {
     clearGarden();
     const layer = document.getElementById('garden');
@@ -309,37 +314,45 @@
     const { past } = Logic.gardenDays(p.garden);
     if (!past.length) return;
     const width = window.innerWidth || 390;
-    const n = Math.max(4, Math.floor(width / 36));
-    // One slot per hill position, nearest-to-centre first, skipping the gap
-    // reserved for today's plant (centred in #app).
-    const slots = [];
-    for (let i = 0; i < n; i++) {
-      const xFrac = (i + 0.5) / n;
-      if (Math.abs(xFrac - 0.5) * width < 50) continue;
-      slots.push(xFrac);
+    const plant = app.querySelector('.today-plant');
+    const measured = canMeasure(plant) ? plant.getBoundingClientRect().width : 0;
+    const gapHalf = (measured || Layout.todayPlantWidth(window.innerHeight || 800)) / 2;
+    const { front, back } = Layout.gardenSlots(width, { gapHalf });
+    const placed = front.map((s) => ({ ...s, far: false })).concat(back.map((s) => ({ ...s, far: true })));
+    const shown = past.slice(0, placed.length);
+    if (shown.length > front.length) {
+      layer.appendChild(el('div', {
+        class: 'far-ridge',
+        html: `<svg viewBox="0 0 390 340" preserveAspectRatio="none"><path d="${FAR_RIDGE}" /></svg>`,
+      }));
     }
-    slots.sort((a, b) => Math.abs(a - 0.5) - Math.abs(b - 0.5));
-    past.slice(0, slots.length).forEach((day, i) => {
-      const xFrac = slots[i];
-      const y = backHillY(xFrac);
+    // The far row's tap buttons go in first, so a front button wins where
+    // they overlap.
+    const items = shown.map((day, i) => ({ day, slot: placed[i] }));
+    const flowers = items.map(({ day, slot }) => {
+      const y = backHillY(slot.x) - (slot.far ? FAR_RISE : 0);
       const stage = Logic.plantStage(day.sets);
-      const spot = `left:${(xFrac * 100).toFixed(2)}%;bottom:calc(${((340 - y) / 340 * 100).toFixed(2)}% - 4px)`;
+      const spot = `left:${(slot.x * 100).toFixed(2)}%;bottom:calc(${((340 - y) / 340 * 100).toFixed(2)}% - ${slot.far ? 3 : 5}px);` +
+        `width:${slot.w}px;height:${slot.h}px`;
       const flower = el('div', {
-        class: 'garden-flower', style: spot,
+        class: slot.far ? 'garden-flower far' : 'garden-flower', style: spot,
         html: Sprites.plant(stage, swatchesOf(day.colors)),
       });
       layer.appendChild(flower);
-      // #garden sits behind the page and can't be tapped, so a button of the
-      // same size on top of it (in #garden-taps) makes the flower sing. It's
-      // as decorative as the scenery: out of the tab order and unlabelled
-      // (the flags already give tap-to-hear).
-      if (tapLayer) {
+      return { flower, stage, day, spot, far: slot.far };
+    });
+    // #garden sits behind the page and can't be tapped, so a button of the
+    // same size on top of it (in #garden-taps) makes the flower sing. It's
+    // as decorative as the scenery: out of the tab order and unlabelled
+    // (the flags already give tap-to-hear).
+    if (tapLayer) {
+      flowers.slice().sort((a, b) => (b.far ? 1 : 0) - (a.far ? 1 : 0)).forEach(({ flower, stage, day, spot }) => {
         tapLayer.appendChild(el('button', {
           class: 'flower-tap', tabindex: '-1', style: spot,
           onclick: () => playFlowerSong(flower, Songs.visibleColors(stage, day.colors), day.day),
         }));
-      }
-    });
+      });
+    }
   }
 
   // A flower's tap button must never steal a tap meant for a control, so once
@@ -550,10 +563,17 @@
     });
   }
 
-  function setInviting(on) {
+  // While the flags invite the child's turn, the ones whose colour isn't in
+  // the song fade back (still tappable, never marked wrong); turning
+  // inviting off clears that.
+  function setInviting(on, names) {
     if (!homeFlagsEl) return;
     if (on) homeFlagsEl.classList.add('inviting');
     else homeFlagsEl.classList.remove('inviting');
+    Array.from(homeFlagsEl.children || []).forEach((flag, i) => {
+      if (on && names && !names.includes(homeFlagNames[i])) flag.classList.add('off-song');
+      else flag.classList.remove('off-song');
+    });
   }
 
   function armEchoIdle(g) {
@@ -569,7 +589,7 @@
     songFlower = null;
     g.listening = true;
     paintAwake(g);
-    setInviting(true);
+    setInviting(true, g.names);
     armEchoIdle(g);
   }
 
@@ -1416,9 +1436,10 @@
   // Home's flags share the ground below the back hill's ridge with the
   // "tap a flag" label, so they're sized to what's left rather than left to
   // wrap and scroll (which would carry flags into the sky while the fixed
-  // hills stay put). maxH 82 is today's size, so few colours look unchanged.
+  // hills stay put). maxH 156 lets a few colours stand big (about double the
+  // old 82); Layout.fitFlags shrinks them as the crowd grows.
   const HOME_GAP_X = 14;
-  const HOME_FLAGS = { maxH: 82, minH: 40, gapX: HOME_GAP_X, gapY: 10, aspect: FLAG_ASPECT };
+  const HOME_FLAGS = { maxH: 156, minH: 40, gapX: HOME_GAP_X, gapY: 10, aspect: FLAG_ASPECT };
   function fitHomeFlags() {
     const box = app.querySelector('.home-flags');
     const colors = app.querySelector('.today-colors');

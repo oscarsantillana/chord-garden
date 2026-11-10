@@ -179,6 +179,13 @@ body.adult #scene { display: none; }
 #garden { position: absolute; left: 0; bottom: 0; width: 100%; height: 42vh; min-height: 260px; }
 .garden-flower { position: absolute; width: 34px; height: 51px; transform: translateX(-50%); }
 .garden-flower svg { width: 100%; height: 100%; display: block; overflow: visible; }
+/* The back row stands small and a little dimmed on a farther, paler ridge
+   (renderGarden); the ridge sits behind the hills (negative z-index inside
+   #scene's stacking context), in the back hill's colour, a little paler. */
+.garden-flower.far { opacity: .8; }
+.far-ridge { position: absolute; inset: 0; z-index: -1; }
+.far-ridge svg { width: 100%; height: 100%; display: block; }
+.far-ridge path { fill: var(--hill-back); opacity: .7; }
 
 /* Tap targets over the past flowers (renderGarden in app.js): #scene is
    behind the page and can't be tapped, so this layer, the same box as
@@ -186,7 +193,7 @@ body.adult #scene { display: none; }
    .flower-tap buttons do, and app.js hides any that would cover a control. */
 #garden-taps { position: fixed; left: 0; bottom: 0; width: 100%; height: 42vh; min-height: 260px; z-index: 2; pointer-events: none; }
 body.adult #garden-taps { display: none; }
-.flower-tap { position: absolute; width: 44px; height: 60px; transform: translateX(-50%); pointer-events: auto; background: none; }
+.flower-tap { position: absolute; width: 34px; height: 51px; /* sized per flower inline */ transform: translateX(-50%); pointer-events: auto; background: none; }
 .flower-tap[hidden] { display: none; }
 
 /* A flower singing its song (playFlowerSong in app.js): a gentle rock, and
@@ -223,6 +230,8 @@ body.adult #garden-taps { display: none; }
 .today-colors.inviting .today-swatch:nth-child(3) { animation-delay: .1s, .3s; }
 .today-colors.inviting .today-swatch:nth-child(4) { animation-delay: .15s, .45s; }
 .today-colors.inviting .today-swatch:nth-child(5) { animation-delay: .2s, .6s; }
+/* Echo game: flags whose colour isn't in the song fade back and stay still. */
+.today-colors.inviting .today-swatch.off-song { animation: pop .4s ease backwards; opacity: .4; }
 @keyframes flag-invite { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
 .echo-spark {
   position: absolute; width: 14px; height: 14px; background: #fff; pointer-events: none;
@@ -365,26 +374,26 @@ body.adult #app { max-width: 680px; }
    — a cadence nudge with no numbers, so a seed or a bud just reads "not yet".
    A soft glow pulses behind it so it reads as the thing to tend, not just
    scenery. */
-.today-plant { position: relative; isolation: isolate; width: 64px; height: 96px; }
+.today-plant { position: relative; isolation: isolate; width: 92px; height: 138px; }
 .today-plant svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .today-plant::before {
   content: ''; position: absolute; z-index: -1; left: 50%; top: 50%;
-  width: 120px; height: 120px; margin: -66px 0 0 -60px; border-radius: 50%;
+  width: 170px; height: 170px; margin: -90px 0 0 -85px; border-radius: 50%;
   background: radial-gradient(circle, var(--glow) 0%, transparent 68%);
   animation: today-glow 2.4s ease-in-out infinite;
 }
 @keyframes today-glow { 0%, 100% { opacity: .6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.08); } }
-@media (max-height: 700px) { .today-plant { width: 52px; height: 78px; } }
+@media (max-height: 700px) { .today-plant { width: 76px; height: 114px; } }
 /* A small phone with its browser bars showing: no taller than the old
    five-daisies row, so Home fits the way it used to. */
-@media (max-height: 640px) { .today-plant { width: 44px; height: 66px; } }
+@media (max-height: 640px) { .today-plant { width: 64px; height: 96px; } }
 @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
 
 /* Today's flags, planted along the front hill; tapping one plays its chord. */
 .home-flags { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-bottom: 6px; flex: 0 0 auto; }
 .today-label { margin: 0; font-weight: 800; font-size: .95rem; color: var(--ink); }
 .today-colors { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 10px 14px; }
-.today-swatch { width: var(--hf-w, 54px); height: var(--hf-h, 82px); transition: transform .12s ease; animation: pop .4s ease backwards; transform-origin: 16% 100%; }
+.today-swatch { width: var(--hf-w, 54px); height: var(--hf-h, 82px); transition: transform .12s ease, opacity .25s ease; animation: pop .4s ease backwards; transform-origin: 16% 100%; }
 .today-swatch svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .today-swatch:active { transform: rotate(-6deg); }
 .today-swatch:nth-child(2) { animation-delay: .05s; } .today-swatch:nth-child(3) { animation-delay: .1s; }
