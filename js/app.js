@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.9.1';
+  const APP_VERSION = '0.9.2';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -100,6 +100,75 @@
         el('button', { class: danger ? 'danger-btn' : 'primary-btn', onclick: () => { close(); onConfirm(); } }, confirmLabel)));
     close = openOverlay(card);
     if (cancel.focus) cancel.focus();
+  }
+
+  // ---- silent in-memory diagnostics --------------------------------------
+  function diag(type, data) {
+    try { if (typeof Diagnostics !== 'undefined') Diagnostics.record(type, data); } catch (e) { /* never interrupt play */ }
+  }
+  function diagErr(err) {
+    try {
+      if (typeof Diagnostics !== 'undefined') return Diagnostics.errorMessage(err);
+      return String((err && err.message) || err || 'unknown').slice(0, 200);
+    } catch (e) { return 'unknown'; }
+  }
+  function audioDiagState() {
+    try {
+      if (typeof PianoAudio !== 'undefined' && typeof PianoAudio.diagnosticState === 'function') {
+        return PianoAudio.diagnosticState();
+      }
+    } catch (e) { return { error: diagErr(e) }; }
+    return null;
+  }
+  function practiceSnapshot() {
+    if (!session) return null;
+    const answersEl = app.querySelector('.answers');
+    return {
+      mode: session.mode,
+      roundId: session.roundId,
+      index: session.index,
+      total: session.total,
+      played: session.played,
+      colors: session.colors.length,
+      attempted: session.attempted,
+      locked: session.locked,
+      revealing: session.revealing,
+      cueing: session.cueing,
+      chordPending: !!session.chordPending,
+      timers: session.timers.size,
+      answersClass: answersEl ? answersEl.className : null,
+      audio: audioDiagState(),
+    };
+  }
+  function buildDiagnosticReport() {
+    const nav = typeof navigator === 'object' && navigator ? navigator : {};
+    const standalone = nav.standalone === true
+      || (typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        && window.matchMedia('(display-mode: standalone)').matches);
+    const env = {
+      ua: String(nav.userAgent || ''),
+      maxTouchPoints: typeof nav.maxTouchPoints === 'number' ? nav.maxTouchPoints : null,
+      standalone,
+      viewport: typeof window !== 'undefined' && window.innerWidth
+        ? `${window.innerWidth}x${window.innerHeight}` : null,
+      visibility: typeof document !== 'undefined' ? (document.visibilityState || null) : null,
+    };
+    const meta = { version: APP_VERSION, env, audio: audioDiagState(), session: practiceSnapshot() };
+    return typeof Diagnostics !== 'undefined' ? Diagnostics.formatReport(meta) : JSON.stringify(meta, null, 2);
+  }
+  function openDiagnosticDialog(report) {
+    let close = () => {};
+    const box = el('textarea', { class: 'diag-text', readonly: 'true', 'aria-label': I18n.t('settings.about.diagDialogTitle') });
+    box.value = report;
+    const closeBtn = el('button', { class: 'primary-btn', onclick: () => close() }, I18n.t('settings.about.diagClose'));
+    const card = el('div', { class: 'adult dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': I18n.t('settings.about.diagDialogTitle') },
+      el('h3', { class: 'dialog-title' }, I18n.t('settings.about.diagDialogTitle')),
+      el('p', { class: 'dialog-body' }, I18n.t('settings.about.diagDialogBody')),
+      box,
+      el('div', { class: 'dialog-actions' }, closeBtn));
+    close = openOverlay(card);
+    if (box.focus) box.focus();
+    if (box.select) box.select();
   }
 
   let screenGeneration = 0;
@@ -992,6 +1061,7 @@
       locked: false,
       revealing: false, // true from a wrong tap until the glowing flag is confirmed
       cueing: false,    // true pre-chord: mic mode's card, digital mode's listening mascot
+      chordPending: false, // true while the round-start playChord promise is in flight
       roundId: 0,
       timers: new Set(),
       streak: 0,        // consecutive FIRST-ATTEMPT-correct rounds; any miss resets it
@@ -999,6 +1069,7 @@
       micListen: null,   // cancellable handle for the current mic round
       micArmed: false,   // flips true after FreshChordGate has a calm baseline
     };
+    diag('practice.start', { mode, colors: colors.length, total: session.total });
     vineProgress = 0;
     nextRound(); // renders the first round's screen (and its fade-in)
   }
@@ -1074,9 +1145,12 @@
     if (!session) return;
     for (const timer of session.timers) clearTimeout(timer);
     session.timers.clear();
-    if (session.micListen) session.micListen.cancel();
+    session.chordPending = false;
+    if (session.micListen) {
+      try { session.micListen.cancel(); } catch (e) { diag('mic.cancel.error', { error: diagErr(e) }); }
+    }
     session.micListen = null;
-    PianoAudio.stopAll();
+    try { PianoAudio.stopAll(); } catch (e) { diag('round.stopAll.error', { error: diagErr(e) }); }
   }
 
   function nextRound() {
@@ -1097,6 +1171,7 @@
     session.locked = true;
     session.cueing = true; // shows the "Listen…" overlay (mic mode) / the mascot's listening pose (digital), until the chord below sounds
     const roundId = session.roundId = ++roundSequence;
+    diag('practice.round', { roundId, index: session.index, total: session.total, mode: 'digital' });
     renderPractice();
     const notes = session.current.notes;
     // Timings: 500ms gives clearRoundWork()'s stopAll() above its 0.3s
@@ -1105,14 +1180,23 @@
     // no card, no tick — so the flags flutter the instant it sounds
     // (flutterFlags) to say "the chord is here, your turn".
     scheduleRound(() => {
-      if (!session) return;
+      if (!session || session.roundId !== roundId) return;
+      session.chordPending = true;
+      let played;
+      try {
+        played = Promise.resolve(PianoAudio.playChord(notes));
+      } catch (e) {
+        played = Promise.reject(e);
+      }
       // If the chord genuinely fails to play (e.g. the sampler load timed
       // out), unlock the answer grid anyway — a silent, chordless round is
       // better than a frozen screen the child can't get past. A failed
       // playback has nothing to flutter for.
-      PianoAudio.playChord(notes).then(() => {
+      played.then(() => {
+        if (session && session.roundId === roundId) session.chordPending = false;
         unlockAnswers(roundId);
         flutterFlags(roundId);
+        diag('practice.unlock', { roundId, ok: true });
         // The mascot's "listening" pose (see renderPractice) is a cueing-
         // phase thing; 1200ms gives it a beat to register after the chord
         // starts before it settles back to its baseline face.
@@ -1120,7 +1204,11 @@
           const m = document.getElementById('mascot');
           if (m) m.classList.remove('listening');
         }, 1200);
-      }, () => unlockAnswers(roundId));
+      }, (err) => {
+        if (session && session.roundId === roundId) session.chordPending = false;
+        diag('practice.unlock', { roundId, ok: false, error: diagErr(err) });
+        unlockAnswers(roundId);
+      });
     }, 500);
   }
 
@@ -1271,6 +1359,8 @@
     const listenBtn = (session.mode === 'mic' && !session.current) ? null : el('button', {
       class: 'listen-btn',
       onclick: () => {
+        if (!session || !session.current) return;
+        diag('practice.listenAgain', { roundId: session.roundId, locked: session.locked, revealing: session.revealing });
         if (session.mode === 'mic') {
           PianoAudio.playChord(session.current.notes).catch(() => {});
         } else {
@@ -1293,6 +1383,16 @@
       'data-color': c.name,
       'aria-label': I18n.color(c.name),
       html: Sprites.flag(c, { picture: p.flagPictures }),
+      onpointerdown: () => {
+        if (!session) return;
+        const answersEl = app.querySelector('.answers');
+        diag('flag.down', {
+          roundId: session.roundId,
+          locked: session.locked,
+          revealing: session.revealing,
+          answersClass: answersEl ? answersEl.className : null,
+        });
+      },
       onclick: () => onAnswer(c),
     });
 
@@ -1521,22 +1621,44 @@
   }
 
   function onAnswer(color) {
+    if (!session || !session.current) {
+      diag('flag.ignored', { reason: 'no-session' });
+      return;
+    }
     // A wrong tap leaves the round in `revealing` (see below) until the
     // child taps the glowing correct flag — every other tap is ignored, and
     // only that one confirms and moves on. This has to come before the
     // locked check below: `revealing` rounds are locked too (nothing else
     // is tappable), but the glowing flag itself still needs to respond.
     if (session.revealing) {
-      if (color.name === session.current.name) confirmReveal();
+      if (color.name === session.current.name) {
+        diag('practice.revealConfirm', { roundId: session.roundId });
+        confirmReveal();
+      } else {
+        diag('flag.ignored', { reason: 'revealing-other', ...practiceSnapshot() });
+      }
       return;
     }
-    if (session.locked) return;
+    if (session.locked) {
+      diag('flag.ignored', { reason: 'locked', ...practiceSnapshot() });
+      // In digital mode, a locked non-revealing round must always have either
+      // a pending round timer or an in-flight playChord(). If neither exists,
+      // something wedged the transition — log it and recover instead of
+      // stranding the child on unresponsive flags.
+      if (session.mode !== 'mic' && session.timers.size === 0 && !session.chordPending) {
+        diag('practice.stuck.recovered', practiceSnapshot());
+        if (session.attempted) nextRound();
+        else unlockAnswers(session.roundId);
+      }
+      return;
+    }
     // A quick tap can land inside the listening pose's 1200ms; drop it now
     // so the tilt never mixes with the happy hop or the curious face.
     const mascotEl = document.getElementById('mascot');
     if (mascotEl) mascotEl.classList.remove('listening');
     const correct = color.name === session.current.name;
     const firstAttempt = !session.attempted; // streak only moves on a first-attempt result
+    diag('practice.answer', { roundId: session.roundId, ok: correct });
 
     // Only the FIRST attempt of a round counts toward guardian stats. Mic-
     // mode rounds are tagged with a `src: 'mic'` + confidence via a separate
@@ -1558,8 +1680,8 @@
     if (correct) {
       session.locked = true;
       if (firstAttempt) session.streak += 1;
-      btn.classList.add('correct');
-      cheer();
+      if (btn) btn.classList.add('correct');
+      try { cheer(); } catch (e) { diag('practice.cheer.error', { error: diagErr(e) }); }
       // A little tactile "yes!" right at tap time. The vibrate call is
       // wrapped because plenty of browsers/devices simply don't have
       // navigator.vibrate, and a couple that do still throw if it's blocked
@@ -1576,8 +1698,10 @@
       // recorded as incorrect on the first attempt, above.
       session.streak = 0;
       setMascotMood('curious');
-      btn.classList.add('nudge');
-      scheduleRound(() => btn.classList.remove('nudge'), 500);
+      if (btn) {
+        btn.classList.add('nudge');
+        scheduleRound(() => btn.classList.remove('nudge'), 500);
+      }
       session.locked = true;
       session.revealing = true;
       const answersEl = app.querySelector('.answers');
@@ -1665,6 +1789,9 @@
 
   function finishPractice(early) {
     if (!session) return;
+    // Capture the live round state before clearing it, so tapping "All done"
+    // after a glitch preserves what the practice screen was doing.
+    diag('practice.finish', { early, ...practiceSnapshot() });
     clearRoundWork();
     // Release the microphone (MediaStream tracks) the moment a real-piano
     // set ends — this IS the stop control; there's no separate mic-off
@@ -2400,12 +2527,35 @@
       },
     }, I18n.t('settings.about.check'));
 
+    const diagStatus = el('span', { class: 'g-row-sub diag-status', 'aria-live': 'polite' },
+      I18n.t('settings.about.diagSub'));
+    const diagBtn = el('button', {
+      class: 'secondary-btn',
+      onclick: () => {
+        const report = buildDiagnosticReport();
+        const clipboard = typeof navigator !== 'undefined' && navigator.clipboard;
+        if (clipboard && typeof clipboard.writeText === 'function') {
+          Promise.resolve(clipboard.writeText(report)).then(
+            () => { diagStatus.textContent = I18n.t('settings.about.diagCopied'); },
+            () => { openDiagnosticDialog(report); }
+          );
+        } else {
+          openDiagnosticDialog(report);
+        }
+      },
+    }, I18n.t('settings.about.diagCopy'));
+
     return section(I18n.t('settings.about.section'), el('div', { class: 'g-card g-list' },
       el('div', { class: 'g-row' },
         el('span', { class: 'g-row-main' },
           el('span', { class: 'g-row-title' }, I18n.t('settings.about.version', { version: APP_VERSION })),
           status),
-        checkBtn)),
+        checkBtn),
+      el('div', { class: 'g-row' },
+        el('span', { class: 'g-row-main' },
+          el('span', { class: 'g-row-title' }, I18n.t('settings.about.diagTitle')),
+          diagStatus),
+        diagBtn)),
       I18n.t('settings.about.footnote'));
   }
 
@@ -2586,7 +2736,18 @@
     }
   }
 
+  window.addEventListener('error', (event) => {
+    diag('js.error', {
+      message: diagErr(event && (event.error || event.message)),
+      line: event && event.lineno ? event.lineno : null,
+      col: event && event.colno ? event.colno : null,
+    });
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    diag('js.rejection', { reason: diagErr(event && event.reason) });
+  });
   window.addEventListener('pagehide', () => {
+    diag('page.pagehide', { inSession: !!session });
     screenGeneration += 1;
     pendingMicStart = false;
     clearRoundWork();
@@ -2600,6 +2761,7 @@
     if (document.visibilityState === 'visible') refreshHomeForNewDay();
   });
   window.addEventListener('pageshow', event => {
+    diag('page.pageshow', { persisted: !!(event && event.persisted) });
     if (event.persisted) renderHome();
   });
 

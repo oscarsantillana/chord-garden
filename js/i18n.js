@@ -285,6 +285,13 @@ const I18n = (() => {
       'settings.about.unsupported': 'This browser always loads the newest version.',
       'settings.about.updated': 'Updated to version {version}.',
       'settings.about.footnote': 'New versions also install by themselves and switch over the next time the home screen is showing.',
+      'settings.about.diagTitle': 'Diagnostics',
+      'settings.about.diagSub': 'Recent practice and audio events from this session. Nothing is sent anywhere.',
+      'settings.about.diagCopy': 'Copy report',
+      'settings.about.diagCopied': 'Report copied.',
+      'settings.about.diagDialogTitle': 'Diagnostic report',
+      'settings.about.diagDialogBody': 'Select and copy this text to share what happened.',
+      'settings.about.diagClose': 'Close',
 
       // ---- Settings: language + note names (new in this change) --------------
       'settings.language.section': 'Language',
@@ -545,6 +552,13 @@ const I18n = (() => {
       'settings.about.unsupported': 'Este navegador siempre carga la última versión.',
       'settings.about.updated': 'Actualizada a la versión {version}.',
       'settings.about.footnote': 'Las versiones nuevas también se instalan solas y se aplican la próxima vez que aparece la pantalla de inicio.',
+      'settings.about.diagTitle': 'Diagnóstico',
+      'settings.about.diagSub': 'Eventos recientes de práctica y sonido de esta sesión. No se envía nada a ningún sitio.',
+      'settings.about.diagCopy': 'Copiar informe',
+      'settings.about.diagCopied': 'Informe copiado.',
+      'settings.about.diagDialogTitle': 'Informe de diagnóstico',
+      'settings.about.diagDialogBody': 'Selecciona y copia este texto para compartir lo que ocurrió.',
+      'settings.about.diagClose': 'Cerrar',
 
       'settings.language.section': 'Idioma',
       'settings.language.sectionTitle': 'Idioma y notas',

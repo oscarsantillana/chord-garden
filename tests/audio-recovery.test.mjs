@@ -441,3 +441,17 @@ test('unplug mid-set: statechange then the next flag tap rebuilds and chords pla
   assert.ok(w.samplers.at(-1) !== w.samplers[0] && !w.samplers.at(-1).disposed);
   assert.equal(w.samplers.filter((s) => !s.disposed).length, 1, 'only the new sampler is live');
 });
+
+test('a throwing sampler.releaseAll() does not break stopAll() or playChord()', async () => {
+  const w = makeWorld();
+  await w.audio.unlock();
+  let played = 0;
+  w.samplers[0].releaseAll = () => { throw new Error('sampler release failed'); };
+  w.samplers[0].triggerAttackRelease = () => { played += 1; };
+  assert.doesNotThrow(() => w.audio.stopAll());
+  await w.audio.playChord(['C4', 'E4', 'G4'], 0.01);
+  assert.equal(played, 1, 'chord still plays after a releaseAll() throw');
+  const state = w.audio.diagnosticState();
+  assert.equal(state.started, true);
+  assert.equal(state.contextState, 'running');
+});

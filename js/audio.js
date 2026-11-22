@@ -23,10 +23,19 @@
  * With variety off, playback is exactly the single steady main recording.
  *
  * Public API: unlock, playChord, playReward, playSparkle, stopAll,
- * whenOutputSilent, isChordRinging, setVariety, chordPlan.
+ * whenOutputSilent, isChordRinging, setVariety, chordPlan, diagnosticState.
  */
 
 const PianoAudio = (() => {
+  function diag(type, data) {
+    try { if (typeof Diagnostics !== 'undefined') Diagnostics.record(type, data); } catch (e) { /* never break audio */ }
+  }
+  function errText(err) {
+    try {
+      if (typeof Diagnostics !== 'undefined') return Diagnostics.errorMessage(err);
+      return String((err && err.message) || err || 'unknown').slice(0, 200);
+    } catch (e) { return 'unknown'; }
+  }
   // Where the piano files live, resolved against THIS script (captured while
   // it runs; currentScript is null afterwards), so the app page and the
   // real-piano acceptance tool (which loads ../../js/audio.js) both find them.
@@ -172,7 +181,10 @@ const PianoAudio = (() => {
       if (!raw || raw === listenedRaw || typeof raw.addEventListener !== 'function') return;
       listenedRaw = raw;
       raw.addEventListener('statechange', () => {
-        if (raw === listenedRaw && startAttempted && raw.state !== 'running') suspect = true;
+        if (raw === listenedRaw && startAttempted) {
+          diag('audio.statechange', { state: raw.state });
+          if (raw.state !== 'running') suspect = true;
+        }
       });
     } catch (e) { /* no state events — visibility and timeouts still work */ }
   }
@@ -211,8 +223,8 @@ const PianoAudio = (() => {
           base = null; // restart the clock measurement once it is running
         }
         if (now - began < HEALTH_WINDOW_MS) setTimeout(tick, HEALTH_POLL_MS);
-        else { suspect = true; finish(); } // never ran with a moving clock: the next tap rebuilds
-      } catch (e) { suspect = true; finish(); }
+        else { suspect = true; diag('audio.healthFail', { state: ctx.state, routeChanged }); finish(); } // never ran with a moving clock: the next tap rebuilds
+      } catch (e) { suspect = true; diag('audio.healthFail', { error: errText(e) }); finish(); }
     };
     tick();
   }
@@ -227,6 +239,7 @@ const PianoAudio = (() => {
     try {
       const ctx = toneContext();
       const raw = ctx && ctx.rawContext;
+      diag('audio.visible', { state: raw ? raw.state : null });
       if (raw && raw.state !== 'running' && typeof raw.resume === 'function') {
         Promise.resolve(raw.resume()).catch(() => {});
       }
@@ -246,6 +259,7 @@ const PianoAudio = (() => {
     try {
       const ctx = toneContext();
       const raw = ctx && ctx.rawContext;
+      diag('audio.routeChange', { state: raw ? raw.state : null });
       if (raw && raw.state !== 'running' && typeof raw.resume === 'function') {
         Promise.resolve(raw.resume()).catch(() => {});
       }
@@ -288,7 +302,7 @@ const PianoAudio = (() => {
     if (!started || !suspect || typeof Tone === 'undefined') return;
     if (Date.now() - gestureRebuildAt < GESTURE_REBUILD_GAP_MS) return; // same tap's second event
     gestureRebuildAt = Date.now();
-    try { rebuildContext(); } catch (e) { return; } // leaves `suspect` set: the next tap tries again
+    try { rebuildContext('gesture'); } catch (e) { diag('audio.rebuild.error', { source: 'gesture', error: errText(e) }); return; } // leaves `suspect` set: the next tap tries again
     startContext().then(() => {
       watchContext();
       checkHealth();
@@ -373,13 +387,14 @@ const PianoAudio = (() => {
   // the first `await`. Samplers belong to the old context, so they are thrown
   // away and rebuilt lazily (from the service worker's audio cache, so this
   // works offline).
-  function rebuildContext() {
+  function rebuildContext(source = 'unknown') {
     if (typeof Tone.getContext !== 'function' || typeof Tone.setContext !== 'function'
       || typeof Tone.Context !== 'function') return;
     stopAll();
     const old = Tone.getContext();
     const fresh = new Tone.Context(); // if this throws, nothing has been torn down
     audioEpoch += 1;
+    diag('audio.rebuild', { source, epoch: audioEpoch });
     for (const s of allSamplers()) { try { s.dispose(); } catch (e) { /* already gone */ } }
     if (sparkleSynth) { try { sparkleSynth.dispose(); } catch (e) { /* already gone */ } }
     sparkleSynth = null;
@@ -413,6 +428,7 @@ const PianoAudio = (() => {
       await Promise.race([Tone.start(), timeout]);
     } catch (e) {
       suspect = true;
+      diag('audio.start.error', { error: errText(e) });
       throw e;
     } finally {
       clearTimeout(timer);
@@ -420,6 +436,7 @@ const PianoAudio = (() => {
     const ctx = toneContext();
     if (ctx && ctx.state !== 'running') {
       suspect = true;
+      diag('audio.start.error', { state: ctx.state });
       throw new Error('The piano did not wake up.');
     }
   }
@@ -450,7 +467,7 @@ const PianoAudio = (() => {
     // same tap and cleared `suspect`, so there is nothing left to do here.)
     if ((started || startAttempted) && suspect) {
       gestureRebuildAt = Date.now();
-      rebuildContext();
+      rebuildContext('unlock');
     }
     startAttempted = true;
     await startContext();
@@ -479,7 +496,9 @@ const PianoAudio = (() => {
       if (!started) await unlock();
       await ensureSampler();
       if (operationGeneration !== pitchedOperationGeneration) return;
-      for (const s of allSamplers()) s.releaseAll();
+      for (const s of allSamplers()) {
+        try { s.releaseAll(); } catch (e) { diag('audio.releaseAll.error', { error: errText(e) }); }
+      }
       const delay = 0.05;
       const start = Tone.now() + delay;
       let spreadMs = 0;
@@ -504,6 +523,9 @@ const PianoAudio = (() => {
       );
       pitchedHeldUntil = Math.max(pitchedHeldUntil, Date.now() + (delay + duration) * 1000 + spreadMs);
       watchAfterPlaying();
+    } catch (e) {
+      diag('audio.play.error', { error: errText(e) });
+      throw e;
     } finally {
       pendingPitchedOperations -= 1;
     }
@@ -570,7 +592,10 @@ const PianoAudio = (() => {
     pitchedHeldUntil = 0;
     const all = allSamplers();
     if (!all.length) return;
-    for (const s of all) s.releaseAll();
+    for (const s of all) {
+      // A Tone.Sampler cleanup glitch must never abort a round transition.
+      try { s.releaseAll(); } catch (e) { diag('audio.stopAll.error', { error: errText(e) }); }
+    }
     if (pitchedOutputUntil > Date.now()) {
       pitchedOutputUntil = Date.now() + RELEASE_SECONDS * 1000;
     }
@@ -604,6 +629,28 @@ const PianoAudio = (() => {
     });
   }
 
+  function diagnosticState() {
+    try {
+      const ctx = toneContext();
+      const raw = ctx && ctx.rawContext;
+      return {
+        started,
+        startAttempted,
+        suspect,
+        routeChanged,
+        audioEpoch,
+        pendingPitched: pendingPitchedOperations,
+        ringing: isChordRinging(),
+        varietyOn,
+        contextState: raw ? raw.state : (ctx ? ctx.state : null),
+        currentTime: raw && typeof raw.currentTime === 'number' ? Number(raw.currentTime.toFixed(3)) : null,
+        readyLayers: Object.keys(ready).filter((k) => ready[k]),
+      };
+    } catch (e) {
+      return { error: errText(e) };
+    }
+  }
+
   return {
     unlock,
     playChord,
@@ -614,5 +661,6 @@ const PianoAudio = (() => {
     isChordRinging,
     setVariety,
     chordPlan,
+    diagnosticState,
   };
 })();
