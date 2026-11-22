@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { fakeDom, fakeClock } from './helpers/fake-dom.mjs';
 const Songs = createRequire(import.meta.url)('../js/songs.js');
 const flush = () => new Promise(resolve => setImmediate(resolve));
-function setup({ micMode = false, deferredMic = false, deferredChord = false, ringing = true, colors = ['red'], navigator = {}, seed = {}, globals = {} } = {}) {
+function setup({ micMode = false, deferredMic = false, deferredChord = false, ringing = true, stopAudio = () => {}, colors = ['red'], navigator = {}, seed = {}, globals = {} } = {}) {
   // Only the update-check tests below pass a `navigator.serviceWorker` — by
   // default it's {} (no serviceWorker), so js/updates.js's Updates.init()
   // stays inert, same as opening the app via file:// or in an old browser.
@@ -38,7 +38,8 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
       flag: (c, o = {}) => (o.picture === false ? 'plain-flag' : 'picture-flag'),
       plant: (stage) => `plant-${stage}`, butterfly: () => 'butterfly' },
     PianoAudio: {
-      async unlock() {}, stopAll() {}, setVariety(on) { varietyCalls.push(on); }, async whenOutputSilent() {}, playSparkle() {},
+      async unlock() {}, stopAll() { stopAudio(); }, setVariety(on) { varietyCalls.push(on); }, async whenOutputSilent() {}, playSparkle() {},
+      diagnosticState: () => ({ contextState: 'running', suspect: false }),
       isChordRinging: () => ringing,
       async playReward(notes) { rewards.push([...notes]); },
       playChord(notes) { played.push([...notes]); return deferredChord ? new Promise(resolve => pendingChords.push(resolve)) : Promise.resolve(); },
@@ -53,8 +54,8 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   // i18n.js loads right after data.js (same order as index.html) — the
   // sandbox's navigator defaults to {} (English), so existing label-based
   // clicks below keep working unless a test explicitly asks for another one.
-  for (const file of ['data', 'i18n', 'logic', 'layout', 'songs', 'storage', 'updates']) vm.runInContext(fs.readFileSync(new URL(`../js/${file}.js`, import.meta.url), 'utf8'), sandbox);
-  vm.runInContext('this.store=Store; Store.updateProfile(Store.activeProfile().id, { realPianoMode: ' + micMode + ', activeColors: ' + JSON.stringify(colors) + ', roundsPerSet: 2 });', sandbox);
+  for (const file of ['data', 'diagnostics', 'i18n', 'logic', 'layout', 'songs', 'storage', 'updates']) vm.runInContext(fs.readFileSync(new URL(`../js/${file}.js`, import.meta.url), 'utf8'), sandbox);
+  vm.runInContext('this.store=Store; this.diagnostics=Diagnostics; Store.updateProfile(Store.activeProfile().id, { realPianoMode: ' + micMode + ', activeColors: ' + JSON.stringify(colors) + ', roundsPerSet: 2 });', sandbox);
   vm.runInContext(fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8'), sandbox);
   const chordByName = vm.runInContext('CHORD_BY_NAME', sandbox); // for tests that need to know the (randomly picked) target
   const click = async label => {
@@ -66,7 +67,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   const colorBtn = name => app.querySelector(`.color-btn[data-color="${name}"]`);
   const advance = ms => { clockOffset += ms; };
   return { app, document, garden, clock, advance, click, played, listens, pendingStarts, pendingChords, windowEvents, rewards, varietyCalls,
-    get reloads() { return reloads; }, store: sandbox.store, i18n: sandbox.I18n, saved, chordByName, colorBtn, get micStarts() { return micStarts; }, get micStops() { return micStops; } };
+    get reloads() { return reloads; }, store: sandbox.store, diagnostics: sandbox.diagnostics, i18n: sandbox.I18n, saved, chordByName, colorBtn, get micStarts() { return micStarts; }, get micStops() { return micStops; } };
 }
 // With two+ active colours the round's target is picked at random; the only
 // way to know which one without reaching into session state is to match the
@@ -1193,3 +1194,66 @@ console.log('ok - Home: nothing redraws unless the day changed');
   assert.deepEqual(plantsOnHill(ui), ['plant-5']);
 }
 console.log('ok - Home: a day change mid-set waits until the child is back on Home');
+
+{
+  // Regression: a one-time throw from PianoAudio.stopAll() during round
+  // cleanup must never abort nextRound() or strand flags in a locked state.
+  let failStop = false;
+  const colors = ['red', 'yellow'];
+  const ui = setup({
+    colors,
+    stopAudio() {
+      if (failStop) { failStop = false; throw new Error('simulated audio cleanup failure'); }
+    },
+  });
+  await ui.click('Play'); await ui.clock.tick(500);
+  ui.colorBtn(targetOf(ui, colors)).click();
+  failStop = true;
+  await ui.clock.tick(800);
+  await ui.clock.tick(500);
+  assert.equal(ui.played.length, 2, 'next round still starts and plays its chord');
+  assert.equal(ui.app.querySelector('.answers').classList.contains('waiting'), false, 'flags unlock normally');
+  assert.ok(ui.diagnostics.events().some((e) => e.type === 'round.stopAll.error'), 'cleanup error is recorded in diagnostics');
+  ui.colorBtn(targetOf(ui, colors)).click();
+  assert.equal(ui.store.activeProfile().events.length, 2, 'subsequent flag taps are accepted');
+}
+console.log('ok - Practice: an audio cleanup error during round transition cannot strand the flags');
+
+{
+  // Settings -> About copies a privacy-safe diagnostic report via clipboard,
+  // and falls back to an in-app selectable dialog when clipboard is absent.
+  const copied = [];
+  const ui = setup({
+    colors: ['red', 'yellow'],
+    navigator: { userAgent: 'iPad-test', clipboard: { writeText: async (text) => { copied.push(text); } } },
+  });
+  ui.store.updateProfile(ui.store.activeProfile().id, { name: 'SecretChildName' });
+  await ui.click('Play'); await ui.clock.tick(500);
+  ui.colorBtn(targetOf(ui, ['red', 'yellow'])).click();
+  await ui.click('All done');
+  await ui.click('Home');
+  ui.app.querySelector('.gear').click();
+  for (const digit of ['2', '4', '6', '8']) await ui.click(digit);
+  await ui.click('Settings');
+  await ui.click('Copy report');
+  assert.equal(copied.length, 1);
+  assert.equal(copied[0].includes('SecretChildName'), false, 'diagnostic report never includes the child name');
+  assert.equal(copied[0].includes('2468'), false, 'diagnostic report never includes the PIN');
+  const parsed = JSON.parse(copied[0]);
+  assert.equal(parsed.version, APP_VERSION);
+  assert.ok(parsed.events.some((e) => e.type === 'practice.finish'), 'includes the pre-clear finish snapshot');
+  assert.equal(ui.app.querySelector('.diag-status').textContent, 'Report copied.');
+
+  // Without navigator.clipboard, tapping Copy report opens a copyable dialog.
+  const fallbackUi = setup();
+  fallbackUi.app.querySelector('.gear').click();
+  for (const digit of ['2', '4', '6', '8']) await fallbackUi.click(digit);
+  await fallbackUi.click('Settings');
+  await fallbackUi.click('Copy report');
+  const box = fallbackUi.document.body.querySelector('.diag-text');
+  assert.ok(box, 'fallback dialog shows the report in a textarea');
+  assert.equal(JSON.parse(box.value).version, APP_VERSION);
+  await fallbackUi.click('Close');
+  assert.equal(fallbackUi.document.body.querySelector('.diag-text'), null);
+}
+console.log('ok - Settings -> About: diagnostic report copies cleanly and falls back to a dialog');
