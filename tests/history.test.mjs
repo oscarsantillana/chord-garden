@@ -126,9 +126,13 @@ function load(seed, startClock = at(8, 26)) {
   Store.recordRound('red', 'red', true);
   Store.recordSession({ ts: at(8, 26), rounds: 1, correct: 1, colors: ['red'] });
   clock.now = at(8, 30);
+  Store.updateProfile(Store.activeProfile().id, { readySeen: 'blue' });
   Store.resetProgress(Store.activeProfile().id);
   const p = Store.activeProfile();
   assert.deepEqual(plain(p.history), []);
+  // The active colours survive a reset, so the next colour is the same one:
+  // a remembered readySeen would hide the alert when the child earns it again.
+  assert.equal(p.readySeen, null, 'reset forgets which ready colour the grown-up was shown');
   assert.deepEqual(plain(p.colorDates), {
     red: { added: '2026-09-30', ready: null }, yellow: { added: '2026-09-30', ready: null },
     blue: { added: '2026-09-30', ready: null },

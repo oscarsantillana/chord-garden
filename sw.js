@@ -16,7 +16,7 @@
 // It carries APP_VERSION from js/app.js (a test in tests/version.test.mjs
 // enforces this) — browsers decide a new sw.js exists by diffing this file's
 // bytes, so the version has to live here literally, not in an imported script.
-const CACHE_NAME = 'rainbow-pitch-v0.9.0';
+const CACHE_NAME = 'rainbow-pitch-v0.9.1';
 
 // The local app shell: everything needed to boot the app with no network.
 const APP_SHELL = [
@@ -153,23 +153,29 @@ self.addEventListener('fetch', (event) => {
 
   // Only the app's two entry URLs share the main document cache. Other
   // pages (including the acceptance tool) keep their own navigation behavior.
+  //
+  // Cache-first, like the rest of the shell: index.html names its scripts by
+  // unversioned paths, so it must come from the same release as the cached
+  // js/ and css/ beside it. Network-first served a newer index.html (and wrote
+  // it into this older release's cache) while this worker still controlled
+  // the page, running new markup against old scripts until the update was
+  // applied. A new release precaches its own index.html at install, and
+  // js/updates.js switches to it on Home.
   if (request.mode === 'navigate') {
     if (url.origin !== APP_ROOT.origin ||
         (url.pathname !== APP_ROOT.pathname && url.pathname !== new URL(INDEX_URL).pathname)) return;
-    event.respondWith(
-      fetch(request).then(async res => {
-        if (res.ok) {
-          try {
-            const cache = await caches.open(CACHE_NAME);
-            await cache.put(INDEX_URL, res.clone());
-          } catch (error) { /* Cache failure must not discard a successful network response. */ }
-        }
-        return res;
-      }).catch(async () => {
-        const cache = await caches.open(CACHE_NAME);
-        return cache.match(INDEX_URL);
-      })
-    );
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(INDEX_URL);
+      if (cached) return cached;
+      const res = await fetch(request);
+      if (res.ok) {
+        try {
+          await cache.put(INDEX_URL, res.clone());
+        } catch (error) { /* Cache failure must not discard a successful network response. */ }
+      }
+      return res;
+    })());
     return;
   }
 

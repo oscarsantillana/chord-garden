@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { fakeDom, fakeClock } from './helpers/fake-dom.mjs';
 const Songs = createRequire(import.meta.url)('../js/songs.js');
 const flush = () => new Promise(resolve => setImmediate(resolve));
-function setup({ micMode = false, deferredMic = false, deferredChord = false, ringing = true, colors = ['red'], navigator = {}, seed = {} } = {}) {
+function setup({ micMode = false, deferredMic = false, deferredChord = false, ringing = true, colors = ['red'], navigator = {}, seed = {}, globals = {} } = {}) {
   // Only the update-check tests below pass a `navigator.serviceWorker` — by
   // default it's {} (no serviceWorker), so js/updates.js's Updates.init()
   // stays inert, same as opening the app via file:// or in an old browser.
@@ -30,7 +30,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
   }
   const sandbox = { console, document, Date: SandboxDate, ...clock, requestAnimationFrame: callback => callback(),
     window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
-    navigator, location,
+    navigator, location, ...globals,
     localStorage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) },
     Sprites: { animals: ['fox', 'owl'], icon: () => '', mascot: () => '', shape: () => '',
       // Reveals whether a caller passed { picture: false } (the flagPictures
@@ -722,6 +722,42 @@ const ariaOf = (node) => node.attrs['aria-label'];
   assert.equal(ariaOf(ui.app.querySelector('.gear')), 'Grown-up area');
 }
 console.log('ok - Home: a ready, unseen child shows the lock dot until the grown-up area is opened');
+
+{
+  // A reset keeps the active colours, so the next colour is the same one.
+  // The grown-up must hear again when the child earns it after a reset.
+  const ui = setup({ seed: seedTwo() });
+  await openGrownUps(ui);
+  assert.equal(ui.store.activeProfile().readySeen, 'yellow');
+  await ui.click('Settings'); await ui.click('Reset this child’s progress'); await ui.click('Reset progress');
+  assert.equal(ui.store.activeProfile().readySeen, null, 'reset forgets the colour the grown-up was shown');
+  for (let i = 0; i < 8; i++) ui.store.recordRound('red', 'red', true);
+  await ui.click('Done');
+  assert.ok(ui.app.querySelector('.gear-dot'), 'the dot returns once the child is ready for yellow again');
+}
+console.log('ok - Home: resetting progress lets the same next colour alert again');
+
+{
+  // WebKit (every iPad browser) reads the blob after click() returns;
+  // revoking the URL on the same tick can cancel the download.
+  const revoked = [], clicked = [];
+  const globals = {
+    Blob: class { constructor(parts, opts) { this.parts = parts; this.type = opts.type; } },
+    URL: { createObjectURL: () => 'blob:export', revokeObjectURL: (url) => revoked.push(url) },
+  };
+  const ui = setup({ globals });
+  await openGrownUps(ui);
+  await ui.click('Progress');
+  const exportBtn = ui.app.querySelectorAll('button').find((b) => b.textContent === 'Export progress (JSON)');
+  const appendChild = ui.document.body.appendChild.bind(ui.document.body);
+  ui.document.body.appendChild = (node) => { if (node.tag === 'a') node.click = () => clicked.push(node.attrs.href); return appendChild(node); };
+  exportBtn.click();
+  assert.deepEqual(clicked, ['blob:export'], 'the download link is clicked');
+  assert.deepEqual(revoked, [], 'the blob URL outlives the click');
+  await ui.clock.tick(60000);
+  assert.deepEqual(revoked, ['blob:export'], 'and is revoked later');
+}
+console.log('ok - Progress: export keeps the blob URL alive past the click');
 
 {
   const ui = setup({ seed: seedTwo({ kidReady: false, sibReady: true }) });

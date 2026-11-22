@@ -43,14 +43,24 @@ function dispatch(path, mode = 'navigate') {
   return response;
 }
 assert.equal(dispatch('tools/real-piano-acceptance/'), undefined, 'tool navigation must use the browser network path');
-assert.equal(await (await cache.match(root + 'index.html')).text(), 'main app');
-assert.equal(await (await dispatch('./')).text(), 'fresh app');
-assert.deepEqual(writes, [root + 'index.html']);
+// index.html names its scripts by unversioned paths, so it must come from the
+// same release as the cached js/ and css/: a newer one on the network must not
+// be served (or written into this release's cache) while this worker runs.
+assert.equal(await (await dispatch('./')).text(), 'main app', 'the cached document wins over a newer one online');
+assert.equal(await (await dispatch('index.html')).text(), 'main app');
+assert.deepEqual(writes, [], 'a newer document never lands in this release\'s cache');
 offline = true;
-assert.equal(await (await dispatch('index.html')).text(), 'fresh app');
-assert.equal(await (await dispatch('./')).text(), 'fresh app');
+assert.equal(await (await dispatch('index.html')).text(), 'main app');
+assert.equal(await (await dispatch('./')).text(), 'main app');
 assert.equal(dispatch('tools/real-piano-acceptance/'), undefined, 'offline tool navigation must not receive the main shell');
-console.log('ok - service worker keeps app and tool documents separate, with an offline app fallback');
+// With nothing cached yet (a failed precache), the network fills the gap.
+offline = false;
+entries.delete(root + 'index.html');
+assert.equal(await (await dispatch('./')).text(), 'fresh app');
+assert.deepEqual(writes, [root + 'index.html'], 'and is stashed for offline use');
+offline = true;
+assert.equal(await (await dispatch('./')).text(), 'fresh app');
+console.log('ok - service worker serves the app document cache-first, kept apart from tool documents');
 
 // The page (js/updates.js) asks a waiting version to take over by posting
 // this message; every other message must be ignored.
