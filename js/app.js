@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.9.0';
+  const APP_VERSION = '0.9.1';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -2148,7 +2148,7 @@
 
   function guardianProgress(body) {
     const p = Store.activeProfile();
-    const days = Logic.dailyAccuracy(p.events, { days: 14 });
+    const days = Logic.dailyAccuracy(p.events, { days: 14, solo: p.activeColors.length < 2 });
     const seen = days.reduce((n, d) => n + d.seen, 0);
     const right = days.reduce((n, d) => n + d.correct, 0);
 
@@ -2256,7 +2256,9 @@
     const url = URL.createObjectURL(blob);
     const a = el('a', { href: url, download: `chord-garden-${p.name}.json` });
     document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
+    // Safari (and every iPad browser, all WebKit) reads the blob after
+    // click() returns; revoking on the same tick can cancel the download.
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   // --- Guardian: Children (profiles) --------------------------------------

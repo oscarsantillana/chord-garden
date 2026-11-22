@@ -211,6 +211,24 @@ function ev(c, a, ok) {
   console.log('ok - dailyAccuracy: buckets digital first attempts by local day');
 }
 
+{
+  // Single-flag rounds are always right, so once there is a choice they would
+  // inflate the Progress chart and 14-day tile, as they did readiness.
+  const now = new Date(2026, 8, 24, 18, 0).getTime();
+  const at = (daysAgo, hour) => new Date(2026, 8, 24 - daysAgo, hour).getTime();
+  const events = [
+    { c: 'red', a: 'yellow', ok: false, ts: at(0, 9) },
+    { c: 'red', a: 'red', ok: true, ts: at(0, 8) },
+    ...Array.from({ length: 8 }, (_, i) => ({ c: 'red', a: 'red', ok: true, ts: at(1, 8 + i), solo: true })),
+    { c: 'red', a: 'red', ok: true, ts: at(2, 9) }, // saved before solo existed: counts
+  ];
+  const days = Logic.dailyAccuracy(events, { days: 3, now });
+  assert.deepEqual(days.map((d) => [d.seen, d.pct]), [[1, 100], [0, null], [2, 50]], 'solo rounds are skipped by default');
+  const listening = Logic.dailyAccuracy(events, { days: 3, now, solo: true });
+  assert.deepEqual(listening.map((d) => [d.seen, d.pct]), [[1, 100], [8, 100], [2, 50]], 'solo: true counts them (one active colour)');
+  console.log('ok - dailyAccuracy skips single-flag rounds unless asked');
+}
+
 // --- dailySets ----------------------------------------------------------------
 
 {

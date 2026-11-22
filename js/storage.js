@@ -230,10 +230,12 @@ const Store = (() => {
 
   function resetProgress(id) {
     // The garden, history and colour dates are progress too; colour dates
-    // start again from today for the colours now active.
+    // start again from today for the colours now active. `readySeen` goes
+    // too: the active colours survive a reset, so the next colour is the same
+    // one, and the grown-up must hear when the child earns it again.
     const p = data.profiles.find((x) => x.id === id);
     updateProfile(id, {
-      stats: {}, sessions: [], events: [], garden: [], history: [],
+      stats: {}, sessions: [], events: [], garden: [], history: [], readySeen: null,
       colorDates: seedColorDates(p ? p.activeColors : []),
     });
   }

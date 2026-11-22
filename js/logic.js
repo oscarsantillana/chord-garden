@@ -116,8 +116,10 @@ const Logic = {
   // First-attempt accuracy per local calendar day for the last `days` days,
   // oldest first, ending with the day containing `now`. Days without practice
   // have seen 0 and pct null. Real-piano rounds are excluded, as everywhere
-  // else in the core accuracy signal.
-  dailyAccuracy(events, { days = 14, now = Date.now() } = {}) {
+  // else in the core accuracy signal, and so are single-flag (`solo`) rounds,
+  // where every tap is right, unless the caller opts in with `solo: true`
+  // (the one-colour listening stage, as in readyColors()).
+  dailyAccuracy(events, { days = 14, now = Date.now(), solo = false } = {}) {
     const end = new Date(now);
     end.setHours(0, 0, 0, 0);
     const buckets = Array.from({ length: days }, (_, i) => {
@@ -127,7 +129,7 @@ const Logic = {
     });
     const first = buckets[0].start;
     events.forEach((e) => {
-      if (e.src === 'mic' || typeof e.ts !== 'number' || e.ts < first || e.ts > now) return;
+      if (e.src === 'mic' || (e.solo && !solo) || typeof e.ts !== 'number' || e.ts < first || e.ts > now) return;
       let i = buckets.length - 1;
       while (i > 0 && e.ts < buckets[i].start) i--;
       buckets[i].seen += 1;

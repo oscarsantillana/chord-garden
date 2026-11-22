@@ -5,8 +5,8 @@
  * installs in the background and waits) are invisible without something on
  * the page side asking a waiting worker to take over and reloading once it
  * does — otherwise, on an installed PWA that never fully closes (common on
- * iPhone/iPad), a family can be stuck on an old version for days while a
- * fresh index.html runs against old cached scripts. This module owns that
+ * iPhone/iPad), a family can be stuck on an old version for days. This
+ * module owns that
  * page-side half: registering sw.js, noticing a waiting update, and
  * switching to it only when app.js says it's safe to (see onChildHome() and
  * the Updates.init/renderHome calls in js/app.js). It never decides WHEN to
