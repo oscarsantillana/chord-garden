@@ -16,7 +16,7 @@
   // release, together with sw.js's CACHE_NAME, which must carry the same
   // version (tests/version.test.mjs enforces this). Shown in Settings →
   // About and compared against Store's persisted seenVersion at boot, below.
-  const APP_VERSION = '0.9.2';
+  const APP_VERSION = '0.10.0';
   // Set once at boot (below) when the persisted seenVersion is a different
   // version — i.e. this app session is running right after an update, not a
   // first install. Read by guardianSettings' About section to show
@@ -182,6 +182,7 @@
       MicCapture.stop();
     }
     stopFlowerSong(); // a flower's song ends when Home does
+    closeSeedPicker(false); // a seed picker ends when Home does
     clear(app);
     clearGarden(); // every screen but Home shows the bare hills — see renderHome for where it's filled back in
     clearTerraces();
@@ -405,7 +406,7 @@
         `width:${slot.w}px;height:${slot.h}px`;
       const flower = el('div', {
         class: slot.far ? 'garden-flower far' : 'garden-flower', style: spot,
-        html: Sprites.plant(stage, swatchesOf(day.colors)),
+        html: Sprites.plant(stage, swatchesOf(day.colors), { species: day.species }),
       });
       layer.appendChild(flower);
       return { flower, stage, day, spot, far: slot.far };
@@ -776,6 +777,129 @@
     if (natural && Updates.hasUpdate() && onChildHome()) Updates.apply();
   }
 
+  // --- Mystery seed picker -------------------------------------------------
+  // On an empty plot (no growing flower and no pendingSeed yet), tapping
+  // today's plot opens three neutral cream-paper packets hiding distinct
+  // flower species. Picking one saves the pending seed straight away (never
+  // waters or logs a set, so it can't be farmed), drops the seed into the
+  // hole, and closes the picker. Holds back app updates while open, like
+  // the echo game.
+  let seedPicker = null;
+
+  function closeSeedPicker(natural = false) {
+    const sp = seedPicker;
+    if (!sp) return;
+    seedPicker = null;
+    sp.timers.forEach((t) => clearTimeout(t));
+    sp.timers = [];
+    if (sp.seedEl) sp.seedEl.remove();
+    if (sp.backdrop) sp.backdrop.remove();
+    if (natural && Updates.hasUpdate() && onChildHome()) Updates.apply();
+  }
+
+  function openSeedPicker(plantEl) {
+    if (seedPicker) return;
+    const p = Store.activeProfile();
+    if (Logic.gardenDays(p.garden).today || p.pendingSeed) return;
+    stopFlowerSong();
+    const generation = screenGeneration;
+    const choices = Logic.seedChoices(p.garden);
+    const sp = { backdrop: null, seedEl: null, timers: [], chosen: false };
+    seedPicker = sp;
+
+    const closeBtn = el('button', {
+      class: 'seed-picker-close',
+      'aria-label': I18n.t('seed.closeAria'),
+      html: Sprites.icon('close'),
+      onclick: () => { if (!sp.chosen) closeSeedPicker(true); },
+    });
+
+    const packetBtns = choices.map((choice, i) => el('button', {
+      class: 'seed-packet-btn',
+      'aria-label': I18n.t('seed.packetAria', { n: i + 1 }),
+      html: typeof Sprites.seedPacket === 'function' ? Sprites.seedPacket(choice.pattern) : '',
+      onclick: () => choosePacket(i),
+    }));
+
+    const backdrop = el('div', {
+      class: 'overlay-backdrop',
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-label': I18n.t('seed.pickerAria'),
+      onclick: (e) => { if (e.target === backdrop && !sp.chosen) closeSeedPicker(true); },
+      onkeydown: (e) => { if (e.key === 'Escape' && !sp.chosen) closeSeedPicker(true); },
+    },
+      closeBtn,
+      el('div', { class: 'seed-picker' },
+        el('div', { class: 'seed-packets' }, packetBtns)));
+    sp.backdrop = backdrop;
+    document.body.appendChild(backdrop);
+
+    function choosePacket(index) {
+      if (sp.chosen || seedPicker !== sp || generation !== screenGeneration) return;
+      sp.chosen = true;
+      const choice = choices[index];
+      // Save on the tap itself so leaving mid-animation never loses the pick.
+      Store.setPendingSeed(choice.species);
+      plantEl.classList.remove('wants-seed');
+      plantEl.setAttribute('aria-label', todaysFlowerLabel('planted'));
+      closeBtn.hidden = true;
+      packetBtns.forEach((b, j) => b.classList.add(j === index ? 'chosen' : 'away'));
+
+      const land = () => {
+        if (generation !== screenGeneration) return;
+        plantEl.innerHTML = Sprites.plant('planted', [], { species: choice.species });
+        plantEl.classList.add('planting');
+        const svg = plantEl.querySelector('svg');
+        if (svg && typeof svg.addEventListener === 'function') {
+          svg.addEventListener('animationend', () => plantEl.classList.remove('planting'), { once: true });
+        }
+        Promise.resolve(PianoAudio.playSparkle()).catch(() => {});
+        closeSeedPicker(true);
+      };
+
+      const reduce = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const canAnimate = typeof Element !== 'undefined' && typeof Element.prototype.animate === 'function'
+        && canMeasure(packetBtns[index]) && canMeasure(plantEl);
+      if (reduce || !canAnimate) {
+        land();
+        return;
+      }
+
+      sp.timers.push(setTimeout(() => {
+        if (seedPicker !== sp || generation !== screenGeneration) return;
+        const from = packetBtns[index].getBoundingClientRect();
+        const to = plantEl.getBoundingClientRect();
+        const sx = from.left + from.width * 0.18, sy = from.top + from.height * 0.62;
+        const ex = to.left + to.width * 0.5, ey = to.top + to.height * 0.9;
+        const seedEl = el('div', {
+          class: 'seed-drop',
+          html: typeof Sprites.seed === 'function' ? Sprites.seed(choice.species) : '',
+        });
+        sp.seedEl = seedEl;
+        document.body.appendChild(seedEl);
+        backdrop.remove();
+        sp.backdrop = null;
+        const at = (x, y, r) => `translate(${(x - 11).toFixed(1)}px, ${(y - 12).toFixed(1)}px) rotate(${r}deg)`;
+        const peakX = (sx + ex) / 2, peakY = Math.min(sy, ey) - 60;
+        const anim = seedEl.animate([
+          { transform: at(sx, sy, 0) + ' scale(.6)', opacity: 0, offset: 0 },
+          { transform: at(sx, sy, 0) + ' scale(1)', opacity: 1, offset: 0.08 },
+          { transform: at(peakX, peakY, 200), offset: 0.45, easing: 'ease-in' },
+          { transform: at(ex, ey, 360), offset: 1 },
+        ], { duration: 700, easing: 'ease-out', fill: 'forwards' });
+        const finish = () => {
+          if (seedPicker !== sp) return;
+          seedEl.remove();
+          sp.seedEl = null;
+          land();
+        };
+        anim.finished.then(finish, finish);
+      }, 550));
+    }
+  }
+
   // The big round Play button (home and celebration). The label sits inside
   // the button, under the disc, so the whole thing is one tap target.
   function playButton(label, error) {
@@ -792,7 +916,7 @@
   // without surprising or interrupting anyone — see the Updates.init/
   // renderHome calls below and at the bottom of this file.
   function onChildHome() {
-    return !session && !echo && !!app.querySelector('.home');
+    return !session && !echo && !seedPicker && !!app.querySelector('.home');
   }
 
   // --- "A new colour is ready" signals ------------------------------------
@@ -882,14 +1006,30 @@
     // back hill forever once today is over (see renderGarden).
     const { today } = Logic.gardenDays(p.garden);
     const stage = Logic.plantStage(today ? today.sets : 0);
+    const pendingSpecies = !today && p.pendingSeed ? p.pendingSeed : null;
+    const wantsSeed = !today && !pendingSpecies;
+    const todaySpecies = today ? today.species : (pendingSpecies || 'daisy');
+    const displayStage = pendingSpecies ? 'planted' : stage;
     const todayColors = today ? today.colors : [];
+    const cueIndex = Math.abs((homeDay || '').split('').reduce((h, ch) => ((h * 31) + ch.charCodeAt(0)) | 0, 0)) % Logic.PACKET_PATTERNS.length;
     const todayPlant = el('button', {
-      class: 'today-plant', 'aria-label': todaysFlowerLabel(stage),
-      html: Sprites.plant(stage, swatchesOf(todayColors)),
-      // Tap for today's flower to sing its song; the day key seeds it, so
-      // today's plant sings the same tune all day.
-      onclick: () => playFlowerSong(todayPlant, Songs.visibleColors(stage, todayColors), today ? today.day : Logic.dayKey(Date.now())),
-    });
+      class: 'today-plant' + (wantsSeed ? ' wants-seed' : ''),
+      'aria-label': wantsSeed ? I18n.t('seed.pickAria') : todaysFlowerLabel(displayStage),
+      html: Sprites.plant(displayStage, swatchesOf(todayColors), { species: todaySpecies }),
+      // Empty plot with no seed chosen: open the mystery-seed picker.
+      // Once a seed is planted or growing: tap to wiggle / sing its song.
+      onclick: () => {
+        const cur = Store.activeProfile();
+        if (!Logic.gardenDays(cur.garden).today && !cur.pendingSeed) {
+          openSeedPicker(todayPlant);
+          return;
+        }
+        playFlowerSong(todayPlant, Songs.visibleColors(stage, todayColors), today ? today.day : Logic.dayKey(Date.now()));
+      },
+    }, wantsSeed ? el('span', {
+      class: 'seed-cue', 'aria-hidden': 'true',
+      html: typeof Sprites.seedPacket === 'function' ? Sprites.seedPacket(Logic.PACKET_PATTERNS[cueIndex]) : '',
+    }) : null);
 
     const startError = el('p', { class: 'start-error', hidden: true },
       I18n.t('errors.startError'));
@@ -1809,7 +1949,9 @@
     // still looks and feels like any other calm ending.
     let watering = null;
     if (session.played > 0) {
-      const before = Logic.plantStage((Logic.gardenDays(Store.activeProfile().garden).today || { sets: 0 }).sets);
+      const prof = Store.activeProfile();
+      const beforeEntry = Logic.gardenDays(prof.garden).today;
+      const before = beforeEntry ? Logic.plantStage(beforeEntry.sets) : (prof.pendingSeed ? 'planted' : 0);
       Store.recordSession({
         ts: Date.now(),
         rounds: session.played,
@@ -1822,7 +1964,7 @@
       syncIconBadge(); // this set may have made the child ready for a new colour
       if (!early) {
         const today = Logic.gardenDays(Store.activeProfile().garden).today;
-        watering = { before, after: Logic.plantStage(today.sets), colors: today.colors };
+        watering = { before, after: Logic.plantStage(today.sets), colors: today.colors, species: today.species };
       }
     }
     renderCelebration(early, session.colors, watering);
@@ -1863,7 +2005,7 @@
     const hint = el('p', { class: 'cele-hint' }, I18n.t('celebrate.waterHint'));
     const plant = el('div', {
       class: 'cele-plant', role: 'img', 'aria-label': todaysFlowerLabel(watering.before),
-      html: Sprites.plant(watering.before, swatches),
+      html: Sprites.plant(watering.before, swatches, { species: watering.species }),
     });
     const can = el('button', {
       class: 'water-can', 'aria-label': I18n.t('celebrate.waterAria'), html: Sprites.icon('can'),
@@ -1896,15 +2038,16 @@
       hint.classList.add('hidden');
       setTimeout(() => {
         if (generation !== screenGeneration) return;
-        plant.innerHTML = Sprites.plant(watering.after, swatches);
+        plant.innerHTML = Sprites.plant(watering.after, swatches, { species: watering.species });
         plant.setAttribute('aria-label', todaysFlowerLabel(watering.after));
         plant.classList.remove('grow');
         void plant.offsetWidth; // restart the grow animation
         plant.classList.add('grow');
         PianoAudio.playSparkle();
-        title.textContent = watering.after === 5 && watering.before < 5
+        const beforeNum = watering.before === 'planted' ? 0 : watering.before;
+        title.textContent = watering.after === 5 && beforeNum < 5
           ? I18n.t('celebrate.bloomed')
-          : watering.after > watering.before ? I18n.t('celebrate.itGrew') : I18n.t('celebrate.lovesIt');
+          : watering.after > beforeNum ? I18n.t('celebrate.itGrew') : I18n.t('celebrate.lovesIt');
         if (watering.after === 5) garden.classList.add('bloomed');
         actions.classList.remove('waiting');
       }, 900);

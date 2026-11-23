@@ -62,11 +62,18 @@ const I18n = (() => {
       // ---- the growing garden's plant stages (child + celebration) -----
       'flower.today': "Today's flower: {stage}",
       'flower.stage.0': 'not planted yet',
+      'flower.stage.planted': 'a planted seed',
       'flower.stage.1': 'a seed',
       'flower.stage.2': 'a sprout',
       'flower.stage.3': 'growing leaves',
       'flower.stage.4': 'a bud',
       'flower.stage.5': 'in bloom',
+
+      // ---- Mystery seeds (child Home picker) ------------------------------
+      'seed.pickAria': 'Pick a mystery seed',
+      'seed.pickerAria': 'Pick a mystery seed',
+      'seed.packetAria': 'Mystery seed {n}',
+      'seed.closeAria': 'Close',
 
       // ---- Home (child start) -------------------------------------------
       'home.play': 'Play',
@@ -341,11 +348,17 @@ const I18n = (() => {
 
       'flower.today': 'La flor de hoy: {stage}',
       'flower.stage.0': 'todavía sin plantar',
+      'flower.stage.planted': 'una semilla plantada',
       'flower.stage.1': 'una semilla',
       'flower.stage.2': 'un brote',
       'flower.stage.3': 'con hojas',
       'flower.stage.4': 'un capullo',
       'flower.stage.5': 'en flor',
+
+      'seed.pickAria': 'Elegir una semilla misteriosa',
+      'seed.pickerAria': 'Elige una semilla misteriosa',
+      'seed.packetAria': 'Semilla misteriosa {n}',
+      'seed.closeAria': 'Cerrar',
 
       'home.play': 'Jugar',
       'home.playAgain': 'Jugar otra vez',

@@ -40,8 +40,10 @@ function loadContext({ withStore = true, seed } = {}) {
 function loadSprites() {
   const sandbox = { console };
   vm.createContext(sandbox);
+  vm.runInContext(read('data') + '\nthis.CHORDS = CHORDS;', sandbox);
+  vm.runInContext(read('songs') + '\nthis.Songs = Songs;', sandbox);
   vm.runInContext(read('sprites') + '\nthis.Sprites = Sprites;', sandbox);
-  return sandbox.Sprites;
+  return { Sprites: sandbox.Sprites, CHORDS: sandbox.CHORDS, Songs: sandbox.Songs };
 }
 
 const countOf = (svg, cls) => (svg.match(new RegExp(`class="${cls}"`, 'g')) || []).length;
@@ -310,7 +312,7 @@ function plain(value) {
 // --- Sprites.flag: the picture option ----------------------------------------------
 
 {
-  const Sprites = loadSprites();
+  const { Sprites } = loadSprites();
   const { CHORDS } = loadContext({ withStore: false });
   const red = CHORDS.find((c) => c.name === 'red'); // apple shape
 
@@ -329,7 +331,7 @@ function plain(value) {
 // --- Sprites.plant: petal counts ----------------------------------------------------
 
 {
-  const Sprites = loadSprites();
+  const { Sprites } = loadSprites();
   const expected = { 1: 6, 2: 6, 3: 6, 4: 8, 5: 5, 6: 6, 9: 9, 10: 10, 14: 14 };
   Object.entries(expected).forEach(([n, count]) => {
     const swatches = Array.from({ length: Number(n) }, (_, i) => `#${String(i + 1).padStart(6, '0')}`);
@@ -342,7 +344,7 @@ function plain(value) {
 // --- Sprites.plant: stages 0-3 have no petals ---------------------------------------
 
 {
-  const Sprites = loadSprites();
+  const { Sprites } = loadSprites();
   [0, 1, 2, 3].forEach((stage) => {
     const svg = Sprites.plant(stage, ['#e6304b']);
     assert.equal(countOf(svg, 'petal'), 0, `stage ${stage}`);
@@ -353,7 +355,7 @@ function plain(value) {
 // --- Sprites.plant: stage 4 bud-tip counts ------------------------------------------
 
 {
-  const Sprites = loadSprites();
+  const { Sprites } = loadSprites();
   const two = Sprites.plant(4, ['#e6304b', '#ffd21e']);
   assert.equal(countOf(two, 'bud-tip'), 2, '2 colours -> 2 tips');
   const nine = Sprites.plant(4, Array.from({ length: 9 }, (_, i) => `#${String(i + 1).padStart(6, '0')}`));
@@ -364,7 +366,7 @@ function plain(value) {
 // --- Sprites.plant: stage 5 includes every practised swatch -------------------------
 
 {
-  const Sprites = loadSprites();
+  const { Sprites } = loadSprites();
   const svg = Sprites.plant(5, ['#e6304b', '#ffd21e']);
   assert.ok(svg.includes('#e6304b'), 'red swatch present');
   assert.ok(svg.includes('#ffd21e'), 'yellow swatch present');
@@ -374,7 +376,7 @@ function plain(value) {
 // --- Sprites.plant: stage is clamped -------------------------------------------------
 
 {
-  const Sprites = loadSprites();
+  const { Sprites } = loadSprites();
   const over = Sprites.plant(7, ['#e6304b']);
   assert.ok(countOf(over, 'petal') > 0, 'stage clamps up to 5 (bloom)');
   const under = Sprites.plant(-1, ['#e6304b']);
@@ -387,9 +389,139 @@ function plain(value) {
 // --- Sprites.icon: can -----------------------------------------------------------------
 
 {
-  const Sprites = loadSprites();
+  const { Sprites } = loadSprites();
   assert.ok(Sprites.icon('can').includes('can-water'));
   console.log('ok - Sprites.icon: can icon includes the can-water fill rect');
+}
+
+// --- Mystery seeds: Logic.seedChoices / pickSpecies -----------------------------------
+
+{
+  const { Logic } = loadContext({ withStore: false });
+  const choices = plain(Logic.seedChoices([
+    { day: '2026-09-20', sets: 5, colors: ['red'] }, // no species -> counts as daisy
+    { day: '2026-09-21', sets: 5, colors: ['red'], species: 'daisy' },
+  ], () => 0.4));
+  assert.equal(choices.length, 3);
+  assert.equal(new Set(choices.map((c) => c.species)).size, 3, 'three distinct species');
+  assert.equal(new Set(choices.map((c) => c.pattern)).size, 3, 'three distinct packet patterns');
+  assert.equal(choices.some((c) => c.species === 'daisy'), false, 'existing daisies steer new picks to unseen species');
+
+  // Once all 6 species have been seen, the three least-recently-grown lead.
+  const allSeen = [
+    { day: '2026-09-26', sets: 5, colors: ['red'], species: 'bellflower' },
+    { day: '2026-09-25', sets: 5, colors: ['red'], species: 'pinwheel' },
+    { day: '2026-09-24', sets: 5, colors: ['red'], species: 'starflower' },
+    { day: '2026-09-23', sets: 5, colors: ['red'], species: 'sunflower' },
+    { day: '2026-09-22', sets: 5, colors: ['red'], species: 'tulip' },
+    { day: '2026-09-21', sets: 5, colors: ['red'], species: 'daisy' },
+  ];
+  const next = plain(Logic.seedChoices(allSeen, () => 0.2));
+  assert.deepEqual(next.map((c) => c.species).sort(), ['daisy', 'sunflower', 'tulip']);
+  assert.ok(Logic.SPECIES.includes(Logic.pickSpecies(allSeen, () => 0.5)));
+  console.log('ok - Logic.seedChoices: prefers unseen species first, then least-recently-grown');
+}
+
+// --- Mystery seeds: Store migration & pendingSeed lifecycle ---------------------------
+
+{
+  const oldData = {
+    version: 12,
+    activeProfileId: 'p1',
+    pin: '2468',
+    profiles: [{
+      id: 'p1', name: 'Kid', avatar: 'fox',
+      activeColors: ['red', 'yellow'], roundsPerSet: 20, realPianoMode: false, flagPictures: true, pianoVariety: true,
+      stats: {}, sessions: [], events: [],
+      garden: [{ day: '2026-09-20', sets: 5, colors: ['red', 'yellow'] }],
+      history: [], colorDates: {}, readySeen: null,
+    }],
+  };
+  const { Store } = loadContext({ seed: { 'rainbow-pitch:v1': JSON.stringify(oldData) } });
+  const p = Store.activeProfile();
+  assert.equal(Store.all().version, 13);
+  assert.equal(p.garden[0].species, 'daisy', 'older garden entries stay daisies');
+  assert.equal(p.pendingSeed, null);
+
+  Store.setPendingSeed('sunflower');
+  assert.equal(p.pendingSeed, 'sunflower');
+  assert.equal(p.garden.length, 1, 'picking a seed never waters or creates a plant');
+
+  // An early stop leaves pendingSeed untouched.
+  const todayTs = new Date(2026, 8, 26, 10, 0).getTime();
+  Store.recordSession({ ts: todayTs, rounds: 2, correct: 2, colors: ['red'], early: true });
+  assert.equal(p.pendingSeed, 'sunflower');
+  assert.equal(p.garden.length, 1);
+
+  // A finished set consumes pendingSeed and stamps its species on the new plant.
+  Store.recordSession({ ts: todayTs + 1000, rounds: 20, correct: 20, colors: ['red', 'yellow'] });
+  assert.equal(p.pendingSeed, null);
+  assert.equal(p.garden.length, 2);
+  assert.equal(p.garden[0].species, 'sunflower');
+  assert.equal(p.garden[0].sets, 1);
+
+  // Later sets on the same plant keep its species.
+  Store.recordSession({ ts: todayTs + 2000, rounds: 20, correct: 20, colors: ['red', 'yellow'] });
+  assert.equal(p.garden[0].species, 'sunflower');
+  assert.equal(p.garden[0].sets, 2);
+
+  // Resetting progress clears pendingSeed too.
+  Store.setPendingSeed('tulip');
+  Store.resetProgress(p.id);
+  assert.equal(p.pendingSeed, null);
+  console.log('ok - Store: v12->v13 keeps old flowers as daisies and consumes pendingSeed on finished sets');
+}
+
+// --- Mystery seeds: Sprites invariants across all 6 species x 1..14 colours -----------
+
+{
+  const { Sprites, CHORDS, Songs } = loadSprites();
+  const HEX = CHORDS.map((c) => c.swatch.toLowerCase());
+  const tags = (svg) => [...svg.matchAll(/<([a-zA-Z]+)([^>]*)>/g)].map(([, name, attrs]) => ({
+    name, attrs,
+    cls: (attrs.match(/class="([^"]*)"/) || [])[1] || '',
+    fill: ((attrs.match(/\sfill="([^"]*)"/) || [])[1] || '').toLowerCase(),
+  }));
+  const setOf = (a) => [...new Set(a)].sort();
+
+  for (const species of Sprites.SPECIES) {
+    assert.equal(Sprites.plant(5, ['#e6304b'], species), Sprites.plant(5, ['#e6304b'], { species }));
+    for (let n = 1; n <= 14; n++) {
+      const pick = CHORDS.slice(0, n);
+      const sw = pick.map((c) => c.swatch);
+      for (const st of ['planted', 0, 1, 2, 3, 4, 5]) {
+        const svg = Sprites.plant(st, sw, { species });
+        const t = tags(svg);
+        const petals = t.filter((x) => /\bpetal\b/.test(x.cls));
+        const tips = t.filter((x) => /\bbud-tip\b/.test(x.cls));
+        assert.ok(!/\sid="|<defs|clipPath|<mask|fill-opacity|<use/.test(svg), `${species} ${st}: clean SVG`);
+        for (const x of t) for (const h of HEX) {
+          if (!x.attrs.toLowerCase().includes(h)) continue;
+          assert.ok((/\bpetal\b|\bbud-tip\b/.test(x.cls)) && x.fill === h, `${species} n=${n} st=${st}: chord ${h} only on petal/bud-tip`);
+        }
+        if (st === 5) {
+          assert.deepEqual(setOf(petals.map((p) => p.fill)), setOf(sw.map((s) => s.toLowerCase())), `${species} n=${n}: every colour has a petal`);
+          assert.equal(tips.length, 0);
+        } else if (st === 4) {
+          const vis = Songs.visibleColors(4, pick.map((c) => c.name)).map((nm) => CHORDS.find((c) => c.name === nm).swatch.toLowerCase());
+          assert.deepEqual(setOf(tips.map((p) => p.fill)), setOf(vis), `${species} n=${n}: bud tips match Songs.visibleColors`);
+          assert.equal(petals.length, 0);
+        } else {
+          assert.equal(petals.length + tips.length, 0);
+          assert.ok(svg.includes('plant-soil'));
+        }
+      }
+    }
+    const planted = Sprites.plant('planted', [], { species });
+    assert.ok(planted.includes('plant-seed') && planted.includes('plant-soil') && !planted.includes('plant-stem'));
+    for (const h of HEX) assert.ok(!Sprites.seed(species).toLowerCase().includes(h), `${species} seed uses no chord colour`);
+  }
+  for (const pat of Sprites.PACKET_NAMES) {
+    const svg = Sprites.seedPacket(pat);
+    for (const h of HEX) assert.ok(!svg.toLowerCase().includes(h), `packet ${pat} uses no chord colour`);
+    assert.ok(!/<text|\sid="/.test(svg), `packet ${pat} has no text or ids`);
+  }
+  console.log('ok - Sprites: all 6 species x 1..14 colours, seeds and packets satisfy petal and colour invariants');
 }
 
 console.log('\nAll garden.test.mjs assertions passed.');
