@@ -324,6 +324,54 @@ const Logic = {
       .filter((n) => index.has(n))
       .sort((a, b) => index.get(a) - index.get(b));
   },
+
+  // ---- Mystery seeds ------------------------------------------------------
+  // Six flower species the garden can grow; 'daisy' is the original flower
+  // and remains the fallback for every older garden entry saved without one.
+  SPECIES: ['daisy', 'tulip', 'sunflower', 'starflower', 'pinwheel', 'bellflower'],
+  PACKET_PATTERNS: ['stripes', 'dots', 'swirl', 'stars', 'waves', 'zigzag'],
+
+  normalizeSpecies(name) {
+    return typeof name === 'string' && Logic.SPECIES.includes(name) ? name : 'daisy';
+  },
+
+  // Build `count` (default 3) mystery seed packets: distinct species paired
+  // with distinct neutral ink patterns. Species never yet seen in `garden`
+  // come first (so a child discovers every new flower before seeing repeats);
+  // after that, least-recently-grown species lead. Entries without a species
+  // count as 'daisy', matching how existing gardens render.
+  seedChoices(garden, rand = Math.random, count = 3) {
+    const shuffle = (arr) => {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    };
+    const lastDay = new Map();
+    (Array.isArray(garden) ? garden : []).forEach((g) => {
+      if (!g) return;
+      const sp = Logic.normalizeSpecies(g.species);
+      const day = typeof g.day === 'string' ? g.day : '';
+      if (!lastDay.has(sp) || day > lastDay.get(sp)) lastDay.set(sp, day);
+    });
+    const unseen = shuffle(Logic.SPECIES.filter((s) => !lastDay.has(s)));
+    const seen = shuffle(Logic.SPECIES.filter((s) => lastDay.has(s)))
+      .sort((a, b) => (lastDay.get(a) < lastDay.get(b) ? -1 : lastDay.get(a) > lastDay.get(b) ? 1 : 0));
+    const n = Math.min(count, Logic.SPECIES.length);
+    const chosen = shuffle([...unseen, ...seen].slice(0, n));
+    const patterns = shuffle(Logic.PACKET_PATTERNS).slice(0, n);
+    return chosen.map((species, i) => ({ species, pattern: patterns[i] }));
+  },
+
+  // Automatic species pick when a child taps Play without opening the seed
+  // picker first: picks randomly among unseen species when any remain, or
+  // among the least-recently-grown species once all have been discovered.
+  pickSpecies(garden, rand = Math.random) {
+    const choices = Logic.seedChoices(garden, rand, 3);
+    return choices[0].species;
+  },
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Logic;

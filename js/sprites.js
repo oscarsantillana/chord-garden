@@ -263,6 +263,7 @@ const Sprites = (() => {
     // Grown-up UI glyphs, drawn to replace text characters (‹ ⬇ ⌫) that
     // render differently in every font.
     back: svg(`<path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`, '0 0 24 24'),
+    close: svg(`<path d="M6 6 L18 18 M18 6 L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>`, '0 0 24 24'),
     chevron: svg(`<path d="M6 9 L12 15 L18 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`, '0 0 24 24'),
     download: svg(`
       <path d="M12 4 V15 M7 10.5 L12 15.5 L17 10.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -484,7 +485,362 @@ const Sprites = (() => {
       + `<circle cx="0" cy="0" r="${r2}" fill="#EAD7A6" stroke="none"/></g>`;
   }
 
-  function plant(stage, swatches) {
+  // ---- Mystery-seed species ----------------------------------------------
+  // Each species draws its own seed, sprout, leaves, bud and bloom on the
+  // same 60×90 canvas as the daisy (soil centred at x=30, y≈86). The daisy
+  // stays the default and its stages 0–5 are byte-identical to before.
+  //
+  // Petal contract, same as the daisy (app.js petalsOf / glowPetals /
+  // chordOfPetal): every .petal / .bud-tip carries its own exact swatch in a
+  // `fill` attribute (never style, never inherited, never fill-opacity — that
+  // attribute belongs to glowPetals). Nothing is drawn over a petal except a
+  // small flower centre. No ids, <defs>, clipPath or mask: the echo game
+  // clones the SVG. Chord colours appear nowhere else.
+
+  const SPECIES = ['daisy', 'tulip', 'sunflower', 'starflower', 'pinwheel', 'bellflower'];
+
+  const OUTLINE = 'stroke="#1F3A2E" stroke-opacity=".22" stroke-width="1"';
+  const CREAM = '#FFF4D6';
+  const sLeaf = 'fill:var(--leaf,#6FA656)';
+  const sSoil = 'fill:var(--soil,#9B7650)';
+  const sSoilDark = 'fill:var(--soil-dark,#7A5B3D)';
+  const sVine = 'stroke:var(--vine,#5E8F46)';
+  const r2 = round2;
+  const rad = (deg) => (deg * Math.PI) / 180;
+  const at = (list, i) => list[i % list.length];
+
+  const leafD = (d) => `<path class="plant-leaf" d="${d}" style="${sLeaf}"/>`;
+  const stemD = (d, w) => `<path class="plant-stem" d="${d}" style="${sVine}" stroke-width="${w}" fill="none" stroke-linecap="round"/>`;
+  const veinD = (d) => `<path d="${d}" style="${sVine}" stroke-width=".8" fill="none" stroke-linecap="round" opacity=".7"/>`;
+  const plot = '<ellipse class="plant-soil" cx="30" cy="86" rx="15" ry="5.5" style="fill:var(--soil,#9B7650)"/>'
+    + '<ellipse cx="30" cy="84.5" rx="5" ry="1.8" style="fill:var(--soil-dark,#7A5B3D)"/>';
+  const mound = '<ellipse class="plant-soil" cx="30" cy="86" rx="15" ry="6" style="fill:var(--soil,#9B7650)"/>';
+  const soilTop = '<ellipse class="plant-soil" cx="30" cy="87" rx="13" ry="4.5" style="fill:var(--soil,#9B7650)"/>';
+
+  // The colours a closed bud shows — mirrors budTips() and
+  // Songs.visibleColors(4, …): 1 colour → two tips of it, 2 → both,
+  // 3+ → first, middle, last.
+  function budColors(swatches) {
+    const n = swatches.length;
+    if (n <= 1) { const c = swatches[0] || '#FFFFFF'; return [c, c]; }
+    if (n === 2) return swatches.slice();
+    return [swatches[0], swatches[Math.floor((n - 1) / 2)], swatches[n - 1]];
+  }
+
+  // ---- Seeds: drawn around (0,0), ~12 units tall. Neutral earth tones and
+  // cream only, so they never read as a chord colour.
+  const SEEDS = {
+    daisy: '<ellipse class="plant-seed" cx="0" cy="0" rx="4.2" ry="5.4" fill="#C9A26B"/>',
+    // A papery bulb: wide shoulders, flat base, tunic lines, cream roots.
+    tulip: '<path d="M-2 5.6 l-1.3 2.2 M0 5.9 v2.6 M2 5.6 l1.3 2.2" stroke="#EFE3C8" stroke-width="1" stroke-linecap="round" fill="none"/>'
+      + '<path class="plant-seed" d="M0 -6.6 C1.2 -4.4 6.2 -3.2 6.2 1.4 C6.2 4.8 3.6 6.1 0 6.1 C-3.6 6.1 -6.2 4.8 -6.2 1.4 C-6.2 -3.2 -1.2 -4.4 0 -6.6 Z" fill="#C68A56"/>'
+      + '<path d="M-2.8 -2.4 C-3.9 0 -3.7 3 -2.4 5.4 M2.8 -2.4 C3.9 0 3.7 3 2.4 5.4 M0 -6.6 L.5 -8.4" stroke="#7A4E2C" stroke-opacity=".55" stroke-width=".9" stroke-linecap="round" fill="none"/>',
+    // Striped almond, lying tilted.
+    sunflower: '<g transform="rotate(32)"><path class="plant-seed" d="M0 -7 C3.9 -4.6 4 2.6 0 7 C-4 2.6 -3.9 -4.6 0 -7 Z" fill="#4B4540"/>'
+      + '<path d="M-1.7 -4.2 C-2.3 -.5 -1.9 2.8 -.7 5.3 M1.7 -4.2 C2.3 -.5 1.9 2.8 .7 5.3" stroke="#F2E6CC" stroke-width="1.05" stroke-linecap="round" fill="none"/></g>',
+    // Slender curved seed with a little cream tuft.
+    starflower: '<g transform="rotate(-18)"><path class="plant-seed" d="M-1.6 -6.4 C3.4 -3.6 3.6 3 .4 7 C1.2 2.6 .2 -2.4 -2.6 -5.4 Z" fill="#6E5843"/>'
+      + '<path d="M-2.1 -5.9 l-1.9 -2.2 M-2.1 -5.9 l-.2 -2.9 M-2.1 -5.9 l1.4 -2.4" stroke="#EFE3C8" stroke-width=".9" stroke-linecap="round" fill="none"/></g>',
+    // Plump round seed with the swirl its flower will wear.
+    pinwheel: '<circle class="plant-seed" cx="0" cy="0" r="4.9" fill="#B88A5C"/>'
+      + '<path d="M0 0 C1.4 0 1.5 -1.7 0 -1.8 C-2.1 -1.9 -2.6 1 -.8 2.4 C1.6 4 4.1 1.5 3.3 -1.3" stroke="#F4E7CC" stroke-width="1.1" stroke-linecap="round" fill="none"/>',
+    // A little cluster of three tiny seeds.
+    bellflower: '<circle class="plant-seed" cx="-3" cy="1.8" r="2.5" fill="#7B5A3E"/><circle class="plant-seed" cx="3" cy="2.2" r="2.4" fill="#7B5A3E"/><circle class="plant-seed" cx="0" cy="-2.2" r="2.6" fill="#7B5A3E"/>'
+      + '<circle cx="-3.7" cy="1" r=".7" fill="#EFE3C8"/><circle cx="2.3" cy="1.4" r=".7" fill="#EFE3C8"/><circle cx="-.7" cy="-3" r=".75" fill="#EFE3C8"/>',
+  };
+  const seedAt = (species, x, y) => `<g transform="translate(${x} ${y})">${SEEDS[species] || SEEDS.daisy}</g>`;
+
+  // Stage 1's first green: a spear for the bulb, a little hook for the rest.
+  const peek = (species) => (species === 'tulip'
+    ? leafD('M29.2 80.5 C29.2 77 29.8 74 30.8 71 C31.8 74 32.2 77 31.8 80.5 Z')
+    : stemD('M30 80 C29.6 77 30.6 74.8 32.6 74', 1.8)
+      + leafD('M32.6 74 C34.8 72.4 36.6 73 37.1 74.5 C35.2 75.4 33.7 75.1 32.6 74 Z'));
+
+  // ---- Per-species foliage (stems + leaves, soil last) for stages 2-5 ----
+  const FOLIAGE = {
+    tulip: {
+      2: leafD('M29.5 86 C26 80 25 72 26.5 64 C28.8 70 30.2 78 31 86 Z') + leafD('M30.5 86 C33 81 34.6 75 34 68 C32 73 30.8 79 29.8 86 Z'),
+      3: stemD('M30 87 C30 74 30 60 30 48', 3)
+        + leafD('M29 86 C21 80 17 66 19 50 C23 60 27 72 31 84 Z') + leafD('M31 86 C38 80 42 70 41 58 C37 66 33 75 29.5 84 Z'),
+      4: stemD('M30 87 C30 72 30 54 30 38', 3.2)
+        + leafD('M29 86 C19 80 14 64 16 44 C21 56 26 70 31 84 Z') + leafD('M31 86 C40 79 45 66 43 52 C38 62 34 72 29.5 84 Z'),
+    },
+    sunflower: {
+      2: stemD('M30 86 C30 80 30 75 30 70', 3.6)
+        + leafD('M30 71 C25 72.6 19.5 71 18 67.5 C21 64.8 27 65.8 30 70 Z') + leafD('M30 71 C35 72.6 40.5 71 42 67.5 C39 64.8 33 65.8 30 70 Z')
+        + `<g transform="translate(35 64.5) scale(.62) rotate(-60)">${SEEDS.sunflower}</g>`,
+      3: stemD('M30 87 C30 74 30 60 30 46', 4.2)
+        + leafD('M30 73 C26 77 16 79 9.5 72.5 C13.5 66 18.5 62.5 24 63.5 C27.5 64.5 29.5 68 30 73 Z') + veinD('M30 72 C24 70 17 70 12 72')
+        + leafD('M30 62 C34 66 44 68 50.5 61.5 C46.5 55 41.5 51.5 36 52.5 C32.5 53.5 30.5 57 30 62 Z') + veinD('M30 61 C36 59 43 59 48 61')
+        + leafD('M30 50 C27 52.5 22 52.5 19.5 49 C22 45.5 26.5 45 30 48 Z') + leafD('M30 50 C33 52.5 38 52.5 40.5 49 C38 45.5 33.5 45 30 48 Z'),
+      4: stemD('M30 87 C30 72 30.5 54 30 38', 4.6)
+        + leafD('M30 74 C26 78 15 80 8.5 73.5 C12.5 67 17.5 63.5 23.5 64.5 C27.5 65.5 29.5 69 30 74 Z') + veinD('M30 73 C24 71 16 71 11 73')
+        + leafD('M30 62 C34 66 45 68 51.5 61.5 C47.5 55 42.5 51.5 36.5 52.5 C32.5 53.5 30.5 57 30 62 Z') + veinD('M30 61 C36 59 44 59 49 61'),
+    },
+    starflower: {
+      2: stemD('M30 86 C30 80 30.5 75 30 70', 2.2)
+        + leafD('M30 74 C26 72 22.5 67.5 21.5 62 C25 65 28.5 69 30 72 Z') + leafD('M30 74 C34 72 37.5 67.5 38.5 62 C35 65 31.5 69 30 72 Z'),
+      3: stemD('M30 87 C30 74 30 60 30 46', 2.6)
+        + leafD('M30 73 C24 72 18 69 13.5 62.5 C20 65 26 68 30 70.5 Z') + leafD('M30 73 C36 72 42 69 46.5 62.5 C40 65 34 68 30 70.5 Z')
+        + leafD('M30 59 C25.5 58 21 55 18.5 49.5 C23 52 27 54.5 30 56.5 Z') + leafD('M30 59 C34.5 58 39 55 41.5 49.5 C37 52 33 54.5 30 56.5 Z'),
+      4: stemD('M30 87 C30 72 30 54 30 38', 2.6)
+        + leafD('M30 74 C24 73 18 70 13.5 63.5 C20 66 26 69 30 71.5 Z') + leafD('M30 74 C36 73 42 70 46.5 63.5 C40 66 34 69 30 71.5 Z')
+        + leafD('M30 61 C25.5 60 21 57 18.5 51.5 C23 54 27 56.5 30 58.5 Z') + leafD('M30 61 C34.5 60 39 57 41.5 51.5 C37 54 33 56.5 30 58.5 Z'),
+    },
+    pinwheel: {
+      2: stemD('M30 86 C30 81 31 77 30 73 C29.3 70 31.6 68.4 33.2 70.2', 2.4)
+        + stemD('M30 79 L25 77', 1.6) + `<circle class="plant-leaf" cx="22.5" cy="76" r="4" style="${sLeaf}"/>`
+        + stemD('M30.4 75 L35 73', 1.6) + `<circle class="plant-leaf" cx="37.5" cy="72" r="3.6" style="${sLeaf}"/>`,
+      3: stemD('M30 87 C33 76 27 64 30 48', 3)
+        + stemD('M31 75 L22 72', 1.8) + `<circle class="plant-leaf" cx="18" cy="70.5" r="5.8" style="${sLeaf}"/>` + veinD('M18 70.5 l-3 -3.6 M18 70.5 l-4.2 1.4 M18 70.5 l-.6 4.4 M18 70.5 l3.6 1.4')
+        + stemD('M29.6 63 L38 60', 1.8) + `<circle class="plant-leaf" cx="42" cy="59" r="5.2" style="${sLeaf}"/>` + veinD('M42 59 l3 -3.4 M42 59 l3.9 1.4 M42 59 l.4 4.2 M42 59 l-3.4 1.6')
+        + stemD('M29.5 54 C26 53.5 24 50 25.5 47.5 C27 45.5 29.5 47 28.4 48.6', 1.3),
+      4: stemD('M30 87 C33 74 27 56 30 38', 3)
+        + stemD('M31.2 75 L21.5 72', 1.8) + `<circle class="plant-leaf" cx="17" cy="70.5" r="6.2" style="${sLeaf}"/>` + veinD('M17 70.5 l-3.2 -3.8 M17 70.5 l-4.4 1.5 M17 70.5 l-.6 4.6 M17 70.5 l3.8 1.4')
+        + stemD('M29.4 62 L38.5 59', 1.8) + `<circle class="plant-leaf" cx="43" cy="58" r="5.6" style="${sLeaf}"/>` + veinD('M43 58 l3.2 -3.6 M43 58 l4.1 1.5 M43 58 l.4 4.4 M43 58 l-3.6 1.7'),
+    },
+    bellflower: {
+      2: stemD('M30 86 C30 80 30 75 30 71 C30 67.5 33.5 66.8 34.6 69.6', 2.4)
+        + leafD('M29.5 86 C25 82 23.5 76 25 70.5 C27.5 75 29.5 80 30.5 85 Z'),
+      3: stemD('M30 87 C30 72 26 58 26 47 C26 41.5 31.5 39.5 33.5 44', 2.6)
+        + leafD('M29.5 86 C21 81 17.5 70 20 57 C25 66 29 76 31 85 Z') + leafD('M30.5 86 C38 82 42 74 40.5 63 C36.5 71 32.5 78 29.5 85 Z'),
+      4: stemD('M30 87 C29 66 19 44 20 27 C19 8 45 3 51 25', 2.6)
+        + leafD('M29.5 86 C20 81 15.5 69 18 54 C24 64 28.5 75 31 85 Z') + leafD('M30.5 86 C39 82 44 72 42.5 60 C38 69 33 78 29.5 85 Z'),
+    },
+  };
+
+  // ---- Per-species heads: stage 4 bud (bud-tips) and stage 5 bloom -------
+  const tulipPetal = (W, H) => `M0 0 C${r2(-W * 1.25)} ${r2(-H * 0.12)} ${r2(-W * 1.15)} ${r2(-H * 0.78)} 0 ${-H} C${r2(W * 1.15)} ${r2(-H * 0.78)} ${r2(W * 1.25)} ${r2(-H * 0.12)} 0 0 Z`;
+  function tulipFan(cls, fills, { A, W, H, px = 30, py = 40 }) {
+    const P = fills.length;
+    const items = fills.map((fill, i) => ({ fill, angle: P > 1 ? -A + (2 * A * i) / (P - 1) : 0 }));
+    return items.slice().sort((a, b) => Math.abs(b.angle) - Math.abs(a.angle))
+      .map((p) => `<path class="${cls}" d="${tulipPetal(W, H)}" fill="${p.fill}" transform="translate(${px} ${py}) rotate(${r2(p.angle)})"/>`).join('');
+  }
+  function tulipHead(stage, colors) {
+    if (stage === 4) {
+      const tips = budColors(colors);
+      const fan = tulipFan('bud-tip', tips, { A: tips.length === 3 ? 8 : 5, W: 4.3, H: 21 });
+      return `<g ${OUTLINE}>${fan}</g>` + `<path d="M23.4 33.5 C23.8 38.6 26.4 41.2 30 41.2 C33.6 41.2 36.2 38.6 36.6 33.5 C34.6 35.6 32.4 36.6 30 36.6 C27.6 36.6 25.4 35.6 23.4 33.5 Z" style="${sLeaf}"/>`;
+    }
+    const n = colors.length;
+    let body;
+    if (n <= 7) {
+      const P = n <= 2 ? 3 : n;
+      const fills = Array.from({ length: P }, (_, i) => at(colors, i));
+      body = tulipFan('petal', fills, { A: P <= 3 ? 20 : Math.min(34, 8.5 * (P - 1)), W: P <= 3 ? 7.5 : P <= 5 ? 6.3 : 5.4, H: 24 });
+    } else {
+      const back = Math.ceil(n / 2);
+      body = tulipFan('petal', colors.slice(0, back), { A: 36, W: 5.4, H: 25.5 })
+        + tulipFan('petal', colors.slice(back), { A: 20, W: 5.8, H: 19, py: 41 });
+    }
+    return `<g ${OUTLINE}>${body}</g>`;
+  }
+
+  const lens = (r0, r1, w) => `M0 ${-r0} C${r2(w)} ${r2(-r0 - 3)} ${r2(w * 0.9)} ${r2(-r1 + 4)} 0 ${-r1} C${r2(-w * 0.9)} ${r2(-r1 + 4)} ${r2(-w)} ${r2(-r0 - 3)} 0 ${-r0} Z`;
+  function ring(cls, fills, { r0, r1, w, offset = 0, cx = 30, cy = 25 }) {
+    const K = fills.length;
+    const d = lens(r0, r1, w);
+    return fills.map((fill, i) => `<path class="${cls}" d="${d}" fill="${fill}" transform="translate(${cx} ${cy}) rotate(${r2(offset + (360 * i) / K)})"/>`).join('');
+  }
+  function sunDisc(r) {
+    let dots = '';
+    for (let i = 1; i <= 16; i++) {
+      const rr = (r - 2) * Math.sqrt(i / 16), a = i * 137.5;
+      dots += `<circle cx="${r2(30 + rr * Math.sin(rad(a)))}" cy="${r2(25 - rr * Math.cos(rad(a)))}" r=".85"/>`;
+    }
+    return `<circle class="plant-heart" cx="30" cy="25" r="${r}" style="${sSoilDark}"/>`
+      + `<g fill="${CREAM}" opacity=".6" stroke="none">${dots}</g>`;
+  }
+  function sunflowerHead(stage, colors) {
+    if (stage === 4) {
+      const tips = budColors(colors);
+      const angles = tips.length === 3 ? [-30, 30, 0] : [-17, 17];
+      const tipEls = tips.map((fill, i) => `<path class="bud-tip" d="${lens(4, 16.5, 3.1)}" fill="${fill}" transform="translate(30 26) rotate(${angles[i]})"/>`).join('');
+      let bracts = '';
+      for (let i = 0; i < 11; i++) bracts += `<path d="M0 -7 L2.4 -7.6 L0 -11.8 L-2.4 -7.6 Z" transform="translate(30 26) rotate(${r2(16 + (360 * i) / 11)})"/>`;
+      return `<g ${OUTLINE}>${tipEls}</g><g style="${sLeaf}">${bracts}</g>`
+        + `<circle cx="30" cy="26" r="8.4" style="${sLeaf}" stroke="#1F3A2E" stroke-opacity=".18"/>`
+        + `<path d="M25.5 23 L34.5 29 M25.5 29 L34.5 23 M30 20 V32" style="${sVine}" stroke-width=".8" opacity=".55"/>`;
+    }
+    const n = colors.length;
+    let petals;
+    if (n <= 8) {
+      const K = n <= 4 ? 12 : 2 * n;
+      const fills = Array.from({ length: K }, (_, i) => at(colors, i));
+      petals = ring('petal', fills, { r0: 6.5, r1: 19.5, w: Math.min(3.2, 42 / K) });
+    } else {
+      const shift = Math.floor(n / 2);
+      petals = ring('petal', colors, { r0: 6.5, r1: 20, w: Math.min(3.2, 44 / n) })
+        + ring('petal', colors.map((_, i) => at(colors, i + shift)), { r0: 6.5, r1: 16.5, w: Math.min(3.1, 42 / n), offset: 180 / n });
+    }
+    return `<g ${OUTLINE}>${petals}${sunDisc(n >= 9 ? 8.2 : 8.8)}</g>`;
+  }
+
+  const ray = (L, w, r0 = 2.5) => `M0 ${-r0} C${w} -7 ${r2(w * 0.8)} ${r2(-L * 0.6)} 0 ${-L} C${r2(-w * 0.8)} ${r2(-L * 0.6)} ${-w} -7 0 ${-r0} Z`;
+  function starflowerHead(stage, colors) {
+    if (stage === 4) {
+      const tips = budColors(colors);
+      const angles = tips.length === 3 ? [-9, 9, 0] : [-6, 6];
+      const tipEls = tips.map((fill, i) => `<path class="bud-tip" d="${ray(19, 2.3, 0)}" fill="${fill}" transform="translate(30 38) rotate(${angles[i]})"/>`).join('');
+      let calyx = '';
+      [-64, -32, 0, 32, 64].forEach((a) => { calyx += `<path d="M0 0 C1.6 -2 1.3 -4.6 0 -6.8 C-1.3 -4.6 -1.6 -2 0 0 Z" transform="translate(30 38.5) rotate(${a})"/>`; });
+      return `<g ${OUTLINE}>${tipEls}</g><g style="${sLeaf}">${calyx}</g>`;
+    }
+    const n = colors.length;
+    const O = n >= 13 ? 7 : 6;
+    const outer = Array.from({ length: O }, (_, i) => at(colors, i));
+    const inner = n > O ? Array.from({ length: O }, (_, i) => at(colors, O + i)) : [];
+    const ringOf = (fills, L, w, off) => fills.map((fill, i) =>
+      `<path class="petal" d="${ray(L, w)}" fill="${fill}" transform="translate(30 26) rotate(${r2(off + (360 * i) / fills.length)})"/>`).join('');
+    let stamens = '';
+    for (let i = 0; i < 6; i++) {
+      const a = rad(30 + 60 * i), x = r2(30 + 4.6 * Math.sin(a)), y = r2(26 - 4.6 * Math.cos(a));
+      stamens += `<path d="M30 26 L${x} ${y}" stroke="#1F3A2E" stroke-opacity=".45" stroke-width=".7"/><circle cx="${x}" cy="${y}" r="1" fill="${CREAM}" stroke="#1F3A2E" stroke-opacity=".35" stroke-width=".5"/>`;
+    }
+    return `<g ${OUTLINE}>${ringOf(inner, 13.5, 2, 180 / O)}${ringOf(outer, 20.5, 2.7, 0)}`
+      + `<circle class="plant-heart" cx="30" cy="26" r="3.3" fill="${CREAM}" stroke-opacity=".3"/></g>${stamens}`;
+  }
+
+  const blade = (k) => `M0 -2.5 C${r2(-3.6 * k)} -7 ${r2(-3 * k)} -15 ${r2(3 * k)} -18.5 C${r2(7 * k)} -20.8 ${r2(12 * k)} -19.5 ${r2(13.5 * k)} -15.5 C${r2(10.5 * k)} -17 ${r2(7.5 * k)} -16 ${r2(5.5 * k)} -13 C${r2(4 * k)} -10.5 ${r2(2.5 * k)} -6 0 -2.5 Z`;
+  function pinwheelHead(stage, colors) {
+    if (stage === 4) {
+      const tips = budColors(colors);
+      const angles = tips.length === 3 ? [-10, 10, 0] : [-6, 6];
+      const d = 'M0 0 C-4 -4 -4.6 -11 -1.2 -16 C.8 -19 3 -20.6 4.6 -21 C2.6 -17.4 2.6 -11 4 -6 C4.6 -3 2.6 -1 0 0 Z';
+      const tipEls = tips.map((fill, i) => `<path class="bud-tip" d="${d}" fill="${fill}" transform="translate(30 40) rotate(${angles[i]})"/>`).join('');
+      return `<g ${OUTLINE}>${tipEls}</g>`
+        + `<circle cx="26.6" cy="39.4" r="3.2" style="${sLeaf}"/><circle cx="33.4" cy="39.4" r="3.2" style="${sLeaf}"/>`;
+    }
+    const layout = petalLayout(colors.length);
+    const petals = layout.map((p) => {
+      const inner = p.D < 10;
+      const k = inner ? 0.9 : Math.min(1, 7 / layout.filter((q) => q.D >= 10).length);
+      const s = inner ? 0.62 : 1;
+      return `<path class="petal" d="${blade(k)}" fill="${colors[p.color]}" transform="translate(30 26) rotate(${r2(p.angle)}) scale(${s})"/>`;
+    }).join('');
+    const small = colors.length >= 10;
+    return `<g ${OUTLINE}>${petals}<circle class="plant-heart" cx="30" cy="26" r="${small ? 4.4 : 5.4}" fill="${CREAM}" stroke-opacity=".3"/></g>`
+      + `<path d="M30 26 C31.4 26 31.5 24.3 30 24.2 C27.9 24.1 27.4 27 29.2 28.4 C31.6 30 34.1 27.5 33.3 24.7" transform="translate(30 26) scale(${small ? 0.8 : 1}) translate(-30 -26)" stroke="#1F3A2E" stroke-opacity=".4" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
+  }
+
+  const ARCH = [[20, 27], [19, 8], [45, 3], [51, 25]];
+  const onArch = (t) => {
+    const u = 1 - t;
+    const k = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
+    return [0, 1].map((j) => k.reduce((s, kk, i) => s + kk * ARCH[i][j], 0));
+  };
+  function bellLobes(L, w, h) {
+    const tw = w * 0.42;
+    const side = (u) => [[u * tw, 0], [u * tw * 1.2, h * 0.5], [u * w * 0.78, h * 0.74], [u * w * 1.06, h]];
+    const bumps = L === 1 ? 3 : L === 2 ? 2 : 1;
+    return Array.from({ length: L }, (_, i) => {
+      const u0 = -1 + (2 * i) / L, u1 = -1 + (2 * (i + 1)) / L;
+      const a = side(u0), b = side(u1);
+      const p = (q) => `${r2(q[0])} ${r2(q[1])}`;
+      let d = `M${p(a[0])} Q${r2(((u0 + u1) / 2) * tw)} ${r2(-tw * 0.7 * (1 - Math.abs(u0 + u1) / 2))} ${p(b[0])}`;
+      d += ` C${p(b[1])} ${p(b[2])} ${p(b[3])}`;
+      for (let j = 1; j <= bumps; j++) {
+        const xa = b[3][0] + ((a[3][0] - b[3][0]) * (j - 1)) / bumps, xb = b[3][0] + ((a[3][0] - b[3][0]) * j) / bumps;
+        d += ` Q${r2((xa + xb) / 2)} ${r2(h + 2.6)} ${r2(xb)} ${r2(h)}`;
+      }
+      return d + ` C${p(a[2])} ${p(a[1])} ${p(a[0])} Z`;
+    });
+  }
+  function bellflowerHead(stage, colors) {
+    const pedicel = (x, y, len) => `<path d="M${r2(x)} ${r2(y)} v${len}" style="${sVine}" stroke-width="1.3" stroke-linecap="round"/>`;
+    if (stage === 4) {
+      const tips = budColors(colors);
+      const ts = tips.length === 3 ? [0.36, 0.68, 0.98] : [0.5, 0.96];
+      return tips.map((fill, i) => {
+        const [x, y] = onArch(ts[i]);
+        return pedicel(x, y, 3.4)
+          + `<ellipse class="bud-tip" cx="${r2(x)}" cy="${r2(y + 7.6)}" rx="3.7" ry="4.4" fill="${fill}" ${OUTLINE}/>`
+          + `<path d="M${r2(x - 2.6)} ${r2(y + 4.4)} Q${r2(x)} ${r2(y + 1.6)} ${r2(x + 2.6)} ${r2(y + 4.4)} Q${r2(x)} ${r2(y + 5.8)} ${r2(x - 2.6)} ${r2(y + 4.4)} Z" style="${sLeaf}"/>`;
+      }).join('');
+    }
+    const n = colors.length;
+    const B = n <= 3 ? 3 : Math.min(5, n);
+    const L = n <= 5 ? 1 : n <= 10 ? 2 : 3;
+    const w = B === 3 ? 6.6 : B === 4 ? 6 : L === 1 ? 5.6 : 6.2;
+    const h = B === 3 ? 11.5 : B === 4 ? 10.5 : 10;
+    const ts = Array.from({ length: B }, (_, i) => 0.24 + (0.76 * i) / (B - 1));
+    const bells = ts.map((t, i) => {
+      const [x, y] = onArch(t);
+      const drop = B === 5 && i % 2 === 1 ? 6.5 : 0;
+      const len = 2.2 + Math.max(0, 14 - y) * 0.35 + drop;
+      const lobes = bellLobes(L, w, h).map((d, j) => `<path class="petal" d="${d}" fill="${at(colors, i * L + j)}"/>`).join('');
+      return { drop, svg: pedicel(x, y, r2(len)) + `<g transform="translate(${r2(x)} ${r2(y + len)})" ${OUTLINE}>${lobes}</g>` };
+    });
+    return bells.filter((b) => !b.drop).concat(bells.filter((b) => b.drop)).map((b) => b.svg).join('');
+  }
+
+  const HEADS = { tulip: tulipHead, sunflower: sunflowerHead, starflower: starflowerHead, pinwheel: pinwheelHead, bellflower: bellflowerHead };
+
+  // A lone seed, for the seed-drop animation (picker → plot).
+  function seed(species) {
+    return `<svg viewBox="-9 -10 18 20" xmlns="http://www.w3.org/2000/svg" class="sprite seed" aria-hidden="true" focusable="false">${SEEDS[species] || SEEDS.daisy}</svg>`;
+  }
+
+  // ---- Mystery seed packets ----------------------------------------------
+  // Crimped paper packets with a "?" seal. Fixed cream paper and ink (like
+  // butterfly()), so they read as paper on the day and the night garden
+  // alike — var(--card) turns navy at night. No chord colours, no words.
+  const PACKET_INK = '#35584A';
+  const PACKET_PATTERNS = {
+    stripes: () => [20, 31, 42, 53].map((x) => `<rect x="${x}" y="31" width="5.5" height="57" rx="2"/>`).join(''),
+    dots: () => {
+      let s = '';
+      for (let row = 0; row < 6; row++) for (let col = 0; col < 5; col++) {
+        s += `<circle cx="${19 + col * 10.5 + (row % 2) * 5.2}" cy="${35 + row * 10}" r="2.1"/>`;
+      }
+      return s.replace(/<circle cx="(6[6-9]|7\d)(\.\d)?"[^>]*\/>/g, '');
+    },
+    swirl: () => [[22, 38], [58, 38], [22, 80], [58, 80], [40, 84], [40, 34]].map(([x, y]) =>
+      `<path d="M${x} ${y} c1.6 0 1.7 -2 0 -2.1 c-2.4 -.1 -3 3.2 -.9 4.7 c2.8 1.9 5.6 -1.2 4.6 -4.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`).join(''),
+    stars: () => [[21, 36, 1], [59, 40, 0.8], [23, 80, 0.85], [57, 82, 1], [40, 35, 0.7], [16.5, 58, 0.6], [63.5, 60, 0.6]].map(([x, y, s]) =>
+      `<path d="M0 -5 C.6 -1.2 1.2 -.6 5 0 C1.2 .6 .6 1.2 0 5 C-.6 1.2 -1.2 .6 -5 0 C-1.2 -.6 -.6 -1.2 0 -5 Z" transform="translate(${x} ${y}) scale(${s})"/>`).join(''),
+    waves: () => [36, 46, 70, 80].map((y) => `<path d="M16 ${y} q4 -3.6 8 0 t8 0 t8 0 t8 0 t8 0 t8 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`).join(''),
+    zigzag: () => [36, 46, 70, 80].map((y) => `<path d="M16 ${y + 1.6} l4 -3.2 l4 3.2 l4 -3.2 l4 3.2 l4 -3.2 l4 3.2 l4 -3.2 l4 3.2 l4 -3.2 l4 3.2 l4 -3.2 l4 3.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/>`).join(''),
+  };
+  const PACKET_NAMES = Object.keys(PACKET_PATTERNS);
+  function seedPacket(pattern) {
+    const draw = PACKET_PATTERNS[pattern] || PACKET_PATTERNS.dots;
+    let crimp = 'M12 17';
+    for (let x = 12; x < 68; x += 4) crimp += ` L${x + 2} 13.6 L${x + 4} 17`;
+    let teeth = '';
+    for (let x = 16; x < 66; x += 4) teeth += `M${x} 18.5 v6 `;
+    return `<svg viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg" class="sprite seed-packet" aria-hidden="true" focusable="false" style="color:${PACKET_INK}">`
+      + `<ellipse cx="40" cy="95" rx="25" ry="3.2" fill="#1F3A2E" opacity=".16"/>`
+      + `<path class="packet-paper" d="${crimp} L68 88 Q68 92.5 63.5 92.5 L16.5 92.5 Q12 92.5 12 88 Z" fill="#FBF3E2"/>`
+      + `<path d="${crimp} L68 27 L12 27 Z" fill="#EBD9B6"/>`
+      + `<path d="${teeth}" stroke="${PACKET_INK}" stroke-opacity=".22" stroke-width="1"/>`
+      + `<path d="M12 27 H68" stroke="${PACKET_INK}" stroke-opacity=".35" stroke-width="1.4" stroke-dasharray="2.5 2.5"/>`
+      + `<g fill="currentColor" opacity=".2">${draw()}</g>`
+      + `<path d="M64 31 V88 Q64 89.5 62.5 89.5" stroke="#fff" stroke-opacity=".7" stroke-width="2" fill="none" stroke-linecap="round"/>`
+      + `<path d="${crimp} L68 88 Q68 92.5 63.5 92.5 L16.5 92.5 Q12 92.5 12 88 Z" fill="none" stroke="${PACKET_INK}" stroke-width="2.4" stroke-linejoin="round"/>`
+      + `<circle class="packet-seal" cx="40" cy="59" r="13.5" fill="#fff" stroke="${PACKET_INK}" stroke-width="2.4"/>`
+      + `<circle cx="40" cy="59" r="10.2" fill="none" stroke="${PACKET_INK}" stroke-opacity=".25" stroke-width="1.2" stroke-dasharray="1.6 2.2"/>`
+      + `<path d="M35.6 55 C35.6 50.6 44.4 50.6 44.4 55.2 C44.4 58.6 40 58.4 40 62" fill="none" stroke="${PACKET_INK}" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`
+      + `<circle cx="40" cy="67" r="2.1" fill="${PACKET_INK}"/>`
+      + `</svg>`;
+  }
+
+  function plant(stage, swatches, opts) {
+    const species = typeof opts === 'string' ? opts : (opts && opts.species) || 'daisy';
+    const kind = SPECIES.includes(species) ? species : 'daisy';
+    const wrap = (body) => `<svg viewBox="0 0 60 90" xmlns="http://www.w3.org/2000/svg" class="sprite plant" aria-hidden="true" focusable="false">${body}</svg>`;
+    if (stage === 'planted') return wrap(plot + seedAt(kind, 30, 80.6));
+    const st = Math.max(0, Math.min(5, Math.floor(stage) || 0));
+    const colors = Array.isArray(swatches) ? swatches : [];
+    if (kind === 'daisy' || st === 0) return daisyPlant(st, colors);
+    if (st === 1) return wrap(seedAt(kind, 30, 80) + mound + peek(kind));
+    const fol = FOLIAGE[kind];
+    if (st <= 3) return wrap(fol[st] + soilTop);
+    return wrap(fol[4] + soilTop + HEADS[kind](st, colors.length ? colors : ['#FFFFFF']));
+  }
+
+  function daisyPlant(stage, swatches) {
     const st = Math.max(0, Math.min(5, Math.floor(stage) || 0));
     const colors = Array.isArray(swatches) ? swatches : [];
     const soil = `<ellipse class="plant-soil" cx="30" cy="87" rx="13" ry="4.5" style="fill:var(--soil,#9B7650)"/>`;
@@ -540,5 +896,5 @@ const Sprites = (() => {
       + `</svg>`;
   }
 
-  return { mascot, icon, animals, shape, flag, plant, butterfly };
+  return { mascot, icon, animals, shape, flag, plant, butterfly, seed, seedPacket, SPECIES, PACKET_NAMES };
 })();

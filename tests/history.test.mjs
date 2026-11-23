@@ -159,7 +159,7 @@ function v9Save() {
 {
   const { Store, map } = load({ 'rainbow-pitch:v1': JSON.stringify(v9Save()) });
   const p = Store.activeProfile();
-  assert.equal(Store.all().version, 12);
+  assert.equal(Store.all().version, 13);
   assert.deepEqual(plain(p.history), [
     { day: '2026-09-26', sets: 0, t: { yellow: [1, 0], red: [4, 4] }, m: { red: [1, 1] } },
     { day: '2026-09-25', sets: 2, t: { red: [5, 5] } },
@@ -248,7 +248,7 @@ console.log('\nAll history.test.mjs assertions passed.');
   assert.deepEqual(plain(byId), {
     none: true, stats: false, events: false, sessions: false, garden: false, history: false, explicit: true, junk: true,
   });
-  assert.equal(Store.all().version, 12);
+  assert.equal(Store.all().version, 13);
   console.log('ok - migration: a version-10 save keeps the steady sound for children who already practise');
 }
 

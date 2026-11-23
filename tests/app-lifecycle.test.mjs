@@ -36,7 +36,7 @@ function setup({ micMode = false, deferredMic = false, deferredChord = false, ri
       // Reveals whether a caller passed { picture: false } (the flagPictures
       // toggle — see js/storage.js/js/app.js), without needing real SVG markup.
       flag: (c, o = {}) => (o.picture === false ? 'plain-flag' : 'picture-flag'),
-      plant: (stage) => `plant-${stage}`, butterfly: () => 'butterfly' },
+      plant: (stage) => `plant-${stage}`, butterfly: () => 'butterfly', seed: () => '', seedPacket: () => '' },
     PianoAudio: {
       async unlock() {}, stopAll() { stopAudio(); }, setVariety(on) { varietyCalls.push(on); }, async whenOutputSilent() {}, playSparkle() {},
       diagnosticState: () => ({ contextState: 'running', suspect: false }),
@@ -835,7 +835,7 @@ console.log('ok - Settings: the badge switch saves the device-wide setting');
 {
   const oldProfile = { id: 'o', name: 'Old', avatar: 'fox', activeColors: ['red'], roundsPerSet: 20, stats: {}, sessions: [], events: [], garden: [] };
   const ui = setup({ seed: { 'rainbow-pitch:v1': JSON.stringify({ version: 8, activeProfileId: 'o', profiles: [oldProfile], pin: '2468' }) } });
-  assert.equal(ui.store.all().version, 12);
+  assert.equal(ui.store.all().version, 13);
   assert.equal(ui.store.activeProfile().readySeen, null);
   assert.equal(ui.store.getLockDot(), true);
   assert.equal(ui.store.getIconBadge(), false);
@@ -1257,3 +1257,61 @@ console.log('ok - Practice: an audio cleanup error during round transition canno
   assert.equal(fallbackUi.document.body.querySelector('.diag-text'), null);
 }
 console.log('ok - Settings -> About: diagnostic report copies cleanly and falls back to a dialog');
+
+{
+  // Mystery seed picker on Home: an empty plot invites picking one of three
+  // packets, holds back app updates while open, saves the pending seed on tap
+  // without watering, cannot reopen once chosen, and waters from 'planted' to
+  // stage 1 ("It grew!") after the first finished set.
+  const sw = fakeUpdatingServiceWorker();
+  const ui = setup({ navigator: { serviceWorker: sw.serviceWorker } });
+  ui.windowEvents.load(); await flush();
+  const plot = () => ui.app.querySelector('.today-plant');
+  assert.ok(plot().classList.contains('wants-seed'), 'empty plot invites a mystery seed');
+  assert.ok(plot().querySelector('.seed-cue'), 'floating packet cue is shown');
+
+  // Open picker, verify 3 packets, close without choosing.
+  plot().click(); await flush();
+  assert.equal(ui.document.body.querySelectorAll('.seed-packet-btn').length, 3, 'three packets shown');
+  ui.document.body.querySelector('.seed-picker-close').click(); await flush();
+  assert.equal(ui.document.body.querySelector('.seed-picker'), null, 'close button dismisses picker');
+  assert.equal(ui.store.activeProfile().pendingSeed, null);
+  assert.ok(plot().classList.contains('wants-seed'), 'plot still invites until a seed is chosen');
+
+  // Open picker again; an update arriving while open waits until it closes.
+  await openSettings(ui);
+  await ui.click('Check for updates');
+  await ui.click('Done');
+  plot().click(); await flush();
+  sw.worker.finishInstall(); await flush();
+  assert.equal(sw.worker.posted.length, 0, 'update waits while the seed picker is open');
+
+  // Pick a packet: saves pendingSeed, waters nothing, swaps to 'planted',
+  // closes picker, and now allows the waiting update to apply.
+  ui.document.body.querySelector('.seed-packet-btn').click(); await flush();
+  const chosen = ui.store.activeProfile().pendingSeed;
+  assert.ok(chosen, 'pendingSeed is saved on tap');
+  assert.equal(ui.store.activeProfile().garden.length, 0, 'picking a seed waters nothing');
+  assert.equal(plot().classList.contains('wants-seed'), false, 'cue is gone once chosen');
+  assert.equal(plot().textContent, 'plant-planted', 'plot shows the chosen seed in the hole');
+  assert.equal(JSON.stringify(sw.worker.posted), JSON.stringify([{ type: 'SKIP_WAITING' }]), 'waiting update applies once picker closes');
+
+  // Tapping the planted plot does not reopen the picker.
+  plot().click(); await flush();
+  assert.equal(ui.document.body.querySelector('.seed-picker'), null, 'picker cannot reopen once chosen');
+
+  // Finishing Set #1 waters the planted seed to stage 1 and stamps its species.
+  await ui.click('Play'); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  await ui.clock.tick(800); await ui.clock.tick(500);
+  ui.app.querySelector('.color-btn').click();
+  await ui.clock.tick(800);
+  assert.equal(ui.app.querySelector('.cele-plant').textContent, 'plant-planted', 'celebration starts from the planted seed');
+  ui.app.querySelector('.water-can').click();
+  await ui.clock.tick(900);
+  assert.equal(ui.app.querySelector('.cele-plant').textContent, 'plant-1', 'watering grows it to stage 1');
+  assert.equal(ui.app.querySelector('.cele-title').textContent, 'It grew!', 'planted -> 1 reads as growth');
+  assert.equal(ui.store.activeProfile().pendingSeed, null, 'pendingSeed is consumed');
+  assert.equal(ui.store.activeProfile().garden[0].species, chosen, 'garden entry keeps the chosen species');
+}
+console.log('ok - Home: mystery seed picker saves pendingSeed, holds updates, prevents reopening, and waters cleanly');

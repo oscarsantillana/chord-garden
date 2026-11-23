@@ -9,7 +9,7 @@
 const Store = (() => {
   const KEY = 'rainbow-pitch:v1';
   const BACKUP_KEY = 'rainbow-pitch:backup';
-  const VERSION = 12; // bumped: events from single-flag rounds carry `solo` (older events lack it and count as rounds with a choice); before that `pianoVariety` (natural piano variety) and the `vr` day tally, and before that `history` and `colorDates`
+  const VERSION = 13; // bumped: mystery seeds (`pendingSeed` on profiles, `species` on garden entries — older entries default to 'daisy'); before that `solo` on events, `pianoVariety` and `vr`, and `history`/`colorDates`
 
   const DEFAULT_ACTIVE = ['red', 'yellow']; // start with two so there is a real choice
   const DEFAULT_ROUNDS = 20;                // a standard Practice Set
@@ -46,9 +46,12 @@ const Store = (() => {
       sessions: [],       // [{ ts, rounds, correct, colors:[...] }]
       events: [],         // [{ c: target, a: answered, ok, ts }] newest-first, for Logic
       // One entry per local day with at least one saved Practice Set, newest
-      // day first: { day: 'YYYY-MM-DD', sets, colors: [...] }. That day's
-      // plant never wilts once it's in here — see js/logic.js's gardenDays.
+      // day first: { day: 'YYYY-MM-DD', sets, colors: [...], species }. That
+      // day's plant never wilts once it's in here — see js/logic.js's gardenDays.
       garden: [],
+      // Chosen mystery-seed species waiting in an empty plot before Set #1
+      // waters it (null when unchosen or once a plant is already growing).
+      pendingSeed: null,
       // Long-term record for the grown-up's progress view, newest day first,
       // one entry per local day with any practice:
       //   { day, sets, t: { colour: [tries, right] }, m?: { ... }, vr?: n }
@@ -98,7 +101,7 @@ const Store = (() => {
     });
     return Array.from(byDay.values())
       .sort((a, b) => (a.day < b.day ? 1 : -1)) // 'YYYY-MM-DD' sorts chronologically; newest first
-      .map((e) => ({ day: e.day, sets: e.sets, colors: Logic.orderColors([...e.colors]) }));
+      .map((e) => ({ day: e.day, sets: e.sets, colors: Logic.orderColors([...e.colors]), species: 'daisy' }));
   }
 
   // Valid language codes are whatever js/i18n.js currently supports (or just
@@ -133,6 +136,11 @@ const Store = (() => {
       // Logic.* is safe to call here and in recordSession below.
       if (typeof p.readySeen !== 'string') p.readySeen = null;
       if (!Array.isArray(p.garden)) p.garden = gardenFromSessions(p.sessions);
+      // Older garden entries predate mystery seeds and stay daisies.
+      p.garden.forEach((g) => {
+        if (g && (typeof g.species !== 'string' || !Logic.SPECIES.includes(g.species))) g.species = 'daisy';
+      });
+      if (typeof p.pendingSeed !== 'string' || !Logic.SPECIES.includes(p.pendingSeed)) p.pendingSeed = null;
       // Saved before `history`/`colorDates` existed: rebuild what the garden
       // and the ~15 days of events still tell us. Anything older is gone, so
       // these dates are estimates, listed in each colour's `approx`.
@@ -235,9 +243,18 @@ const Store = (() => {
     // one, and the grown-up must hear when the child earns it again.
     const p = data.profiles.find((x) => x.id === id);
     updateProfile(id, {
-      stats: {}, sessions: [], events: [], garden: [], history: [], readySeen: null,
+      stats: {}, sessions: [], events: [], garden: [], history: [], readySeen: null, pendingSeed: null,
       colorDates: seedColorDates(p ? p.activeColors : []),
     });
+  }
+
+  // Remember the mystery-seed species a child chose on Home before Set #1
+  // waters it. Waters nothing on its own; recordSession() consumes it when
+  // the next finished set starts a new plant.
+  function setPendingSeed(species) {
+    const p = activeProfile();
+    p.pendingSeed = (typeof species === 'string' && Logic.SPECIES.includes(species)) ? species : null;
+    save();
   }
 
   // Colour set mutations go through the store (not direct array pokes on the
@@ -353,8 +370,14 @@ const Store = (() => {
     // the child hasn't finished yet (see Logic.gardenDays).
     let entry = Logic.gardenDays(p.garden, typeof session.ts === 'number' ? session.ts : Date.now()).today;
     if (!entry) {
-      entry = { day, sets: 0, colors: [] };
+      const species = (typeof p.pendingSeed === 'string' && Logic.SPECIES.includes(p.pendingSeed))
+        ? p.pendingSeed
+        : Logic.pickSpecies(p.garden);
+      entry = { day, sets: 0, colors: [], species };
       p.garden.unshift(entry);
+      p.pendingSeed = null;
+    } else if (typeof entry.species !== 'string' || !Logic.SPECIES.includes(entry.species)) {
+      entry.species = 'daisy';
     }
     entry.sets += 1;
     entry.colors = Logic.orderColors([...entry.colors, ...(session.colors || [])]);
@@ -432,7 +455,7 @@ const Store = (() => {
     all,
     activeProfile, setActiveProfile,
     addProfile, removeProfile, updateProfile, resetProgress,
-    addColor, removeColor,
+    addColor, removeColor, setPendingSeed,
     recordRound, recordSession, recordRealPianoRound,
     getPin, setPin, requestPersistence,
     getLanguage, setLanguage, getNoteNames, setNoteNames,
